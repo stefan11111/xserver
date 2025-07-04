@@ -103,7 +103,7 @@ static Bool kdCaughtSignal = FALSE;
  * to KdScreenInit
  */
 
-KdOsFuncs *kdOsFuncs;
+KdOsFuncs *kdOsFuncs = NULL;
 
 void
 KdDisableScreen(ScreenPtr pScreen)
@@ -631,11 +631,6 @@ KdProcessArgument(int argc, char **argv, int i)
 
     return 0;
 }
-
-/*
- * These are getting tossed in here until I can think of where
- * they really belong
- */
 
 void
 KdOsInit(KdOsFuncs * pOsFuncs)

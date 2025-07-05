@@ -399,6 +399,8 @@ Bool
 void
  KdEnableScreens(void);
 
+void KdResume(void);
+
 void
  KdProcessSwitch(void);
 

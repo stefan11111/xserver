@@ -74,15 +74,20 @@ KdDepths kdDepths[] = {
 #define KD_DEFAULT_BUTTONS 5
 
 DevPrivateKeyRec kdScreenPrivateKeyRec;
-static unsigned long kdGeneration;
+unsigned long kdGeneration;
 
+Bool kdVideoTest;
+unsigned long kdVideoTestTime;
 Bool kdEmulateMiddleButton;
 Bool kdRawPointerCoordinates;
 Bool kdDisableZaphod;
-static Bool kdEnabled;
-static int kdSubpixelOrder;
-static char *kdSwitchCmd;
-static DDXPointRec kdOrigin;
+Bool kdAllowZap;
+Bool kdEnabled;
+int kdSubpixelOrder;
+int kdVirtualTerminal = -1;
+Bool kdSwitchPending;
+char *kdSwitchCmd;
+DDXPointRec kdOrigin;
 Bool kdHasPointer = FALSE;
 Bool kdHasKbd = FALSE;
 const char *kdGlobalXkbRules = NULL;
@@ -91,6 +96,7 @@ const char *kdGlobalXkbLayout = NULL;
 const char *kdGlobalXkbVariant = NULL;
 const char *kdGlobalXkbOptions = NULL;
 
+static Bool kdCaughtSignal = FALSE;
 
 /*
  * Carry arguments from InitOutput through driver initialization
@@ -134,7 +140,7 @@ KdDoSwitchCmd(const char *reason)
     }
 }
 
-static void
+void
 KdSuspend(void)
 {
     KdCardInfo *card;
@@ -151,7 +157,7 @@ KdSuspend(void)
     }
 }
 
-static void
+void
 KdDisableScreens(void)
 {
     KdSuspend();
@@ -181,8 +187,8 @@ ddxGiveUp(enum ExitCode error)
     KdDisableScreens();
 }
 
-static Bool kdDumbDriver;
-static Bool kdSoftCursor;
+Bool kdDumbDriver;
+Bool kdSoftCursor;
 
 const char *
 KdParseFindNext(const char *cur, const char *delim, char *save, char *last)
@@ -338,7 +344,7 @@ KdParseScreen(KdScreenInfo * screen, const char *arg)
     }
 }
 
-static void
+void
 KdParseRgba(char *rgba)
 {
     if (!strcmp(rgba, "rgb"))
@@ -538,7 +544,7 @@ KdOsInit(KdOsFuncs * pOsFuncs)
     }
 }
 
-static Bool
+Bool
 KdAllocatePrivates(ScreenPtr pScreen)
 {
     KdPrivScreenPtr pScreenPriv;
@@ -556,7 +562,7 @@ KdAllocatePrivates(ScreenPtr pScreen)
     return TRUE;
 }
 
-static Bool
+Bool
 KdCreateScreenResources(ScreenPtr pScreen)
 {
     KdScreenPriv(pScreen);
@@ -571,7 +577,8 @@ KdCreateScreenResources(ScreenPtr pScreen)
     return TRUE;
 }
 
-Bool KdCloseScreen(ScreenPtr pScreen)
+Bool
+KdCloseScreen(ScreenPtr pScreen)
 {
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
@@ -615,7 +622,7 @@ Bool KdCloseScreen(ScreenPtr pScreen)
     return ret;
 }
 
-static Bool
+Bool
 KdSaveScreen(ScreenPtr pScreen, int on)
 {
     return FALSE;
@@ -693,7 +700,7 @@ KdSetSubpixelOrder(ScreenPtr pScreen, Rotation randr)
 /* Pass through AddScreen, which doesn't take any closure */
 static KdScreenInfo *kdCurrentScreen;
 
-static Bool
+Bool
 KdScreenInit(ScreenPtr pScreen, int argc, char **argv)
 {
     KdScreenInfo *screen = kdCurrentScreen;
@@ -831,7 +838,7 @@ KdScreenInit(ScreenPtr pScreen, int argc, char **argv)
     return TRUE;
 }
 
-static void
+void
 KdInitScreen(ScreenInfo * pScreenInfo,
              KdScreenInfo * screen, int argc, char **argv)
 {

@@ -338,6 +338,7 @@ extern DevPrivateKeyRec kdScreenPrivateKeyRec;
 
 extern unsigned long kdGeneration;
 extern Bool kdEnabled;
+extern Bool kdSwitchPending;
 extern Bool kdEmulateMiddleButton;
 extern Bool kdDisableZaphod;
 extern char *kdSwitchCmd;
@@ -348,6 +349,9 @@ extern char *kdSwitchCmd;
  * Initialized via KdOSInit()
  */
 extern const KdOsFuncs *kdOsFuncs;
+
+extern Bool kdAllowZap;
+extern int kdVirtualTerminal;
 
 #define KdGetScreenPriv(pScreen) ((KdPrivScreenPtr) \
     dixLookupPrivate(&(pScreen)->devPrivates, kdScreenPrivateKey))
@@ -497,6 +501,8 @@ KdEnqueuePointerEvent(KdPointerInfo * pi, unsigned long flags, int rx, int ry,
 void _KdEnqueuePointerEvent(KdPointerInfo * pi, int type, int x, int y, int z,
                             int b, int absrel, Bool force);
 
+void KdReleaseAllKeys(void);
+
 void KdSetLed(KdKeyboardInfo * ki, int led, Bool on);
 
 void
@@ -505,6 +511,8 @@ void
 void
 KdComputePointerMatrix(KdPointerMatrix *pointer, Rotation randr, int width,
                        int height);
+
+void KdScreenToPointerCoords(int *x, int *y);
 
 void
 KdBlockHandler(ScreenPtr pScreen, void *timeout);

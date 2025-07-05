@@ -115,8 +115,7 @@ static void KdSigio(int sig)
 #define NOBLOCK FNDELAY
 #endif
 
-static void
-KdResetInputMachine(void)
+void KdResetInputMachine(void)
 {
     KdPointerInfo *pi;
 

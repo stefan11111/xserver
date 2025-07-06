@@ -1050,6 +1050,13 @@ KdDepthToFb(ScreenPtr pScreen, int depth)
 
 #endif
 
+static int
+KdSignalWrapper(int signum)
+{
+    kdCaughtSignal = TRUE;
+    return 1;                   /* use generic OS layer cleanup & abort */
+}
+
 void
 KdInitOutput(ScreenInfo * pScreenInfo, int argc, char **argv)
 {
@@ -1091,6 +1098,7 @@ KdInitOutput(ScreenInfo * pScreenInfo, int argc, char **argv)
         for (screen = card->screenList; screen; screen = screen->next)
             KdAddScreen(pScreenInfo, screen, argc, argv);
 
+    OsRegisterSigWrapper(KdSignalWrapper);
     xorgGlxCreateVendor();
 
 #if defined(CONFIG_UDEV) || defined(CONFIG_HAL)

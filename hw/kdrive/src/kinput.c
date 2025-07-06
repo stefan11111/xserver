@@ -1758,19 +1758,6 @@ KdReceiveTimeout(KdPointerInfo * pi)
     KdRunMouseMachine(pi, timeout, 0, 0, 0, 0, 0, 0);
 }
 
-/*
- * kdCheckTermination
- *
- * This function checks for the key sequence that terminates the server.  When
- * detected, it sets the dispatchException flag and returns.  The key sequence
- * is:
- *      Control-Alt
- * It's assumed that the server will be waken up by the caller when this
- * function returns.
- */
-
-extern int nClients;
-
 void
 KdReleaseAllKeys(void)
 {

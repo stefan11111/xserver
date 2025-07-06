@@ -684,13 +684,14 @@ KdCloseScreen(ScreenPtr pScreen)
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
     KdCardInfo *card = pScreenPriv->card;
+    Bool ret;
 
     if (card->cfuncs->closeScreen)
         (*card->cfuncs->closeScreen)(pScreen);
 
     pScreenPriv->closed = TRUE;
 
-    Bool ret = fbCloseScreen(pScreen);
+    ret = fbCloseScreen(pScreen);
 
     if (pScreenPriv->dpmsState != KD_DPMS_NORMAL)
         (*card->cfuncs->dpms) (pScreen, KD_DPMS_NORMAL);

@@ -731,6 +731,10 @@ KdKeyboardProc(DeviceIntPtr pDevice, int onoff)
             return BadImplementation;
         }
 
+        if (ki->driver->PreInit) {
+            (*ki->driver->PreInit)(ki);
+        }
+
         memset(&rmlvo, 0, sizeof(rmlvo));
         rmlvo.rules = ki->xkbRules;
         rmlvo.model = ki->xkbModel;
@@ -2016,6 +2020,8 @@ KdWakeupHandler(ScreenPtr pScreen, int result)
             }
         }
     }
+    if (kdSwitchPending)
+        KdProcessSwitch();
 }
 
 #define KdScreenOrigin(pScreen) (&(KdGetScreenPriv(pScreen)->screen->origin))
@@ -2120,6 +2126,8 @@ void
 ProcessInputEvents(void)
 {
     mieqProcessInputEvents();
+    if (kdSwitchPending)
+        KdProcessSwitch();
     KdCheckLock();
 }
 

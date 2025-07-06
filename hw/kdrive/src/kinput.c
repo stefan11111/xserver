@@ -288,7 +288,11 @@ KdDisableInput(void)
     KdPointerInfo *pi;
     int found = 0, i = 0;
 
+#ifndef KDRIVE_KBD
     input_lock();
+#else
+    KdBlockSigio();
+#endif
 
     for (ki = kdKeyboards; ki; ki = ki->next) {
         if (ki->driver && ki->driver->Disable)
@@ -371,7 +375,11 @@ KdEnableInput(void)
         NoticeEventTime (&ev, pi->dixdev);
     }
 
+#ifndef KDRIVE_KBD
     input_unlock();
+#else
+    KdUnblockSigio();
+#endif
 }
 
 static KdKeyboardDriver *
@@ -1402,8 +1410,12 @@ KdInitInput(void)
     KdKeyboardInfo *ki;
     struct KdConfigDevice *dev;
 
+#ifndef KDRIVE_KBD
     if (kdConfigPointers || kdConfigKeyboards)
         InputThreadPreInit();
+#else
+    InputThreadEnable = FALSE;
+#endif
 
     kdInputEnabled = TRUE;
 
@@ -2099,9 +2111,17 @@ KdWakeupHandler(ScreenPtr pScreen, int result)
         if (pi->timeoutPending) {
             if ((long) (GetTimeInMillis() - pi->emulationTimeout) >= 0) {
                 pi->timeoutPending = FALSE;
+#ifndef KDRIVE_KBD
                 input_lock();
+#else
+                KdBlockSigio();
+#endif
                 KdReceiveTimeout(pi);
+#ifndef KDRIVE_KBD
                 input_unlock();
+#else
+                KdUnblockSigio();
+#endif
             }
         }
     }
@@ -2198,9 +2218,18 @@ int KdCurScreen;                /* current event screen */
 static void
 KdWarpCursor(DeviceIntPtr pDev, ScreenPtr pScreen, int x, int y)
 {
+#ifndef KDRIVE_KBD
     input_lock();
+#else
+    KdBlockSigio();
+#endif
+    KdCurScreen = pScreen->myNum;
     miPointerWarpCursor(pDev, pScreen, x, y);
+#ifndef KDRIVE_KBD
     input_unlock();
+#else
+    KdUnblockSigio();
+#endif
 }
 
 miPointerScreenFuncRec kdPointerScreenFuncs = {

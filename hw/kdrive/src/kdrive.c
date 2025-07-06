@@ -1108,6 +1108,7 @@ KdInitOutput(ScreenInfo * pScreenInfo, int argc, char **argv)
         for (screen = card->screenList; screen; screen = screen->next)
             KdAddScreen(pScreenInfo, screen, argc, argv);
 
+    OsRegisterSigWrapper(KdSignalWrapper);
     xorgGlxCreateVendor();
 
 #if defined(CONFIG_UDEV) || defined(CONFIG_HAL)

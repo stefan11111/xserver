@@ -553,9 +553,14 @@ DDXRingBell(int volume, int pitch, int duration)
 {
     KdKeyboardInfo *ki = NULL;
 
-    for (ki = kdKeyboards; ki; ki = ki->next) {
-        if (ki->dixdev->coreEvents)
-            KdRingBell(ki, volume, pitch, duration);
+    if (kdOsFuncs->Bell) {
+        (*kdOsFuncs->Bell) (volume, pitch, duration);
+    }
+    else {
+        for (ki = kdKeyboards; ki; ki = ki->next) {
+            if (ki->dixdev->coreEvents)
+                KdRingBell(ki, volume, pitch, duration);
+        }
     }
 }
 
@@ -724,6 +729,10 @@ KdKeyboardProc(DeviceIntPtr pDevice, int onoff)
         if (!ki->driver->Init) {
             ErrorF("Keyboard %s: no init function\n", ki->name);
             return BadImplementation;
+        }
+
+        if (ki->driver->PreInit) {
+            (*ki->driver->PreInit)(ki);
         }
 
         memset(&rmlvo, 0, sizeof(rmlvo));
@@ -1991,6 +2000,11 @@ KdBlockHandler(ScreenPtr pScreen, void *timeo)
                 myTimeout = ms;
         }
     }
+    /* if we need to poll for events, do that */
+    if (kdOsFuncs->pollEvents) {
+        (*kdOsFuncs->pollEvents) ();
+        myTimeout = 20;
+    }
     if (myTimeout > 0)
         AdjustWaitForDelay(timeo, myTimeout);
 }
@@ -2010,6 +2024,8 @@ KdWakeupHandler(ScreenPtr pScreen, int result)
             }
         }
     }
+    if (kdSwitchPending)
+        KdProcessSwitch();
 }
 
 #define KdScreenOrigin(pScreen) (&(KdGetScreenPriv(pScreen)->screen->origin))
@@ -2116,6 +2132,8 @@ void
 ProcessInputEvents(void)
 {
     mieqProcessInputEvents();
+    if (kdSwitchPending)
+        KdProcessSwitch();
     KdCheckLock();
 }
 

@@ -50,7 +50,6 @@
 #include "dix/dix_priv.h"
 #include "dix/eventconvert.h"
 #include "dix/exevents_priv.h"
-#include "dix/screen_hooks_priv.h"
 #include "mi/mi_priv.h"
 
 #include "xf86.h"
@@ -58,6 +57,7 @@
 #include "xf86Priv.h"
 #include "dgaproc.h"
 #include "dgaproc_priv.h"
+#include "colormapst.h"
 #include "pixmapstr.h"
 #include "inputstr.h"
 #include "globals.h"
@@ -70,6 +70,7 @@
 #include "xf86Extensions.h"
 #include "misc.h"
 #include "dixstruct.h"
+#include "dixevents.h"
 #include "extnsionst.h"
 #include "cursorstr.h"
 #include "scrnintstr.h"
@@ -83,7 +84,7 @@ static DevPrivateKeyRec DGAScreenKeyRec;
 
 #define DGAScreenKeyRegistered dixPrivateKeyRegistered(&DGAScreenKeyRec)
 
-static void DGACloseScreen(CallbackListPtr *pcbl, ScreenPtr pScreen, void *unused);
+static Bool DGACloseScreen(ScreenPtr pScreen);
 static void DGADestroyColormap(ColormapPtr pmap);
 static void DGAInstallColormap(ColormapPtr pmap);
 static void DGAUninstallColormap(ColormapPtr pmap);
@@ -110,6 +111,7 @@ typedef struct {
     ScrnInfoPtr pScrn;
     int numModes;
     DGAModePtr modes;
+    CloseScreenProcPtr CloseScreen;
     DestroyColormapProcPtr DestroyColormap;
     InstallColormapProcPtr InstallColormap;
     UninstallColormapProcPtr UninstallColormap;
@@ -144,10 +146,11 @@ DGAInit(ScreenPtr pScreen, DGAFunctionPtr funcs, DGAModePtr modes, int num)
     pScreenPriv = DGA_GET_SCREEN_PRIV(pScreen);
 
     if (!pScreenPriv) {
-        if (!(pScreenPriv = calloc(1, sizeof(DGAScreenRec))))
+        if (!(pScreenPriv = (DGAScreenPtr) malloc(sizeof(DGAScreenRec))))
             return FALSE;
         dixSetPrivate(&pScreen->devPrivates, &DGAScreenKeyRec, pScreenPriv);
-        dixScreenHookClose(pScreen, DGACloseScreen);
+        pScreenPriv->CloseScreen = pScreen->CloseScreen;
+        pScreen->CloseScreen = DGACloseScreen;
         pScreenPriv->DestroyColormap = pScreen->DestroyColormap;
         pScreen->DestroyColormap = DGADestroyColormap;
         pScreenPriv->InstallColormap = pScreen->InstallColormap;
@@ -261,24 +264,23 @@ FreeMarkedVisuals(ScreenPtr pScreen)
     }
 }
 
-static void DGACloseScreen(CallbackListPtr *pcbl,
-                           ScreenPtr pScreen, void *unused)
+static Bool
+DGACloseScreen(ScreenPtr pScreen)
 {
     DGAScreenPtr pScreenPriv = DGA_GET_SCREEN_PRIV(pScreen);
-    if (!pScreenPriv)
-        return;
 
     mieqSetHandler(ET_DGAEvent, NULL);
     pScreenPriv->pScrn->SetDGAMode(pScreenPriv->pScrn, 0, NULL);
     FreeMarkedVisuals(pScreen);
 
-    dixScreenUnhookClose(pScreen, DGACloseScreen);
+    pScreen->CloseScreen = pScreenPriv->CloseScreen;
     pScreen->DestroyColormap = pScreenPriv->DestroyColormap;
     pScreen->InstallColormap = pScreenPriv->InstallColormap;
     pScreen->UninstallColormap = pScreenPriv->UninstallColormap;
 
     free(pScreenPriv);
-    dixSetPrivate(&pScreen->devPrivates, &DGAScreenKeyRec, NULL);
+
+    return ((*pScreen->CloseScreen) (pScreen));
 }
 
 static void
@@ -398,7 +400,7 @@ xf86SetDGAMode(ScrnInfoPtr pScrn, int num, DGADevicePtr devRet)
     else
         return BadValue;
 
-    if (!(device = calloc(1, sizeof(DGADeviceRec))))
+    if (!(device = (DGADevicePtr) malloc(sizeof(DGADeviceRec))))
         return BadAlloc;
 
     if (!pScreenPriv->current) {
@@ -662,10 +664,10 @@ DGACreateColormap(int index, ClientPtr client, int id, int mode, int alloc)
 
     pMode = &(pScreenPriv->modes[mode - 1]);
 
-    if (!(pVisual = calloc(1, sizeof(VisualRec))))
+    if (!(pVisual = malloc(sizeof(VisualRec))))
         return BadAlloc;
 
-    pVisual->vid = dixAllocServerXID();
+    pVisual->vid = FakeClientID(0);
     pVisual->class = pMode->visualClass;
     pVisual->nplanes = pMode->depth;
     pVisual->ColormapEntries = 1 << pMode->depth;
@@ -696,7 +698,7 @@ DGACreateColormap(int index, ClientPtr client, int id, int mode, int alloc)
         pVisual->offsetBlue = BitsClear(pVisual->blueMask);
     }
 
-    if (!(fvlp = calloc(1, sizeof(FakedVisualList)))) {
+    if (!(fvlp = malloc(sizeof(FakedVisualList)))) {
         free(pVisual);
         return BadAlloc;
     }
@@ -708,7 +710,7 @@ DGACreateColormap(int index, ClientPtr client, int id, int mode, int alloc)
 
     LEGAL_NEW_RESOURCE(id, client);
 
-    return dixCreateColormap(id, pScreen, pVisual, &pmap, alloc, client);
+    return CreateColormap(id, pScreen, pVisual, &pmap, alloc, client->index);
 }
 
 /*  Called by the extension to install a colormap on DGA active screens */
@@ -1002,7 +1004,7 @@ DGAProcessKeyboardEvent(ScreenPtr pScreen, DGAEvent * event, DeviceIntPtr keybd)
 
     UpdateDeviceState(keybd, &ev);
 
-    if (!InputDevIsMaster(keybd))
+    if (!IsMaster(keybd))
         return;
 
     /*
@@ -1056,7 +1058,7 @@ DGAProcessPointerEvent(ScreenPtr pScreen, DGAEvent * event, DeviceIntPtr mouse)
 
     UpdateDeviceState(mouse, &ev);
 
-    if (!InputDevIsMaster(mouse))
+    if (!IsMaster(mouse))
         return;
 
     /*
@@ -1320,7 +1322,7 @@ ProcXDGAQueryModes(ClientPtr client)
         return Success;
     }
 
-    if (!(mode = calloc(num, sizeof(XDGAModeRec))))
+    if (!(mode = xallocarray(num, sizeof(XDGAModeRec))))
         return BadAlloc;
 
     for (i = 0; i < num; i++)
@@ -1680,7 +1682,7 @@ ProcXDGASetClientVersion(ClientPtr client)
 
     REQUEST_SIZE_MATCH(xXDGASetClientVersionReq);
     if ((pPriv = DGA_GETPRIV(client)) == NULL) {
-        pPriv = calloc(1, sizeof(DGAPrivRec));
+        pPriv = malloc(sizeof(DGAPrivRec));
         /* XXX Need to look into freeing this */
         if (!pPriv)
             return BadAlloc;

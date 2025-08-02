@@ -16,19 +16,12 @@
 #include "include/pixmap.h"
 #include "include/regionstr.h"
 #include "include/screenint.h"
-#include "include/scrnintstr.h"
 #include "include/validate.h"
 #include "include/window.h"
 #include "mi/mi.h"
-#include "mi/micmap.h"
 
-static inline void SetInstalledmiColormap(ScreenPtr s, ColormapPtr c) {
-    dixSetPrivate(&(s)->devPrivates, micmapScrPrivateKey, c);
-}
-
-static inline ColormapPtr GetInstalledmiColormap(ScreenPtr s) {
-    return (ColormapPtr)dixLookupPrivate(&(s)->devPrivates, &micmapScrPrivateKeyRec);
-}
+#define SetInstalledmiColormap(s,c) \
+    (dixSetPrivate(&(s)->devPrivates, micmapScrPrivateKey, c))
 
 void miScreenClose(ScreenPtr pScreen);
 
@@ -55,17 +48,12 @@ typedef void (*mieqHandler) (int screen, InternalEvent *event,
 void mieqSetHandler(int event, mieqHandler handler);
 
 void miSendExposures(WindowPtr pWin, RegionPtr pRgn, int dx, int dy);
-
-_X_EXPORT /* used by in-tree libwfb.so module */
 void miWindowExposures(WindowPtr pWin, RegionPtr prgn);
 
 void miPaintWindow(WindowPtr pWin, RegionPtr prgn, int what);
 void miSourceValidate(DrawablePtr pDrawable, int x, int y, int w, int h,
                       unsigned int subWindowMode);
-
-/* only exported for modesetting, not for external drivers (yet) */
-_X_EXPORT Bool miCreateScreenResources(ScreenPtr pScreen);
-
+Bool miCreateScreenResources(ScreenPtr pScreen);
 int miShapedWindowIn(RegionPtr universe, RegionPtr bounding, BoxPtr rect,
                      int x, int y);
 int miValidateTree(WindowPtr pParent, WindowPtr pChild, VTKind kind);
@@ -86,7 +74,6 @@ void miMarkUnrealizedWindow(WindowPtr pChild, WindowPtr pWin, Bool fromConfigure
 WindowPtr miSpriteTrace(SpritePtr pSprite, int x, int y);
 WindowPtr miXYToWindow(ScreenPtr pScreen, SpritePtr pSprite, int x, int y);
 
-_X_EXPORT /* used by in-tree libwfb.so module */
 int miExpandDirectColors(ColormapPtr, int, xColorItem *, xColorItem *);
 
 #endif /* _XSERVER_MI_PRIV_H */

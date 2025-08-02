@@ -19,10 +19,8 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
  * OF THIS SOFTWARE.
  */
-#include <dix-config.h>
 
-#include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
+#include "randrstr_priv.h"
 
 static int _X_COLD
 SProcRRQueryVersion(ClientPtr client)
@@ -116,6 +114,7 @@ SProcRRGetScreenResourcesCurrent(ClientPtr client)
     REQUEST(xRRGetScreenResourcesCurrentReq);
 
     REQUEST_SIZE_MATCH(xRRGetScreenResourcesCurrentReq);
+    swaps(&stuff->length);
     swapl(&stuff->window);
     return ProcRRGetScreenResourcesCurrent(client);
 }

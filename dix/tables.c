@@ -48,13 +48,11 @@ SOFTWARE.
 
 #include <X11/X.h>
 #include <X11/Xproto.h>
-
-#include "dix/reqhandlers_priv.h"
-
 #include "windowstr.h"
 #include "extnsionst.h"
 #include "dixstruct.h"
 #include "dixstruct_priv.h"
+#include "dixevents.h"
 #include "dispatch.h"
 #include "swaprep.h"
 #include "swapreq.h"
@@ -718,7 +716,7 @@ ReplySwapPtr ReplySwapVector[256] = {
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,
-    ReplyNotSwappd,
+    (ReplySwapPtr) SGetWindowAttributesReply,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 5 */
     ReplyNotSwappd,
@@ -729,45 +727,45 @@ ReplySwapPtr ReplySwapVector[256] = {
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,                             /* 15 */
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,                             /* 20 */
+    (ReplySwapPtr) SGetGeometryReply,
+    (ReplySwapPtr) SQueryTreeReply,             /* 15 */
+    (ReplySwapPtr) SInternAtomReply,
+    (ReplySwapPtr) SGetAtomNameReply,
     ReplyNotSwappd,
     ReplyNotSwappd,
+    (ReplySwapPtr) SGetPropertyReply,           /* 20 */
+    (ReplySwapPtr) SListPropertiesReply,
     ReplyNotSwappd,
+    (ReplySwapPtr) SGetSelectionOwnerReply,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 25 */
-    ReplyNotSwappd,
+    (ReplySwapPtr) SGenericReply,               /* SGrabPointerReply, */
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 30 */
-    ReplyNotSwappd,
+    (ReplySwapPtr) SGenericReply,               /* SGrabKeyboardReply, */
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 35 */
     ReplyNotSwappd,
     ReplyNotSwappd,
+    (ReplySwapPtr) SQueryPointerReply,
+    (ReplySwapPtr) SGetMotionEventsReply,
+    (ReplySwapPtr) STranslateCoordsReply,       /* 40 */
     ReplyNotSwappd,
     ReplyNotSwappd,
-    ReplyNotSwappd,                             /* 40 */
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
+    (ReplySwapPtr) SGetInputFocusReply,
+    (ReplySwapPtr) SQueryKeymapReply,
     ReplyNotSwappd,                             /* 45 */
     ReplyNotSwappd,
+    (ReplySwapPtr) SQueryFontReply,
+    (ReplySwapPtr) SQueryTextExtentsReply,
+    (ReplySwapPtr) SListFontsReply,
+    (ReplySwapPtr) SListFontsWithInfoReply,     /* 50 */
     ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,                             /* 50 */
-    ReplyNotSwappd,
-    ReplyNotSwappd,
+    (ReplySwapPtr) SGetFontPathReply,
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 55 */
@@ -788,7 +786,7 @@ ReplySwapPtr ReplySwapVector[256] = {
     ReplyNotSwappd,                             /* 70 */
     ReplyNotSwappd,
     ReplyNotSwappd,
-    ReplyNotSwappd,
+    (ReplySwapPtr) SGetImageReply,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 75 */
     ReplyNotSwappd,
@@ -798,43 +796,43 @@ ReplySwapPtr ReplySwapVector[256] = {
     ReplyNotSwappd,                             /* 80 */
     ReplyNotSwappd,
     ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,                             /* 85 */
-    ReplyNotSwappd,
-    ReplyNotSwappd,
+    (ReplySwapPtr) SListInstalledColormapsReply,
+    (ReplySwapPtr) SAllocColorReply,
+    (ReplySwapPtr) SAllocNamedColorReply,       /* 85 */
+    (ReplySwapPtr) SAllocColorCellsReply,
+    (ReplySwapPtr) SAllocColorPlanesReply,
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 90 */
-    ReplyNotSwappd,
-    ReplyNotSwappd,
+    (ReplySwapPtr) SQueryColorsReply,
+    (ReplySwapPtr) SLookupColorReply,
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 95 */
     ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
+    (ReplySwapPtr) SQueryBestSizeReply,
+    (ReplySwapPtr) SGenericReply,               /* SQueryExtensionReply, */
+    (ReplySwapPtr) SListExtensionsReply,
     ReplyNotSwappd,                             /* 100 */
+    (ReplySwapPtr) SGetKeyboardMappingReply,
     ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
+    (ReplySwapPtr) SGetKeyboardControlReply,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 105 */
+    (ReplySwapPtr) SGetPointerControlReply,
     ReplyNotSwappd,
+    (ReplySwapPtr) SGetScreenSaverReply,
     ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,                             /* 110 */
+    (ReplySwapPtr) SListHostsReply,             /* 110 */
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,
     ReplyNotSwappd,                             /* 115 */
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,
-    ReplyNotSwappd,                             /* 119 */
+    (ReplySwapPtr) SGenericReply,               /* SetPointerMapping */
+    (ReplySwapPtr) SGetPointerMappingReply,
+    (ReplySwapPtr) SGenericReply,               /* SetModifierMapping */
+    (ReplySwapPtr) SGetModifierMappingReply,    /* 119 */
     ReplyNotSwappd,                             /* 120 */
     ReplyNotSwappd,                             /* 121 */
     ReplyNotSwappd,                             /* 122 */

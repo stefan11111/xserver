@@ -4,12 +4,12 @@ srcs_xext = [
     'shape.c',
     'sleepuntil.c',
     'sync.c',
-    'xace.c',
     'xcmisc.c',
     'xtest.c',
 ]
 
 hdrs_xext = [
+    'geext.h',
     'syncsdk.h',
 ]
 
@@ -34,6 +34,10 @@ if build_screensaver
     srcs_xext += 'saver.c'
 endif
 
+if build_xace
+    srcs_xext += 'xace.c'
+endif
+
 if build_xf86bigfont
     srcs_xext += 'xf86bigfont.c'
 endif
@@ -55,13 +59,13 @@ if build_xv
     hdrs_xext += ['xvdix.h', 'xvmcext.h']
 endif
 
-libxserver_xext = static_library('xserver_xext',
+libxserver_xext = static_library('libxserver_xext',
     srcs_xext,
     include_directories: inc,
     dependencies: common_dep,
 )
 
-libxserver_xext_vidmode = static_library('xserver_xext_vidmode',
+libxserver_xext_vidmode = static_library('libxserver_xext_vidmode',
     'vidmode.c',
     include_directories: inc,
     dependencies: common_dep,

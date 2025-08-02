@@ -81,7 +81,7 @@
 #include <assert.h>                          /* assertion macros */
 #include <string.h>                          /* string functions */
 
-#if defined(WIN32)
+#if defined(WIN32) && !defined(__CYGWIN__)
 #include <X11/Xwinsock.h>
 #endif
 
@@ -101,12 +101,12 @@
 
 static int map_poll_spec
 			(struct pollfd *pArray,
-                         size_t         n_fds,
+                         nfds_t         n_fds,
 			  fd_set        *pReadSet,
 			  fd_set        *pWriteSet,
 			  fd_set        *pExceptSet)
 {
-    register size_t  i;                      /* loop control */
+    register nfds_t  i;                      /* loop control */
     register struct  pollfd *pCur;           /* current array element */
     register int     max_fd = -1;            /* return value */
 
@@ -204,7 +204,7 @@ static struct timeval *map_timeout
 
 static void map_select_results
 			 (struct pollfd *pArray,
-			  size_t        n_fds,
+			  unsigned long  n_fds,
 			  fd_set        *pReadSet,
 			  fd_set        *pWriteSet,
 			  fd_set        *pExceptSet)
@@ -240,7 +240,7 @@ static void map_select_results
 \*---------------------------------------------------------------------------*/
 
 int xserver_poll
-	(struct pollfd *pArray, size_t n_fds, int timeout)
+	(struct pollfd *pArray, unsigned long n_fds, int timeout)
 {
     fd_set  read_descs;                          /* input file descs */
     fd_set  write_descs;                         /* output file descs */

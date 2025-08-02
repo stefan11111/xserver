@@ -81,11 +81,6 @@ SOFTWARE.
 #include <X11/extensions/Xv.h>
 #include <X11/extensions/Xvproto.h>
 
-#include "dix/dix_priv.h"
-#include "dix/screen_hooks_priv.h"
-#include "miext/extinit_priv.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
 #include "Xext/xvdix_priv.h"
 
 #include "misc.h"
@@ -95,10 +90,16 @@ SOFTWARE.
 #include "pixmapstr.h"
 #include "gcstruct.h"
 #include "extnsionst.h"
+#include "extinit_priv.h"
 #include "dixstruct.h"
 #include "resource.h"
 #include "opaque.h"
 #include "input.h"
+
+#ifdef XINERAMA
+#include "panoramiX.h"
+#include "panoramiXsrv.h"
+#endif /* XINERAMA */
 #include "xvdisp.h"
 
 #define SCREEN_PROLOGUE(pScreen, field) ((pScreen)->field = ((XvScreenPtr) \
@@ -127,8 +128,6 @@ int XvReqCode;
 static int XvEventBase;
 int XvErrorBase;
 
-int xvUseXinerama = 0;
-
 RESTYPE XvRTPort;
 static RESTYPE XvRTEncoding;
 static RESTYPE XvRTGrab;
@@ -142,7 +141,9 @@ static void WriteSwappedVideoNotifyEvent(xvEvent *, xvEvent *);
 static void WriteSwappedPortNotifyEvent(xvEvent *, xvEvent *);
 static Bool CreateResourceTypes(void);
 
-static void XvScreenClose(CallbackListPtr *pcbl, ScreenPtr, void *arg);
+static Bool XvCloseScreen(ScreenPtr);
+static Bool XvDestroyPixmap(PixmapPtr);
+static Bool XvDestroyWindow(WindowPtr);
 static void XvResetProc(ExtensionEntry *);
 static int XvdiDestroyGrab(void *, XID);
 static int XvdiDestroyEncoding(void *, XID);
@@ -151,7 +152,6 @@ static int XvdiDestroyPortNotify(void *, XID);
 static int XvdiDestroyVideoNotifyList(void *, XID);
 static int XvdiDestroyPort(void *, XID);
 static int XvdiSendVideoNotify(XvPortPtr, DrawablePtr, int);
-static void XvStopAdaptors(DrawablePtr pDrawable);
 
 /*
 ** XvExtensionInit
@@ -200,7 +200,8 @@ XvExtensionInit(void)
             (EventSwapPtr) WriteSwappedPortNotifyEvent;
 
         SetResourceTypeErrorValue(XvRTPort, _XvBadPort);
-        (void) dixAddAtom(XvName);
+        (void) MakeAtom(XvName, strlen(XvName), xTrue);
+
     }
 }
 
@@ -256,19 +257,11 @@ CreateResourceTypes(void)
 
 }
 
-static void XvWindowDestroy(CallbackListPtr *pcbl, ScreenPtr pScreen, WindowPtr pWin)
-{
-    XvStopAdaptors(&pWin->drawable);
-}
-
-static void XvPixmapDestroy(CallbackListPtr *pcbl, ScreenPtr pScreen, PixmapPtr pPixmap)
-{
-    XvStopAdaptors(&pPixmap->drawable);
-}
-
 int
 XvScreenInit(ScreenPtr pScreen)
 {
+    XvScreenPtr pxvs;
+
     if (XvScreenGeneration != serverGeneration) {
         if (!CreateResourceTypes()) {
             ErrorF("XvScreenInit: Unable to allocate resource types\n");
@@ -289,7 +282,7 @@ XvScreenInit(ScreenPtr pScreen)
 
     /* ALLOCATE SCREEN PRIVATE RECORD */
 
-    XvScreenPtr pxvs = calloc(1, sizeof(XvScreenRec));
+    pxvs = malloc(sizeof(XvScreenRec));
     if (!pxvs) {
         ErrorF("XvScreenInit: Unable to allocate screen private structure\n");
         return BadAlloc;
@@ -297,32 +290,40 @@ XvScreenInit(ScreenPtr pScreen)
 
     dixSetPrivate(&pScreen->devPrivates, XvScreenKey, pxvs);
 
-    dixScreenHookWindowDestroy(pScreen, XvWindowDestroy);
-    dixScreenHookClose(pScreen, XvScreenClose);
-    dixScreenHookPixmapDestroy(pScreen, XvPixmapDestroy);
+    pxvs->DestroyPixmap = pScreen->DestroyPixmap;
+    pxvs->DestroyWindow = pScreen->DestroyWindow;
+    pxvs->CloseScreen = pScreen->CloseScreen;
+
+    pScreen->DestroyPixmap = XvDestroyPixmap;
+    pScreen->DestroyWindow = XvDestroyWindow;
+    pScreen->CloseScreen = XvCloseScreen;
 
     return Success;
 }
 
-static void XvScreenClose(CallbackListPtr *pcbl, ScreenPtr pScreen, void *unused)
+static Bool
+XvCloseScreen(ScreenPtr pScreen)
 {
+
     XvScreenPtr pxvs;
 
     pxvs = (XvScreenPtr) dixLookupPrivate(&pScreen->devPrivates, XvScreenKey);
 
-    dixScreenUnhookWindowDestroy(pScreen, XvWindowDestroy);
-    dixScreenUnhookClose(pScreen, XvScreenClose);
-    dixScreenUnhookPixmapDestroy(pScreen, XvPixmapDestroy);
+    pScreen->DestroyPixmap = pxvs->DestroyPixmap;
+    pScreen->DestroyWindow = pxvs->DestroyWindow;
+    pScreen->CloseScreen = pxvs->CloseScreen;
 
     free(pxvs);
 
     dixSetPrivate(&pScreen->devPrivates, XvScreenKey, NULL);
+
+    return (*pScreen->CloseScreen) (pScreen);
 }
 
 static void
 XvResetProc(ExtensionEntry * extEntry)
 {
-    xvUseXinerama = 0;
+    XvResetProcVector();
 }
 
 DevPrivateKey
@@ -350,7 +351,7 @@ XvStopAdaptors(DrawablePtr pDrawable)
         XvPortPtr pp = pa->pPorts;
         int np = pa->nPorts;
 
-        while ((np--) && (pp)) {
+        while (np--) {
             if (pp->pDraw == pDrawable) {
                 XvdiSendVideoNotify(pp, pDrawable, XvPreempted);
 
@@ -364,6 +365,40 @@ XvStopAdaptors(DrawablePtr pDrawable)
         }
         pa++;
     }
+}
+
+static Bool
+XvDestroyPixmap(PixmapPtr pPix)
+{
+    ScreenPtr pScreen = pPix->drawable.pScreen;
+    Bool status = TRUE;
+
+    if (pPix->refcnt == 1)
+        XvStopAdaptors(&pPix->drawable);
+
+    SCREEN_PROLOGUE(pScreen, DestroyPixmap);
+    if (pScreen->DestroyPixmap)
+        status = pScreen->DestroyPixmap(pPix);
+    SCREEN_EPILOGUE(pScreen, DestroyPixmap, XvDestroyPixmap);
+
+    return status;
+
+}
+
+static Bool
+XvDestroyWindow(WindowPtr pWin)
+{
+    ScreenPtr pScreen = pWin->drawable.pScreen;
+    Bool status;
+
+    XvStopAdaptors(&pWin->drawable);
+
+    SCREEN_PROLOGUE(pScreen, DestroyWindow);
+    status = (*pScreen->DestroyWindow) (pWin);
+    SCREEN_EPILOGUE(pScreen, DestroyWindow, XvDestroyWindow);
+
+    return status;
+
 }
 
 static int
@@ -774,7 +809,7 @@ XvdiSelectVideoNotify(ClientPtr client, DrawablePtr pDraw, BOOL onoff)
        WILL BE DELETED WHEN THE DRAWABLE IS DESTROYED */
 
     if (!pn) {
-        if (!(tpn = calloc(1, sizeof(XvVideoNotifyRec))))
+        if (!(tpn = malloc(sizeof(XvVideoNotifyRec))))
             return BadAlloc;
         tpn->next = NULL;
         tpn->client = NULL;
@@ -810,7 +845,7 @@ XvdiSelectVideoNotify(ClientPtr client, DrawablePtr pDraw, BOOL onoff)
             tpn = fpn;
         }
         else {
-            if (!(tpn = calloc(1, sizeof(XvVideoNotifyRec))))
+            if (!(tpn = malloc(sizeof(XvVideoNotifyRec))))
                 return BadAlloc;
             tpn->next = pn->next;
             pn->next = tpn;
@@ -864,7 +899,7 @@ XvdiSelectPortNotify(ClientPtr client, XvPortPtr pPort, BOOL onoff)
        CREATE A NEW ONE AND ADD IT TO THE BEGINNING OF THE LIST */
 
     if (!tpn) {
-        if (!(tpn = calloc(1, sizeof(XvPortNotifyRec))))
+        if (!(tpn = malloc(sizeof(XvPortNotifyRec))))
             return BadAlloc;
         tpn->next = pPort->pNotify;
         pPort->pNotify = tpn;
@@ -1045,10 +1080,10 @@ XvFillColorKey(DrawablePtr pDraw, CARD32 key, RegionPtr region)
 
     pval[0].val = key;
     pval[1].val = IncludeInferiors;
-    (void) ChangeGC(NULL, gc, GCForeground | GCSubwindowMode, pval);
+    (void) ChangeGC(NullClient, gc, GCForeground | GCSubwindowMode, pval);
     ValidateGC(pDraw, gc);
 
-    rects = calloc(nbox, sizeof(xRectangle));
+    rects = xallocarray(nbox, sizeof(xRectangle));
     if (rects) {
         for (i = 0; i < nbox; i++, pbox++) {
             rects[i].x = pbox->x1 - pDraw->x;

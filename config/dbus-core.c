@@ -28,8 +28,6 @@
 #include <dbus/dbus.h>
 #include <sys/select.h>
 
-#include "os/log_priv.h"
-
 #include "dix.h"
 #include "os.h"
 

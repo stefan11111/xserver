@@ -671,7 +671,7 @@ miZeroPolyArc(DrawablePtr pDraw, GCPtr pGC, int narcs, xArc * parcs)
     numPts = maxPts << 2;
     dospans = (pGC->fillStyle != FillSolid);
     if (dospans) {
-        widths = calloc(numPts, sizeof(int));
+        widths = xallocarray(numPts, sizeof(int));
         if (!widths)
             return;
         maxw = 0;
@@ -687,7 +687,7 @@ miZeroPolyArc(DrawablePtr pDraw, GCPtr pGC, int narcs, xArc * parcs)
                    (unsigned char *) pGC->dash, (int) pGC->numInDashList,
                    &dinfo.dashOffsetInit);
     }
-    points = calloc(numPts, sizeof(DDXPointRec));
+    points = xallocarray(numPts, sizeof(DDXPointRec));
     if (!points) {
         if (dospans) {
             free(widths);
@@ -729,7 +729,7 @@ miZeroPolyArc(DrawablePtr pDraw, GCPtr pGC, int narcs, xArc * parcs)
                 ChangeGCVal gcval;
 
                 gcval.val = pGC->bgPixel;
-                ChangeGC(NULL, pGC, GCForeground, &gcval);
+                ChangeGC(NullClient, pGC, GCForeground, &gcval);
                 ValidateGC(pDraw, pGC);
             }
             pts = &points[numPts >> 1];
@@ -755,7 +755,7 @@ miZeroPolyArc(DrawablePtr pDraw, GCPtr pGC, int narcs, xArc * parcs)
                 ChangeGCVal gcval;
 
                 gcval.val = fgPixel;
-                ChangeGC(NULL, pGC, GCForeground, &gcval);
+                ChangeGC(NullClient, pGC, GCForeground, &gcval);
                 ValidateGC(pDraw, pGC);
             }
         }

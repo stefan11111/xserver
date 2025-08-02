@@ -36,7 +36,6 @@
 
 #include "dix/exevents_priv.h"
 #include "dix/input_priv.h"
-#include "dix/inpututils_priv.h"
 #include "os/fmt.h"
 
 #include "inputstr.h"
@@ -44,6 +43,7 @@
 #include "xkbsrv.h"
 #include "xserver-properties.h"
 #include "xace.h"
+#include "inpututils.h"
 #include "exglobals.h"
 #include "privates.h"
 #include "xiquerydevice.h"
@@ -67,6 +67,7 @@ SProcXIQueryDevice(ClientPtr client)
 int
 ProcXIQueryDevice(ClientPtr client)
 {
+    xXIQueryDeviceReply rep;
     DeviceIntPtr dev = NULL;
     int rc = Success;
     int i = 0, len = 0;
@@ -109,11 +110,12 @@ ProcXIQueryDevice(ClientPtr client)
         return BadAlloc;
     }
 
-    xXIQueryDeviceReply rep = {
+    rep = (xXIQueryDeviceReply) {
         .repType = X_Reply,
         .RepType = X_XIQueryDevice,
         .sequenceNumber = client->sequence,
         .length = len / 4,
+        .num_devices = 0
     };
 
     ptr = info;
@@ -148,17 +150,23 @@ ProcXIQueryDevice(ClientPtr client)
     }
 
     len = rep.length * 4;
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.num_devices);
-    }
-    WriteToClient(client, sizeof(xXIQueryDeviceReply), &rep);
+    WriteReplyToClient(client, sizeof(xXIQueryDeviceReply), &rep);
     WriteToClient(client, len, ptr);
     free(ptr);
     free(skip);
     return rc;
+}
+
+void
+SRepXIQueryDevice(ClientPtr client, int size, xXIQueryDeviceReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->num_devices);
+
+    /* Device info is already swapped, see ProcXIQueryDevice */
+
+    WriteToClient(client, size, rep);
 }
 
 /**
@@ -168,7 +176,7 @@ static Bool
 ShouldSkipDevice(ClientPtr client, int deviceid, DeviceIntPtr dev)
 {
     /* if all devices are not being queried, only master devices are */
-    if (deviceid == XIAllDevices || InputDevIsMaster(dev)) {
+    if (deviceid == XIAllDevices || IsMaster(dev)) {
         int rc = XaceHookDeviceAccess(client, dev, DixGetAttrAccess);
 
         if (rc == Success)
@@ -507,13 +515,13 @@ GetDeviceUse(DeviceIntPtr dev, uint16_t * attachment)
     DeviceIntPtr master = GetMaster(dev, MASTER_ATTACHED);
     int use;
 
-    if (InputDevIsMaster(dev)) {
+    if (IsMaster(dev)) {
         DeviceIntPtr paired = GetPairedDevice(dev);
 
         use = IsPointerDevice(dev) ? XIMasterPointer : XIMasterKeyboard;
         *attachment = (paired ? paired->id : 0);
     }
-    else if (!InputDevIsFloating(dev)) {
+    else if (!IsFloating(dev)) {
         use = IsPointerDevice(master) ? XISlavePointer : XISlaveKeyboard;
         *attachment = master->id;
     }

@@ -20,15 +20,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef _XACESTR_H
 #define _XACESTR_H
 
-#include "dix/selection_priv.h"
-
 #include "dix.h"
 #include "resource.h"
 #include "extnsionst.h"
 #include "window.h"
 #include "input.h"
 #include "property.h"
+#include "selection.h"
 #include "xace.h"
+
+/* XACE_CORE_DISPATCH */
+typedef struct {
+    ClientPtr client;
+    int status;
+} XaceCoreDispatchRec;
 
 /* XACE_RESOURCE_ACCESS */
 typedef struct {

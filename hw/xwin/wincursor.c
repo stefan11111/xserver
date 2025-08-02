@@ -150,6 +150,7 @@ winLoadCursor(ScreenPtr pScreen, CursorPtr pCursor, int screen)
 {
     winScreenPriv(pScreen);
     HCURSOR hCursor = NULL;
+    unsigned char *pAnd;
     unsigned char *pXor;
     int nCX, nCY;
     int nBytes;
@@ -195,7 +196,7 @@ winLoadCursor(ScreenPtr pScreen, CursorPtr pCursor, int screen)
     nCY = min(pScreenPriv->cursor.sm_cy, pCursor->bits->height);
 
     /* Allocate memory for the bitmaps */
-    unsigned char *pAnd = calloc(1, nBytes);
+    pAnd = malloc(nBytes);
     memset(pAnd, 0xFF, nBytes);
     pXor = calloc(1, nBytes);
 

@@ -5,7 +5,6 @@ srcs_os = [
     'auth.c',
     'backtrace.c',
     'client.c',
-    'cmdline.c',
     'connection.c',
     'fmt.c',
     'inputthread.c',
@@ -23,12 +22,13 @@ srcs_os = [
     'log.c',
 ]
 
-conf_data.set('CONFIG_SYSLOG', cc.has_header('syslog.h') ? '1' : false)
-
 # Wrapper code for missing C library functions. Note that conf_data contains either '1' or false.
 srcs_libc = []
 if conf_data.get('HAVE_REALLOCARRAY').to_int() == 0
     srcs_libc += 'reallocarray.c'
+endif
+if conf_data.get('HAVE_STRCASECMP').to_int() == 0
+    srcs_libc += 'strcasecmp.c'
 endif
 if conf_data.get('HAVE_STRCASESTR').to_int() == 0
     srcs_libc += 'strcasestr.c'
@@ -60,15 +60,6 @@ endif
 os_dep = []
 os_c_args = []
 
-# eg. struct msghdr -> msg_control 
-if host_machine.system() == 'sunos'
-    os_c_args += '-D_XOPEN_SOURCE=1'
-    os_c_args += '-D_XOPEN_SOURCE_EXTENDED=1'
-    os_c_args += '-D__EXTENSIONS__'
-    os_dep += cc.find_library('socket')
-    os_dep += cc.find_library('nsl')
-endif
-
 if get_option('xres')
     # Only the XRes extension cares about the client ID.
     os_c_args += '-DCLIENTIDS'
@@ -79,7 +70,7 @@ endif
 
 libxlibc = []
 if srcs_libc.length() > 0
-    libxlibc = static_library('xlibc',
+    libxlibc = static_library('libxlibc',
         srcs_libc,
         include_directories: inc,
         dependencies: [
@@ -92,7 +83,7 @@ if enable_input_thread
     os_dep += cc.find_library('pthread')
 endif
 
-libxserver_os = static_library('xserver_os',
+libxserver_os = static_library('libxserver_os',
     srcs_os,
     include_directories: inc,
     dependencies: [

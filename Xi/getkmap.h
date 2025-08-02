@@ -22,12 +22,20 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ********************************************************/
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef GETKMAP_H
 #define GETKMAP_H 1
 
-#include <dix-config.h>
-
 int ProcXGetDeviceKeyMapping(ClientPtr  /* client */
+    );
+
+void SRepXGetDeviceKeyMapping(ClientPtr /* client */ ,
+                              int /* size */ ,
+                              xGetDeviceKeyMappingReply *       /* rep */
     );
 
 #endif                          /* GETKMAP_H */

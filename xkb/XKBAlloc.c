@@ -29,20 +29,16 @@ THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdio.h>
 #include <X11/X.h>
 #include <X11/Xproto.h>
-#include <string.h>
-
-#include "xkb/xkbsrv_priv.h"
-
 #include "misc.h"
 #include "inputstr.h"
+#include <xkbsrv.h>
 #include "xkbgeom.h"
 #include <os.h>
-
-#include "xkb/xkbsrv_priv.h"
+#include <string.h>
 
 /***===================================================================***/
 
-/*ARGSUSED*/ int
+ /*ARGSUSED*/ Status
 XkbAllocCompatMap(XkbDescPtr xkb, unsigned which, unsigned nSI)
 {
     XkbCompatMapPtr compat;
@@ -118,7 +114,7 @@ XkbFreeCompatMap(XkbDescPtr xkb, unsigned which, Bool freeMap)
 
 /***===================================================================***/
 
-int
+Status
 XkbAllocNames(XkbDescPtr xkb, unsigned which, int nTotalRG, int nTotalAliases)
 {
     XkbNamesPtr names;
@@ -253,7 +249,7 @@ XkbFreeNames(XkbDescPtr xkb, unsigned which, Bool freeMap)
 
 /***===================================================================***/
 
- /*ARGSUSED*/ int
+ /*ARGSUSED*/ Status
 XkbAllocControls(XkbDescPtr xkb, unsigned which)
 {
     if (xkb == NULL)
@@ -279,7 +275,7 @@ XkbFreeControls(XkbDescPtr xkb, unsigned which, Bool freeMap)
 
 /***===================================================================***/
 
-int
+Status
 XkbAllocIndicatorMaps(XkbDescPtr xkb)
 {
     if (xkb == NULL)

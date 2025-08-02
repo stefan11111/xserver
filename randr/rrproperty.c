@@ -24,7 +24,6 @@
 #include <X11/Xatom.h>
 
 #include "dix/dix_priv.h"
-#include "randr/rrdispatch_priv.h"
 
 #include "randrstr_priv.h"
 #include "propertyst.h"
@@ -108,7 +107,9 @@ RRInitOutputPropertyValue(RRPropertyValuePtr property_value)
 static RRPropertyPtr
 RRCreateOutputProperty(Atom property)
 {
-    RRPropertyPtr prop = calloc(1, sizeof(RRPropertyRec));
+    RRPropertyPtr prop;
+
+    prop = (RRPropertyPtr) malloc(sizeof(RRPropertyRec));
     if (!prop)
         return NULL;
     prop->next = NULL;
@@ -140,7 +141,7 @@ static void
 RRNoticePropertyChange(RROutputPtr output, Atom property, RRPropertyValuePtr value)
 {
     const char *non_desktop_str = RR_PROPERTY_NON_DESKTOP;
-    Atom non_desktop_prop = dixGetAtomID(non_desktop_str);
+    Atom non_desktop_prop = MakeAtom(non_desktop_str, strlen(non_desktop_str), FALSE);
 
     if (property == non_desktop_prop) {
         if (value->type == XA_INTEGER && value->format == 32 && value->size >= 1) {
@@ -206,7 +207,7 @@ RRChangeOutputProperty(RROutputPtr output, Atom property, Atom type,
     if (mode == PropModeReplace || len > 0) {
         void *new_data = NULL, *old_data = NULL;
 
-        new_value.data = calloc(total_len, size_in_bytes);
+        new_value.data = xallocarray(total_len, size_in_bytes);
         if (!new_value.data && total_len && size_in_bytes) {
             if (add)
                 RRDestroyOutputProperty(prop);
@@ -358,6 +359,7 @@ RRConfigureOutputProperty(RROutputPtr output, Atom property,
 {
     RRPropertyPtr prop = RRQueryOutputProperty(output, property);
     Bool add = FALSE;
+    INT32 *new_values;
 
     if (!prop) {
         prop = RRCreateOutputProperty(property);
@@ -377,17 +379,14 @@ RRConfigureOutputProperty(RROutputPtr output, Atom property,
         return BadMatch;
     }
 
-    INT32 *new_values = NULL;
-
-    if (num_values) {
-        new_values = calloc(num_values, sizeof(INT32));
-        if (!new_values) {
-            if (add)
-                RRDestroyOutputProperty(prop);
-            return BadAlloc;
-        }
-        memcpy(new_values, values, num_values * sizeof(INT32));
+    new_values = xallocarray(num_values, sizeof(INT32));
+    if (!new_values && num_values) {
+        if (add)
+            RRDestroyOutputProperty(prop);
+        return BadAlloc;
     }
+    if (num_values)
+        memcpy(new_values, values, num_values * sizeof(INT32));
 
     /*
      * Property moving from pending to non-pending
@@ -478,7 +477,7 @@ ProcRRQueryOutputProperty(ClientPtr client)
         return BadName;
 
     if (prop->num_valid) {
-        extra = calloc(prop->num_valid, sizeof(INT32));
+        extra = xallocarray(prop->num_valid, sizeof(INT32));
         if (!extra)
             return BadAlloc;
     }
@@ -703,7 +702,7 @@ ProcRRGetOutputProperty(ClientPtr client)
     len = min(n - ind, 4 * stuff->longLength);
 
     if (len) {
-        extra = calloc(1, len);
+        extra = malloc(len);
         if (!extra)
             return BadAlloc;
     }

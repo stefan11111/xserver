@@ -80,7 +80,11 @@ typedef struct _RootlessScreenRec {
     RootlessFrameProcsPtr imp;
 
     // Wrapped screen functions
+    CreateScreenResourcesProcPtr CreateScreenResources;
+    CloseScreenProcPtr CloseScreen;
+
     CreateWindowProcPtr CreateWindow;
+    DestroyWindowProcPtr DestroyWindow;
     RealizeWindowProcPtr RealizeWindow;
     UnrealizeWindowProcPtr UnrealizeWindow;
     MoveWindowProcPtr MoveWindow;
@@ -88,6 +92,7 @@ typedef struct _RootlessScreenRec {
     RestackWindowProcPtr RestackWindow;
     ReparentWindowProcPtr ReparentWindow;
     ChangeBorderWidthProcPtr ChangeBorderWidth;
+    PositionWindowProcPtr PositionWindow;
     ChangeWindowAttributesProcPtr ChangeWindowAttributes;
     PaintWindowProcPtr PaintWindow;
 

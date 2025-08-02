@@ -64,10 +64,12 @@
 XISBuffer *
 XisbNew(int fd, ssize_t size)
 {
-    XISBuffer *b = calloc(1, sizeof(XISBuffer));
+    XISBuffer *b;
+
+    b = malloc(sizeof(XISBuffer));
     if (!b)
         return NULL;
-    b->buf = calloc(sizeof(unsigned char), size);
+    b->buf = malloc((sizeof(unsigned char) * size));
     if (!b->buf) {
         free(b);
         return NULL;
@@ -125,6 +127,26 @@ XisbRead(XISBuffer * b)
                isprint(b->buf[b->current]) ? b->buf[b->current] : '.');
 
     return b->buf[b->current++];
+}
+
+/* the only purpose of this function is to provide output tracing */
+ssize_t
+XisbWrite(XISBuffer * b, unsigned char *msg, ssize_t len)
+{
+    if (b->trace) {
+        int i = 0;
+
+        for (i = 0; i < len; i++)
+            ErrorF("\t\twrote 0x%02x (%c)\n", msg[i], msg[i]);
+    }
+    return (xf86WriteSerial(b->fd, msg, len));
+}
+
+/* turn tracing of this buffer on (1) or off (0) */
+void
+XisbTrace(XISBuffer * b, int trace)
+{
+    b->trace = trace;
 }
 
 /*

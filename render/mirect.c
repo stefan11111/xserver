@@ -62,7 +62,7 @@ miColorRects(PicturePtr pDst,
         (*pGC->funcs->ChangeClip) (pGC, CT_REGION, pClip, 0);
     }
 
-    ChangeGC(NULL, pGC, mask, tmpval);
+    ChangeGC(NullClient, pGC, mask, tmpval);
     ValidateGC(pDst->pDrawable, pGC);
     if (xoff || yoff) {
         int i;

@@ -32,7 +32,6 @@
 
 #include <string.h>
 
-#include "dix/dix_priv.h"
 #include "os/client_priv.h"
 
 #include "glxserver.h"
@@ -40,6 +39,7 @@
 #include <propertyst.h>
 #include "privates.h"
 #include <os.h>
+#include "extinit.h"
 #include "glx_extinit.h"
 #include "unpack.h"
 #include "glxutil.h"

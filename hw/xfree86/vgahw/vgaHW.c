@@ -16,15 +16,10 @@
 #include <unistd.h>
 
 #include <X11/X.h>
-
-#include "os/log_priv.h"
-
 #include "misc.h"
 
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86_OSproc.h"
-#include "xf86Opt_priv.h"
-#include "xf86Priv.h"
 #include "vgaHW.h"
 
 #include "compiler.h"
@@ -957,21 +952,21 @@ vgaHWSaveFonts(ScrnInfoPtr scrninfp, vgaRegPtr save)
     hwp->writeGr(hwp, 0x06, 0x05);      /* set graphics */
 
 #if SAVE_FONT1
-    if (hwp->FontInfo1 || (hwp->FontInfo1 = calloc(1, FONT_AMOUNT))) {
+    if (hwp->FontInfo1 || (hwp->FontInfo1 = malloc(FONT_AMOUNT))) {
         hwp->writeSeq(hwp, 0x02, 0x04); /* write to plane 2 */
         hwp->writeGr(hwp, 0x04, 0x02);  /* read plane 2 */
         slowbcopy_frombus(hwp->Base, hwp->FontInfo1, FONT_AMOUNT);
     }
 #endif                          /* SAVE_FONT1 */
 #if SAVE_FONT2
-    if (hwp->FontInfo2 || (hwp->FontInfo2 = calloc(1, FONT_AMOUNT))) {
+    if (hwp->FontInfo2 || (hwp->FontInfo2 = malloc(FONT_AMOUNT))) {
         hwp->writeSeq(hwp, 0x02, 0x08); /* write to plane 3 */
         hwp->writeGr(hwp, 0x04, 0x03);  /* read plane 3 */
         slowbcopy_frombus(hwp->Base, hwp->FontInfo2, FONT_AMOUNT);
     }
 #endif                          /* SAVE_FONT2 */
 #if SAVE_TEXT
-    if (hwp->TextInfo || (hwp->TextInfo = calloc(2, TEXT_AMOUNT))) {
+    if (hwp->TextInfo || (hwp->TextInfo = malloc(2 * TEXT_AMOUNT))) {
         hwp->writeSeq(hwp, 0x02, 0x01); /* write to plane 0 */
         hwp->writeGr(hwp, 0x04, 0x00);  /* read plane 0 */
         slowbcopy_frombus(hwp->Base, hwp->TextInfo, TEXT_AMOUNT);
@@ -1303,8 +1298,10 @@ vgaHWInit(ScrnInfoPtr scrninfp, DisplayModePtr mode)
     if (depth == 1) {
         /* Initialise the Mono map according to which bit-plane gets used */
 
+        Bool flipPixels = xf86GetFlipPixels();
+
         for (i = 0; i < 16; i++)
-            if (((i & (1 << BIT_PLANE)) != 0) != xf86FlipPixels)
+            if (((i & (1 << BIT_PLANE)) != 0) != flipPixels)
                 regp->Attribute[i] = WHITE_VALUE;
             else
                 regp->Attribute[i] = BLACK_VALUE;

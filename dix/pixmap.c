@@ -265,7 +265,7 @@ PixmapDirtyCopyArea(PixmapPtr dst, DrawablePtr src,
         ChangeGCVal subWindowMode;
 
         subWindowMode.val = IncludeInferiors;
-        ChangeGC(NULL, pGC, GCSubwindowMode, &subWindowMode);
+        ChangeGC(NullClient, pGC, GCSubwindowMode, &subWindowMode);
     }
     ValidateGC(&dst->drawable, pGC);
 

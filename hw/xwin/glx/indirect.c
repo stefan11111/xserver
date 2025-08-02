@@ -373,6 +373,8 @@ static __GLXdrawable *glxWinCreateDrawable(ClientPtr client,
                                            int type,
                                            XID glxDrawId, __GLXconfig * conf);
 
+static Bool glxWinRealizeWindow(WindowPtr pWin);
+static Bool glxWinUnrealizeWindow(WindowPtr pWin);
 static void glxWinCopyWindow(WindowPtr pWindow, DDXPointRec ptOldOrg,
                              RegionPtr prgnSrc);
 static Bool glxWinSetPixelFormat(HDC hdc, int bppOverride, int drawableTypeOverride,
@@ -702,7 +704,11 @@ glxWinScreenProbe(ScreenPtr pScreen)
     // dump out fbConfigs now fbConfigIds and visualIDs have been assigned
     fbConfigsDump(screen->base.numFBConfigs, screen->base.fbconfigs, &rejects);
 
-    /* Wrap CopyWindow on this screen */
+    /* Wrap RealizeWindow, UnrealizeWindow and CopyWindow on this screen */
+    screen->RealizeWindow = pScreen->RealizeWindow;
+    pScreen->RealizeWindow = glxWinRealizeWindow;
+    screen->UnrealizeWindow = pScreen->UnrealizeWindow;
+    pScreen->UnrealizeWindow = glxWinUnrealizeWindow;
     screen->CopyWindow = pScreen->CopyWindow;
     pScreen->CopyWindow = glxWinCopyWindow;
 
@@ -724,6 +730,23 @@ glxWinScreenProbe(ScreenPtr pScreen)
  * Window functions
  */
 
+static Bool
+glxWinRealizeWindow(WindowPtr pWin)
+{
+    Bool result;
+    ScreenPtr pScreen = pWin->drawable.pScreen;
+    glxWinScreen *screenPriv = (glxWinScreen *) glxGetScreen(pScreen);
+
+    GLWIN_DEBUG_MSG("glxWinRealizeWindow");
+
+    /* Allow the window to be created (RootlessRealizeWindow is inside our wrap) */
+    pScreen->RealizeWindow = screenPriv->RealizeWindow;
+    result = pScreen->RealizeWindow(pWin);
+    pScreen->RealizeWindow = glxWinRealizeWindow;
+
+    return result;
+}
+
 static void
 glxWinCopyWindow(WindowPtr pWindow, DDXPointRec ptOldOrg, RegionPtr prgnSrc)
 {
@@ -734,7 +757,7 @@ glxWinCopyWindow(WindowPtr pWindow, DDXPointRec ptOldOrg, RegionPtr prgnSrc)
     GLWIN_TRACE_MSG("glxWinCopyWindow pWindow %p", pWindow);
 
     dixLookupResourceByType((void *) &pGlxDraw, pWindow->drawable.id,
-                            __glXDrawableRes, NULL, DixUnknownAccess);
+                            __glXDrawableRes, NullClient, DixUnknownAccess);
 
     /*
        Discard any CopyWindow requests if a GL drawing context is pointing at the window
@@ -753,6 +776,22 @@ glxWinCopyWindow(WindowPtr pWindow, DDXPointRec ptOldOrg, RegionPtr prgnSrc)
     pScreen->CopyWindow = screenPriv->CopyWindow;
     pScreen->CopyWindow(pWindow, ptOldOrg, prgnSrc);
     pScreen->CopyWindow = glxWinCopyWindow;
+}
+
+static Bool
+glxWinUnrealizeWindow(WindowPtr pWin)
+{
+    Bool result;
+    ScreenPtr pScreen = pWin->drawable.pScreen;
+    glxWinScreen *screenPriv = (glxWinScreen *) glxGetScreen(pScreen);
+
+    GLWIN_DEBUG_MSG("glxWinUnrealizeWindow");
+
+    pScreen->UnrealizeWindow = screenPriv->UnrealizeWindow;
+    result = pScreen->UnrealizeWindow(pWin);
+    pScreen->UnrealizeWindow = glxWinUnrealizeWindow;
+
+    return result;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -843,7 +882,9 @@ glxWinCreateDrawable(ClientPtr client,
                      DrawablePtr pDraw,
                      XID drawId, int type, XID glxDrawId, __GLXconfig * conf)
 {
-    __GLXWinDrawable *glxPriv = calloc(1, sizeof *glxPriv);
+    __GLXWinDrawable *glxPriv;
+
+    glxPriv = malloc(sizeof *glxPriv);
 
     if (glxPriv == NULL)
         return NULL;
@@ -1967,7 +2008,7 @@ glxWinCreateConfigs(HDC hdc, glxWinScreen * screen)
         n++;
 
         // allocate and save
-        work = calloc(1, sizeof(GLXWinConfig));
+        work = malloc(sizeof(GLXWinConfig));
         if (NULL == work) {
             ErrorF("Failed to allocate GLXWinConfig\n");
             break;
@@ -2381,7 +2422,7 @@ glxWinCreateConfigsExt(HDC hdc, glxWinScreen * screen, PixelFormatRejectStats * 
         n++;
 
         // allocate and save
-        work = calloc(1, sizeof(GLXWinConfig));
+        work = malloc(sizeof(GLXWinConfig));
         if (NULL == work) {
             ErrorF("Failed to allocate GLXWinConfig\n");
             break;

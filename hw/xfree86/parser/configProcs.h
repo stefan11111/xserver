@@ -29,9 +29,6 @@
 
 /* exported functions are/were used by the X Server */
 
-#ifndef XSERVER_XFREE86_CONFIGPROCS_H
-#define XSERVER_XFREE86_CONFIGPROCS_H
-
 #include <X11/Xfuncproto.h>
 
 /* Device.c */
@@ -41,12 +38,12 @@ void xf86freeDeviceList(XF86ConfDevicePtr ptr);
 int xf86validateDevice(XF86ConfigPtr p);
 
 /* Files.c */
-XF86ConfFilesPtr xf86parseFilesSection(XF86ConfFilesPtr ptr);
+XF86ConfFilesPtr xf86parseFilesSection(void);
 void xf86printFileSection(FILE * cf, XF86ConfFilesPtr ptr);
 void xf86freeFiles(XF86ConfFilesPtr p);
 
 /* Flags.c */
-XF86ConfFlagsPtr xf86parseFlagsSection(XF86ConfFlagsPtr ptr);
+XF86ConfFlagsPtr xf86parseFlagsSection(void);
 void xf86printServerFlagsSection(FILE * f, XF86ConfFlagsPtr flags);
 void xf86freeFlags(XF86ConfFlagsPtr flags);
 
@@ -71,7 +68,7 @@ void xf86freeLayoutList(XF86ConfLayoutPtr ptr);
 int xf86validateLayout(XF86ConfigPtr p);
 
 /* Module.c */
-XF86ConfModulePtr xf86parseModuleSection(XF86ConfModulePtr ptr);
+XF86ConfModulePtr xf86parseModuleSection(void);
 void xf86printModuleSection(FILE * cf, XF86ConfModulePtr ptr);
 extern _X_EXPORT XF86LoadPtr xf86addNewLoadDirective(XF86LoadPtr head,
                                                      const char *name, int type,
@@ -149,5 +146,3 @@ xf86freeExtensions(XF86ConfExtensionsPtr ptr);
 void
 ErrorF(const char *f, ...);
 #endif
-
-#endif /* XSERVER_XFREE86_CONFIGPROCS_H */

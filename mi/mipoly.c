@@ -87,7 +87,7 @@ miInsertEdgeInET(EdgeTable * ET, EdgeTableEntry * ETE, int scanline,
      */
     if ((!pSLL) || (pSLL->scanline > scanline)) {
         if (*iSLLBlock > SLLSPERBLOCK - 1) {
-            tmpSLLBlock = calloc(1, sizeof(ScanLineListBlock));
+            tmpSLLBlock = malloc(sizeof(ScanLineListBlock));
             if (!tmpSLLBlock)
                 return FALSE;
             (*SLLBlock)->next = tmpSLLBlock;
@@ -410,8 +410,8 @@ miFillConvexPoly(DrawablePtr dst, GCPtr pgc, int count, DDXPointPtr ptsIn)
     dy = ymax - ymin + 1;
     if ((count < 3) || (dy < 0))
         return TRUE;
-    ptsOut = FirstPoint = calloc(dy, sizeof(DDXPointRec));
-    width = FirstWidth = calloc(dy, sizeof(int));
+    ptsOut = FirstPoint = xallocarray(dy, sizeof(DDXPointRec));
+    width = FirstWidth = xallocarray(dy, sizeof(int));
     if (!FirstPoint || !FirstWidth) {
         free(FirstWidth);
         free(FirstPoint);
@@ -542,7 +542,7 @@ miFillGeneralPoly(DrawablePtr dst, GCPtr pgc, int count, DDXPointPtr ptsIn)
     if (count < 3)
         return TRUE;
 
-    if (!(pETEs = calloc(count, sizeof(EdgeTableEntry))))
+    if (!(pETEs = malloc(sizeof(EdgeTableEntry) * count)))
         return FALSE;
     ptsOut = FirstPoint;
     width = FirstWidth;
@@ -587,10 +587,8 @@ miFillGeneralPoly(DrawablePtr dst, GCPtr pgc, int count, DDXPointPtr ptsIn)
                     width = FirstWidth;
                     nPts = 0;
                 }
-                if (pAET != NULL) { // FIXME: somewhow analyzer still complains
-                    EVALUATEEDGEEVENODD(pAET, pPrevAET, y);
-                    EVALUATEEDGEEVENODD(pAET, pPrevAET, y);
-                }
+                EVALUATEEDGEEVENODD(pAET, pPrevAET, y);
+                EVALUATEEDGEEVENODD(pAET, pPrevAET, y);
             }
             miInsertionSort(&AET);
         }

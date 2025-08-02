@@ -2,9 +2,7 @@
  *
  * Copyright © 2024 Enrico Weigelt, metux IT consult <info@metux.net>
  */
-
 #ifndef _XORG_XVDIX_PRIV_H
-#define _XORG_XVDIX_PRIV_H
 
 #include <X11/Xdefs.h>
 

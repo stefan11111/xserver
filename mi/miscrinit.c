@@ -192,11 +192,13 @@ miCreateScreenResources(ScreenPtr pScreen)
 static Bool
 miScreenDevPrivateInit(ScreenPtr pScreen, int width, void *pbits, int xsize, int ysize)
 {
+    miScreenInitParmsPtr pScrInitParms;
+
     /* Stash pbits and width in a short-lived miScreenInitParmsRec attached
      * to the screen, until CreateScreenResources can put them in the
      * screen pixmap.
      */
-    miScreenInitParmsPtr pScrInitParms = calloc(1, sizeof(miScreenInitParmsRec));
+    pScrInitParms = malloc(sizeof(miScreenInitParmsRec));
     if (!pScrInitParms)
         return FALSE;
     pScrInitParms->pbits = pbits;

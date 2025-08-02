@@ -48,6 +48,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "misc.h"
 #include "dixstruct.h"
 #include "extnsionst.h"
+#include "extinit.h"
+#include "colormapst.h"
 #include "cursorstr.h"
 #include "scrnintstr.h"
 #include "servermd.h"
@@ -65,6 +67,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 static int DRIErrorBase;
 
 static void XF86DRIResetProc(ExtensionEntry *extEntry);
+
+static unsigned char DRIReqCode = 0;
 
 /*ARGSUSED*/
 static void
@@ -419,7 +423,7 @@ ProcXF86DRIGetDrawableInfo(register ClientPtr client)
 
     if (rep.numClipRects) {
         /* Clip cliprects to screen dimensions (redirected windows) */
-        pClippedRects = calloc(rep.numClipRects, sizeof(drm_clip_rect_t));
+        pClippedRects = xallocarray(rep.numClipRects, sizeof(drm_clip_rect_t));
 
         if (!pClippedRects)
             return BadAlloc;
@@ -592,6 +596,7 @@ XFree86DRIExtensionInit(void)
                                  ProcXF86DRIDispatch,
                                  SProcXF86DRIDispatch,
                                  XF86DRIResetProc, StandardMinorOpcode))) {
+        DRIReqCode = (unsigned char) extEntry->base;
         DRIErrorBase = extEntry->errorBase;
     }
 }

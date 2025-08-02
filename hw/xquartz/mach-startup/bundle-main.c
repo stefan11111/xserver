@@ -72,7 +72,10 @@ extern void
 FatalError(const char *f, ...) _X_ATTRIBUTE_PRINTF(1, 2) _X_NORETURN;
 
 extern int noPanoramiXExtension;
+
+#ifdef COMPOSITE
 extern Bool noCompositeExtension;
+#endif
 
 #define DEFAULT_CLIENT X11BINDIR "/xterm"
 #define DEFAULT_STARTX X11BINDIR "/startx -- " X11BINDIR "/Xquartz"
@@ -92,7 +95,7 @@ static const char *__crashreporter_info__ __attribute__((__used__)) =
 asm (".desc ___crashreporter_info__, 0x10");
 
 static const char *__crashreporter_info__base =
-    "XLibre X Server " XSERVER_VERSION;
+    "X.Org X Server " XSERVER_VERSION;
 
 char *bundle_id_prefix = NULL;
 static char *server_bootstrap_name = NULL;
@@ -637,8 +640,10 @@ main(int argc, char **argv, char **envp)
     /* The server must not run the PanoramiX operations. */
     noPanoramiXExtension = TRUE;
 
+#ifdef COMPOSITE
     /* https://gitlab.freedesktop.org/xorg/xserver/-/issues/1409 */
     noCompositeExtension = TRUE;
+#endif
 
     /* Setup the initial crasherporter info */
     strlcpy(__crashreporter_info_buff__, __crashreporter_info__base,

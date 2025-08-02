@@ -41,6 +41,10 @@
 #ifdef SVR4
 #include <sys/sysmacros.h>
 #endif
+#if defined(__CYGWIN__)
+#include <sys/param.h>
+#include <sys/sysmacros.h>
+#endif
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
@@ -53,10 +57,6 @@
 #include <X11/X.h>
 #include <X11/Xproto.h>
 #include <X11/extensions/xf86bigfproto.h>
-#include <X11/fonts/fontstruct.h>
-#include <X11/fonts/libxfont2.h>
-
-#include "miext/extinit_priv.h"
 
 #include "misc.h"
 #include "os.h"
@@ -64,6 +64,7 @@
 #include "gcstruct.h"
 #include "dixfontstr.h"
 #include "extnsionst.h"
+#include "extinit.h"
 #include "protocol-versions.h"
 
 #include "xf86bigfontsrv.h"
@@ -86,7 +87,7 @@ static unsigned int pagesize;
 
 static Bool badSysCall = FALSE;
 
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__CYGWIN__) || defined(__DragonFly__)
 
 static void
 SigSysHandler(int signo)
@@ -146,6 +147,7 @@ static ShmDescPtr ShmList = (ShmDescPtr) NULL;
 static ShmDescPtr
 shmalloc(unsigned int size)
 {
+    ShmDescPtr pDesc;
     int shmid;
     char *addr;
 
@@ -163,7 +165,7 @@ shmalloc(unsigned int size)
     if (size < 3500)
         return (ShmDescPtr) NULL;
 
-    ShmDescPtr pDesc = calloc(1, sizeof(ShmDescRec));
+    pDesc = malloc(sizeof(ShmDescRec));
     if (!pDesc)
         return (ShmDescPtr) NULL;
 
@@ -264,11 +266,13 @@ XF86BigfontResetProc(ExtensionEntry * extEntry)
 static int
 ProcXF86BigfontQueryVersion(ClientPtr client)
 {
-    REQUEST_SIZE_MATCH(xXF86BigfontQueryVersionReq);
+    xXF86BigfontQueryVersionReply reply;
 
-    xXF86BigfontQueryVersionReply reply = {
+    REQUEST_SIZE_MATCH(xXF86BigfontQueryVersionReq);
+    reply = (xXF86BigfontQueryVersionReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
+        .length = 0,
         .majorVersion = SERVER_XF86BIGFONT_MAJOR_VERSION,
         .minorVersion = SERVER_XF86BIGFONT_MINOR_VERSION,
         .uid = geteuid(),
@@ -277,6 +281,9 @@ ProcXF86BigfontQueryVersion(ClientPtr client)
         .signature = signature,
         .capabilities = (client->local && !client->swapped)
                          ? XF86Bigfont_CAP_LocalShm : 0
+#else
+        .signature = 0,
+        .capabilities = 0
 #endif
     };
     if (client->swapped) {
@@ -383,7 +390,7 @@ ProcXF86BigfontQueryFont(ClientPtr client)
             }
             else {
 #endif
-                pCI = calloc(nCharInfos, sizeof(xCharInfo));
+                pCI = xallocarray(nCharInfos, sizeof(xCharInfo));
                 if (!pCI)
                     return BadAlloc;
 #ifdef MITSHM
@@ -445,7 +452,7 @@ ProcXF86BigfontQueryFont(ClientPtr client)
             if (hashModulus > nCharInfos + 1)
                 hashModulus = nCharInfos + 1;
 
-            tmp = calloc(4 * nCharInfos + 1, sizeof(CARD16));
+            tmp = xallocarray(4 * nCharInfos + 1, sizeof(CARD16));
             if (!tmp) {
                 if (!pDesc)
                     free(pCI);
@@ -532,9 +539,8 @@ ProcXF86BigfontQueryFont(ClientPtr client)
                : 0);
 
         xXF86BigfontQueryFontReply rep = {
-            .type = X_Reply,
-            .length = bytes_to_int32(sizeof(xXF86BigfontQueryFontReply)
-                                     - sizeof(xGenericReply) + rlength),
+            .type = X_Reply;
+            .length = bytes_to_int32(buflength),
             .sequenceNumber = client->sequence,
             .minBounds = pFont->info.ink_minbounds,
             .maxBounds = pFont->info.ink_maxbounds,
@@ -647,6 +653,7 @@ ProcXF86BigfontDispatch(ClientPtr client)
 static int _X_COLD
 SProcXF86BigfontQueryVersion(ClientPtr client)
 {
+    REQUEST(xXF86BigfontQueryVersionReq);
     return ProcXF86BigfontQueryVersion(client);
 }
 
@@ -705,7 +712,7 @@ XFree86BigfontExtensionInit(void)
 
         FontShmdescIndex = xfont2_allocate_font_private_index();
 
-#if !defined(CSRG_BASED)
+#if !defined(CSRG_BASED) && !defined(__CYGWIN__)
         pagesize = SHMLBA;
 #else
 #ifdef _SC_PAGESIZE

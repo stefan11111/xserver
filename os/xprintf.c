@@ -59,13 +59,85 @@
 #include <dix-config.h>
 
 #include <X11/Xos.h>
+#include "os.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
 
-#include "include/os.h"
-#include "include/Xprintf.h"
+#ifdef asprintf
+#undef asprintf
+#endif
+#ifdef vasprintf
+#undef vasprintf
+#endif
+
+#ifndef va_copy
+#ifdef __va_copy
+#define va_copy __va_copy
+#else
+#error "no working va_copy was found"
+#endif
+#endif
+
+/**
+ * Varargs sprintf that allocates a string buffer the right size for
+ * the pattern & data provided and prints the requested data to it.
+ *
+ * @param ret     Pointer to which the newly allocated buffer is written
+ *                (contents undefined on error)
+ * @param format  printf style format string
+ * @param va      variable argument list
+ * @return        size of allocated buffer, or -1 on error.
+ */
+int
+Xvasprintf(char **ret, const char *_X_RESTRICT_KYWD format, va_list va)
+{
+#ifdef HAVE_VASPRINTF
+    return vasprintf(ret, format, va);
+#else
+    int size;
+    va_list va2;
+
+    va_copy(va2, va);
+    size = vsnprintf(NULL, 0, format, va2);
+    va_end(va2);
+
+    *ret = malloc(size + 1);
+    if (*ret == NULL)
+        return -1;
+
+    vsnprintf(*ret, size + 1, format, va);
+    (*ret)[size] = 0;
+    return size;
+#endif
+}
+
+#ifndef HAVE_VASPRINTF
+#define vasprintf Xvasprintf
+#endif
+
+/**
+ * sprintf that allocates a string buffer the right size for
+ * the pattern & data provided and prints the requested data to it.
+ *
+ * @param ret     Pointer to which the newly allocated buffer is written
+ *                (contents undefined on error)
+ * @param format  printf style format string
+ * @param ...     arguments for specified format
+ * @return        size of allocated buffer, or -1 on error.
+ */
+int
+Xasprintf(char **ret, const char *_X_RESTRICT_KYWD format, ...)
+{
+    int size;
+    va_list va;
+
+    va_start(va, format);
+    size = vasprintf(ret, format, va);
+    va_end(va);
+    return size;
+}
 
 /**
  * Varargs sprintf that allocates a string buffer the right size for
@@ -154,4 +226,51 @@ int Xscnprintf(char *s, int n, const char *format, ...)
     x = Xvscnprintf(s, n, format, ap);
     va_end(ap);
     return x;
+}
+
+/* Old api, now deprecated, may be removed in the future */
+char *
+Xvprintf(const char *format, va_list va)
+{
+    char *ret;
+
+    if (vasprintf(&ret, format, va) == -1)
+        ret = NULL;
+
+    return ret;
+}
+
+char *
+Xprintf(const char *format, ...)
+{
+    char *ret;
+    va_list va;
+
+    va_start(va, format);
+    if (vasprintf(&ret, format, va) == -1)
+        ret = NULL;
+    va_end(va);
+    return ret;
+}
+
+char *
+XNFvprintf(const char *format, va_list va)
+{
+    char *ret;
+
+    XNFvasprintf(&ret, format, va);
+
+    return ret;
+}
+
+char *
+XNFprintf(const char *format, ...)
+{
+    char *ret;
+    va_list va;
+
+    va_start(va, format);
+    XNFvasprintf(&ret, format, va);
+    va_end(va);
+    return ret;
 }

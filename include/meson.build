@@ -169,9 +169,11 @@ conf_data.set('HAVE_SIGACTION', cc.has_function('sigaction') ? '1' : false)
 conf_data.set('HAVE_SIGPROCMASK', cc.has_function('sigprocmask') ? '1' : false)
 # HAVE_SOCKLEN_T is used by xtrans when IPv6 is disabled
 conf_data.set('HAVE_SOCKLEN_T', cc.has_type('socklen_t', prefix: '#include <sys/socket.h>') ? '1' : false)
+conf_data.set('HAVE_STRCASECMP', cc.has_function('strcasecmp') ? '1' : false)
 conf_data.set('HAVE_STRCASESTR', cc.has_function('strcasestr') ? '1' : false)
 conf_data.set('HAVE_STRLCAT', cc.has_function('strlcat', dependencies: libbsd_dep) ? '1' : false)
 conf_data.set('HAVE_STRLCPY', cc.has_function('strlcpy', dependencies: libbsd_dep) ? '1' : false)
+conf_data.set('HAVE_STRNCASECMP', cc.has_function('strncasecmp') ? '1' : false)
 conf_data.set('HAVE_STRNDUP', cc.has_function('strndup') and cc.has_header_symbol('string.h', 'strndup') ? '1' : false)
 # HAVE_STRUCT_SOCKADDR_STORAGE is used by xtrans >= 1.6
 conf_data.set('HAVE_STRUCT_SOCKADDR_STORAGE', cc.has_type('struct sockaddr_storage', prefix: '#include <sys/socket.h>') ? '1' : false)
@@ -204,15 +206,7 @@ conf_data.set('TCPCONN', '1')
 conf_data.set('UNIXCONN', host_machine.system() != 'windows' ? '1' : false)
 conf_data.set('IPv6', build_ipv6 ? '1' : false)
 
-# potentially tunable - needed also in places that cannot include misc.h
-conf_data.set('MAXCLIENTS', 2048)
-
-# Must be a power of 2 and <= MAXCLIENTS */
-conf_data.set('DIX_LIMITCLIENTS', 256)
-
-# some drivers (eg. xf86-video-intel) still relying on this symbol being set
 conf_data.set('COMPOSITE', '1')
-
 conf_data.set('DAMAGE', '1')
 conf_data.set('DBE', '1')
 conf_data.set('DGA', build_dga ? '1' : false)
@@ -234,10 +228,9 @@ conf_data.set('RES', build_res ? '1' : false)
 conf_data.set('RENDER', '1')
 conf_data.set('SCREENSAVER', build_screensaver ? '1' : false)
 conf_data.set('SHAPE', '1')
-conf_data.set('XACE', '1')
+conf_data.set('XACE', build_xace ? '1' : false)
 conf_data.set('XCMISC', '1')
 conf_data.set('XCSECURITY', build_xsecurity ? '1' : false)
-conf_data.set('CONFIG_NAMESPACE', build_namespace ? '1' : false)
 conf_data.set('XDMCP', xdmcp_dep.found() ? '1' : false)
 conf_data.set('XF86BIGFONT', build_xf86bigfont ? '1' : false)
 conf_data.set('XF86DRI', build_dri1 ? '1' : false)
@@ -255,9 +248,9 @@ conf_data.set('XvExtension', build_xv ? '1' : false)
 conf_data.set('XvMCExtension', build_xvmc ? '1' : false)
 
 # needed by several extensions
-build_registry_resource = (build_xselinux or build_res or build_namespace)
+build_registry_resource = (build_xselinux or build_res)
 conf_data.set('X_REGISTRY_RESOURCE', build_registry_resource ? '1' : false)
-build_registry_request = (build_xselinux or build_xsecurity or with_dtrace or build_namespace)
+build_registry_request = (build_xselinux or build_xsecurity or with_dtrace)
 conf_data.set('X_REGISTRY_REQUEST', build_registry_request ? '1' : false)
 
 conf_data.set('HAVE_SHA1_IN_' + sha1.to_upper(), '1', description: 'Use @0@ SHA1 functions'.format(sha1))
@@ -291,18 +284,21 @@ defines_svr4 = '''#if !defined(SVR4) && !defined(__svr4__) && !defined(__SVR4)
 '''
 
 # BSD specifics
+supports_pccons = false
 supports_pcvt = false
 supports_syscons = false
 supports_wscons = false
 csrg_based = false
 
 if host_machine.system() == 'freebsd' or host_machine.system() == 'dragonfly'
+  supports_pccons = true
   supports_pcvt = true
   supports_syscons = true
   csrg_based = true
 endif
 
 if host_machine.system() == 'kfreebsd'
+  supports_pccons = true
   supports_pcvt = true
   supports_syscons = true
 endif
@@ -330,12 +326,21 @@ conf_data.set_quoted('XCONFIGFILE', 'xorg.conf')
 conf_data.set_quoted('__XSERVERNAME__', 'Xorg')
 conf_data.set('WITH_VGAHW', build_vgahw ? '1' : false)
 conf_data.set('CSRG_BASED', csrg_based ? '1' : false)
+conf_data.set('PCCONS_SUPPORT', supports_pccons ? '1' : false)
 conf_data.set('PCVT_SUPPORT', supports_pcvt ? '1' : false)
 conf_data.set('SYSCONS_SUPPORT', supports_syscons ? '1' : false)
 conf_data.set('WSCONS_SUPPORT', supports_wscons ? '1' : false)
 conf_data.set('XSERVER_LIBPCIACCESS', get_option('pciaccess') ? '1' : false)
 conf_data.set('XSERVER_PLATFORM_BUS', build_udev_kms ? '1' : false)
-conf_data.set('XSERVER_SCREEN_VRR', '1')
+
+configure_file(output : 'dix-config.h',
+               configuration : conf_data)
+
+configure_file(output : 'xorg-server.h',
+               input : 'xorg-server.h.meson.in',
+               configuration : conf_data,
+               install: build_xorg,
+               install_dir: xorgsdkdir)
 
 version_data = configuration_data()
 version_data.set('VENDOR_RELEASE', '@0@'.format(release))
@@ -405,6 +410,8 @@ xwin_data = configuration_data()
 xwin_data.set_quoted('DEFAULT_LOGDIR', log_dir)
 xwin_data.set('HAS_WINSOCK', host_machine.system() == 'windows' ? '1' : false,
               description: 'Use Windows sockets')
+xwin_data.set('HAS_DEVWINDOWS', host_machine.system() == 'cygwin' ? '1' : false,
+              description: 'Has /dev/windows for signaling new win32 messages')
 xwin_data.set('RELOCATE_PROJECTROOT', host_machine.system() == 'windows' ? '1' : false,
               description: 'Make paths relative to the xserver installation location')
 xwin_data.set10('ENABLE_DEBUG', enable_debugging)
@@ -412,6 +419,19 @@ xwin_data.set10('ENABLE_DEBUG', enable_debugging)
 configure_file(output : 'xwin-config.h',
                input : 'xwin-config.h.meson.in',
                configuration : xwin_data)
+
+build_xwayland_glamor = build_glamor and gbm_dep.found()
+
+xwayland_data = configuration_data()
+xwayland_data.set('XWL_HAS_GLAMOR', build_xwayland_glamor ? '1' : false)
+xwayland_data.set('XWL_HAS_LIBDECOR', have_libdecor ? '1' : false)
+xwayland_data.set('XWL_HAS_XWAYLAND_EXTENSION', xwaylandproto_dep.found() ? '1' : false)
+xwayland_data.set('XWL_HAS_EI', build_ei)
+xwayland_data.set('XWL_HAS_EI_PORTAL', build_ei_portal)
+
+configure_file(output : 'xwayland-config.h',
+               input : 'xwayland-config.h.meson.in',
+               configuration : xwayland_data)
 
 dtrace_hdr = []
 dtrace_tmpl = files('Xserver.d')
@@ -438,6 +458,7 @@ if build_xorg
             'cursorstr.h',
             'dix.h',
             'dixaccess.h',
+            'dixevents.h',
             'dixfont.h',
             'dixfontstr.h',
             'dixstruct.h',
@@ -446,7 +467,6 @@ if build_xorg
             'extension.h',
             'extinit.h',
             'extnsionst.h',
-            'fd_notify.h',
             'fourcc.h',
             'gc.h',
             'gcstruct.h',
@@ -465,6 +485,7 @@ if build_xorg
             'pixmapstr.h',
             'privates.h',
             'property.h',
+            'propertyst.h',
             'ptrveloc.h',
             'region.h',
             'regionstr.h',
@@ -472,6 +493,7 @@ if build_xorg
             'rgb.h',
             'screenint.h',
             'scrnintstr.h',
+            'selection.h',
             'servermd.h',
             'validate.h',
             'displaymode.h',

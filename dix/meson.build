@@ -20,7 +20,6 @@ srcs_dix = [
     'glyphcurs.c',
     'grabs.c',
     'inpututils.c',
-    'lookup.c',
     'pixmap.c',
     'privates.c',
     'property.c',
@@ -28,10 +27,7 @@ srcs_dix = [
     'region.c',
     'registry.c',
     'resource.c',
-    'rpcbuf.c',
-    'screen_hooks.c',
     'selection.c',
-    'screen.c',
     'swaprep.c',
     'swapreq.c',
     'tables.c',
@@ -58,13 +54,13 @@ endif
 
 dtrace_dep = declare_dependency(sources: [dtrace_src, dtrace_hdr])
 
-libxserver_dix = static_library('xserver_dix',
+libxserver_dix = static_library('libxserver_dix',
     [ srcs_dix, builtinatoms_src ],
     include_directories: inc,
     dependencies: [ dtrace_dep, common_dep, ]
 )
 
-libxserver_main = static_library('xserver_main',
+libxserver_main = static_library('libxserver_main',
     'stubmain.c',
     include_directories: inc,
     dependencies: common_dep,

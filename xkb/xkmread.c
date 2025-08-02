@@ -34,14 +34,13 @@
 #include <X11/keysym.h>
 #include <X11/extensions/XKMformat.h>
 
-#include "os/log_priv.h"
 #include "xkb/xkbfile_priv.h"
 #include "xkb/xkbfmisc_priv.h"
-#include "xkb/xkbsrv_priv.h"
 
 #include "misc.h"
 #include "inputstr.h"
 #include "xkbstr.h"
+#include "xkbsrv.h"
 #include "xkbgeom.h"
 
 static Atom
@@ -1210,7 +1209,7 @@ unsigned
 XkmReadFile(FILE * file, unsigned need, unsigned want, XkbDescPtr *xkb)
 {
     register unsigned i;
-    xkmSectionInfo toc[MAX_TOC] = { 0 }, tmpTOC = { 0 };
+    xkmSectionInfo toc[MAX_TOC], tmpTOC;
     xkmFileInfo fileInfo;
     unsigned tmp, nRead = 0;
     unsigned which = need | want;

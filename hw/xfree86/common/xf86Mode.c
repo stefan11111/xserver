@@ -85,15 +85,12 @@
 #endif
 
 #include <X11/X.h>
-
-#include "os/log_priv.h"
-
 #include "xf86Modes.h"
 #include "xf86Crtc.h"
 #include "os.h"
 #include "servermd.h"
 #include "globals.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
 #include "edid.h"
 
@@ -248,7 +245,7 @@ xf86ModeStatusToString(ModeStatus status)
  * xf86ShowClockRanges() -- Print the clock ranges allowed
  * and the clock values scaled by ClockMulFactor and ClockDivFactor
  */
-static void
+void
 xf86ShowClockRanges(ScrnInfoPtr scrp, ClockRangePtr clockRanges)
 {
     ClockRangePtr cp;

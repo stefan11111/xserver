@@ -39,7 +39,6 @@
 
 #include "config/hotplug_priv.h"
 #include "dix/input_priv.h"
-#include "dix/inpututils_priv.h"
 #include "mi/mi_priv.h"
 #include "mi/mipointer_priv.h"
 #include "os/cmdline.h"
@@ -47,9 +46,11 @@
 #include "xkbsrv.h"
 #include "XIstubs.h"            /* even though we don't use stubs.  cute, no? */
 #include "exevents.h"
+#include "extinit.h"
 #include "exglobals.h"
 #include "eventstr.h"
 #include "xserver-properties.h"
+#include "inpututils.h"
 #include "optionstr.h"
 
 #define AtomFromName(x) MakeAtom(x, strlen(x), 1)
@@ -383,11 +384,6 @@ DDXRingBell(int volume, int pitch, int duration)
 {
     KdKeyboardInfo *ki = NULL;
 
-    if (kdOsFuncs->Bell) {
-        kdOsFuncs->Bell(volume, pitch, duration);
-        return;
-    }
-
     for (ki = kdKeyboards; ki; ki = ki->next) {
         if (ki->dixdev->coreEvents)
             KdRingBell(ki, volume, pitch, duration);
@@ -703,7 +699,7 @@ KdNewKeyboard(void)
 }
 
 int
-KdAddConfigKeyboard(const char *keyboard)
+KdAddConfigKeyboard(char *keyboard)
 {
     struct KdConfigDevice **prev, *new;
 
@@ -767,7 +763,7 @@ KdRemoveKeyboard(KdKeyboardInfo * ki)
 }
 
 int
-KdAddConfigPointer(const char *pointer)
+KdAddConfigPointer(char *pointer)
 {
     struct KdConfigDevice **prev, *new;
 
@@ -1039,17 +1035,6 @@ KdParsePointerOptions(KdPointerInfo * pi)
                    key, value);
     }
 }
-
-/*
- * Mouse argument syntax:
- *
- *  device,protocol,options...
- *
- *  Options are any of:
- *      1-5         n button mouse
- *      2button     emulate middle button
- *      {NMO}       Reorder buttons
- */
 
 static KdPointerInfo *
 KdParsePointer(const char *arg)
@@ -1776,11 +1761,6 @@ KdBlockHandler(ScreenPtr pScreen, void *timeo)
             if (ms < myTimeout || myTimeout == 0)
                 myTimeout = ms;
         }
-    }
-    /* if we need to poll for events, do that */
-    if (kdOsFuncs->pollEvents) {
-        kdOsFuncs->pollEvents();
-        myTimeout = 20;
     }
     if (myTimeout > 0)
         AdjustWaitForDelay(timeo, myTimeout);

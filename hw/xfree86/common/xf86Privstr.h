@@ -75,6 +75,9 @@ typedef struct {
     Bool vidModeEnabled;        /* VidMode extension enabled */
     Bool vidModeAllowNonLocal;  /* allow non-local VidMode
                                  * connections */
+    Bool miscModInDevEnabled;   /* Allow input devices to be
+                                 * changed */
+    Bool miscModInDevAllowNonLocal;
     Bool pmFlag;
     MessageType iglxFrom;
     XF86_GlxVisuals glxVisuals;

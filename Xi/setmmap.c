@@ -73,6 +73,7 @@ int
 ProcXSetDeviceModifierMapping(ClientPtr client)
 {
     int ret;
+    xSetDeviceModifierMappingReply rep;
     DeviceIntPtr dev;
 
     REQUEST(xSetDeviceModifierMappingReq);
@@ -81,6 +82,13 @@ ProcXSetDeviceModifierMapping(ClientPtr client)
     if (client->req_len != bytes_to_int32(sizeof(xSetDeviceModifierMappingReq)) +
         (stuff->numKeyPerModifier << 1))
         return BadLength;
+
+    rep = (xSetDeviceModifierMappingReply) {
+        .repType = X_Reply,
+        .RepType = X_SetDeviceModifierMapping,
+        .sequenceNumber = client->sequence,
+        .length = 0
+    };
 
     ret = dixLookupDevice(&dev, stuff->deviceid, client, DixManageAccess);
     if (ret != Success)
@@ -91,19 +99,33 @@ ProcXSetDeviceModifierMapping(ClientPtr client)
     if (ret == Success)
         ret = MappingSuccess;
 
-    if (ret != MappingSuccess && ret != MappingBusy && ret != MappingFailed)
-        return ret;
-
-    xSetDeviceModifierMappingReply rep = {
-        .repType = X_Reply,
-        .RepType = X_SetDeviceModifierMapping,
-        .sequenceNumber = client->sequence,
-        .success = ret,
-    };
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
+    if (ret == MappingSuccess || ret == MappingBusy || ret == MappingFailed) {
+        rep.success = ret;
+        WriteReplyToClient(client, sizeof(xSetDeviceModifierMappingReply),
+                           &rep);
     }
-    WriteToClient(client, sizeof(xSetDeviceModifierMappingReply), &rep);
+    else if (ret == -1) {
+        return BadValue;
+    }
+    else {
+        return ret;
+    }
+
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XSetDeviceModifierMapping function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXSetDeviceModifierMapping(ClientPtr client, int size,
+                              xSetDeviceModifierMappingReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

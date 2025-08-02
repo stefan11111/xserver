@@ -61,7 +61,10 @@ SOFTWARE.
 #include <X11/Xwinsock.h>
 #endif
 #include <stdio.h>
-#include "os/Xtrans.h"
+#define XSERV_t
+#define TRANS_SERVER
+#define TRANS_REOPEN
+#include <X11/Xtrans/Xtrans.h>
 #include <X11/Xmd.h>
 #include <errno.h>
 #if !defined(WIN32)
@@ -298,10 +301,6 @@ ReadRequestFromClient(ClientPtr client)
                 needed = get_big_req_len(request, client);
         }
         client->req_len = needed;
-        if (needed > MAXINT >> 2) {
-            /* Check for potential integer overflow */
-            return -(BadLength);
-        }
         needed <<= 2;           /* needed is in bytes now */
     }
     if (gotnow < needed) {
@@ -392,8 +391,6 @@ ReadRequestFromClient(ClientPtr client)
                     needed = get_big_req_len(request, client);
             }
             client->req_len = needed;
-            if (needed > MAXINT >> 2)
-                return -(BadLength);
             needed <<= 2;
         }
         if (gotnow < needed) {
@@ -441,7 +438,7 @@ ReadRequestFromClient(ClientPtr client)
      */
 
     gotnow -= needed;
-    if (!gotnow && !oci->ignoreBytes)
+    if (!gotnow)
         AvailableInput = oc;
     if (move_header) {
         if (client->req_len < bytes_to_int32(sizeof(xBigReq) - sizeof(xReq))) {
@@ -745,7 +742,7 @@ WriteToClient(ClientPtr who, int count, const void *__buf)
         }
         else if (!(oco = AllocateOutputBuffer())) {
             AbortClient(who);
-            dixMarkClientException(who);
+            MarkClientException(who);
             return -1;
         }
         oc->output = oco;
@@ -923,7 +920,7 @@ FlushClient(ClientPtr who, OsCommPtr oc, const void *__extraBuf, int extraCount)
                 }
                 if (!obuf) {
                     AbortClient(who);
-                    dixMarkClientException(who);
+                    MarkClientException(who);
                     oco->count = 0;
                     return -1;
                 }
@@ -950,7 +947,7 @@ FlushClient(ClientPtr who, OsCommPtr oc, const void *__extraBuf, int extraCount)
 #endif
         else {
             AbortClient(who);
-            dixMarkClientException(who);
+            MarkClientException(who);
             oco->count = 0;
             return -1;
         }
@@ -975,10 +972,12 @@ FlushClient(ClientPtr who, OsCommPtr oc, const void *__extraBuf, int extraCount)
 static ConnectionInputPtr
 AllocateInputBuffer(void)
 {
-    ConnectionInputPtr oci = calloc(1, sizeof(ConnectionInput));
+    ConnectionInputPtr oci;
+
+    oci = malloc(sizeof(ConnectionInput));
     if (!oci)
         return NULL;
-    oci->buffer = calloc(1, BUFSIZE);
+    oci->buffer = malloc(BUFSIZE);
     if (!oci->buffer) {
         free(oci);
         return NULL;
@@ -994,7 +993,9 @@ AllocateInputBuffer(void)
 static ConnectionOutputPtr
 AllocateOutputBuffer(void)
 {
-    ConnectionOutputPtr oco = calloc(1, sizeof(ConnectionOutput));
+    ConnectionOutputPtr oco;
+
+    oco = malloc(sizeof(ConnectionOutput));
     if (!oco)
         return NULL;
     oco->buf = calloc(1, BUFSIZE);

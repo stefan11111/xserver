@@ -105,6 +105,7 @@ FreeCursorBits(CursorBitsPtr bits)
 int
 FreeCursor(void *value, XID cid)
 {
+    int nscr;
     CursorPtr pCurs = (CursorPtr) value;
 
     ScreenPtr pscr;
@@ -117,7 +118,7 @@ FreeCursor(void *value, XID cid)
 
     BUG_WARN(CursorRefCount(pCurs) < 0);
 
-    for (int nscr = 0; nscr < screenInfo.numScreens; nscr++) {
+    for (nscr = 0; nscr < screenInfo.numScreens; nscr++) {
         pscr = screenInfo.screens[nscr];
         (void) (*pscr->UnrealizeCursor) (pDev, pscr, pCurs);
     }
@@ -184,11 +185,13 @@ CheckForEmptyMask(CursorBitsPtr bits)
 static int
 RealizeCursorAllScreens(CursorPtr pCurs)
 {
+    DeviceIntPtr pDev;
     ScreenPtr pscr;
+    int nscr;
 
-    for (int nscr = 0; nscr < screenInfo.numScreens; nscr++) {
+    for (nscr = 0; nscr < screenInfo.numScreens; nscr++) {
         pscr = screenInfo.screens[nscr];
-        for (DeviceIntPtr pDev = inputInfo.devices; pDev; pDev = pDev->next) {
+        for (pDev = inputInfo.devices; pDev; pDev = pDev->next) {
             if (DevHasCursor(pDev)) {
                 if (!(*pscr->RealizeCursor) (pDev, pscr, pCurs)) {
                     /* Realize failed for device pDev on screen pscr.
@@ -288,20 +291,20 @@ AllocARGBCursor(unsigned char *psrcbits, unsigned char *pmaskbits,
     *ppCurs = pCurs;
 
     if (argb) {
-        size_t size = bits->width * bits->height;
+        size_t i, size = bits->width * bits->height;
 
-        for (size_t i = 0; i < size; i++) {
+        for (i = 0; i < size; i++) {
             if ((argb[i] & 0xff000000) == 0 && (argb[i] & 0xffffff) != 0) {
                 /* ARGB data doesn't seem pre-multiplied, fix it */
-                for (size_t j = 0; j < size; j++) {
+                for (i = 0; i < size; i++) {
                     CARD32 a, ar, ag, ab;
 
-                    a = argb[j] >> 24;
-                    ar = a * ((argb[j] >> 16) & 0xff) / 0xff;
-                    ag = a * ((argb[j] >> 8) & 0xff) / 0xff;
-                    ab = a * (argb[j] & 0xff) / 0xff;
+                    a = argb[i] >> 24;
+                    ar = a * ((argb[i] >> 16) & 0xff) / 0xff;
+                    ag = a * ((argb[i] >> 8) & 0xff) / 0xff;
+                    ab = a * (argb[i] & 0xff) / 0xff;
 
-                    argb[j] = a << 24 | ar << 16 | ag << 8 | ab;
+                    argb[i] = a << 24 | ar << 16 | ag << 8 | ab;
                 }
 
                 break;
@@ -336,7 +339,7 @@ AllocGlyphCursor(Font source, unsigned sourceChar, Font mask, unsigned maskChar,
 
     rc = dixLookupResourceByType((void **) &sourcefont, source, X11_RESTYPE_FONT,
                                  client, DixUseAccess);
-    if ((rc != Success) || (!sourcefont)) {
+    if (rc != Success) {
         client->errorValue = source;
         return rc;
     }
@@ -373,7 +376,7 @@ AllocGlyphCursor(Font source, unsigned sourceChar, Font mask, unsigned maskChar,
             unsigned char *mskptr;
 
             n = BitmapBytePad(cm.width) * (long) cm.height;
-            mskptr = mskbits = calloc(1, n);
+            mskptr = mskbits = malloc(n);
             if (!mskptr)
                 return BadAlloc;
             while (--n >= 0)
@@ -424,7 +427,7 @@ AllocGlyphCursor(Font source, unsigned sourceChar, Font mask, unsigned maskChar,
             bits->refcnt = -1;
         else {
             bits->refcnt = 1;
-            pShare = calloc(1, sizeof(GlyphShare));
+            pShare = malloc(sizeof(GlyphShare));
             if (!pShare) {
                 FreeCursorBits(bits);
                 return BadAlloc;
@@ -494,7 +497,7 @@ CreateRootCursor(void)
     XID fontID;
     const char defaultCursorFont[] = "cursor";
 
-    fontID = dixAllocServerXID();
+    fontID = FakeClientID(0);
     err = OpenFont(serverClient, fontID, FontLoadAll | FontOpenSync,
                    (unsigned) strlen(defaultCursorFont), defaultCursorFont);
     if (err != Success)
@@ -508,7 +511,7 @@ CreateRootCursor(void)
                          &curs, serverClient, (XID) 0) != Success)
         return NullCursor;
 
-    if (!AddResource(dixAllocServerXID(), X11_RESTYPE_CURSOR, (void *) curs))
+    if (!AddResource(FakeClientID(0), X11_RESTYPE_CURSOR, (void *) curs))
         return NullCursor;
 
     return curs;

@@ -40,10 +40,11 @@
 #include <stdbool.h>
 
 #include <X11/Xwindows.h>
-#include <winsock2.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_icccm.h>
 #include <xcb/xcb_image.h>
+
+#include <winsock2.h>
 
 #include "winresource.h"
 #include "winprefs.h"
@@ -512,9 +513,9 @@ winXIconToHICON(xcb_connection_t *conn, xcb_window_t id, int iconSize)
                     /* Mask is 1-bit deep */
                     maskStride = ((iconSize * 1 + 15) & (~15)) / 8;
 
-                    image = calloc(stride, iconSize);
-                    imageMask = calloc(stride, iconSize);
-                    mask = calloc(maskStride, iconSize);
+                    image = malloc(stride * iconSize);
+                    imageMask = malloc(stride * iconSize);
+                    mask = malloc(maskStride * iconSize);
 
                     /* Default to a completely black mask */
                     memset(imageMask, 0, stride * iconSize);

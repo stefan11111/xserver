@@ -81,7 +81,6 @@ request_XIGetClientPointer(ClientPtr client, xXIGetClientPointerReq * req,
 
     test_data.win = req->win;
 
-    client_request.swapped = FALSE;
     rc = ProcXIGetClientPointer(&client_request);
     assert(rc == error);
 
@@ -96,6 +95,7 @@ request_XIGetClientPointer(ClientPtr client, xXIGetClientPointerReq * req,
 
     if (rc == BadWindow)
         assert(client_request.errorValue == req->win);
+
 }
 
 static void

@@ -49,9 +49,6 @@ SOFTWARE.
 #include <X11/X.h>
 #include <X11/Xproto.h>
 #include <X11/Xprotostr.h>
-
-#include "dix/reqhandlers_priv.h"
-
 #include "misc.h"
 #include "dixstruct.h"
 #include "extnsionst.h"         /* for SendEvent */
@@ -752,13 +749,14 @@ SwapColorItem(xColorItem * pItem)
 int _X_COLD
 SProcStoreColors(ClientPtr client)
 {
+    long count;
     xColorItem *pItem;
 
     REQUEST(xStoreColorsReq);
     REQUEST_AT_LEAST_SIZE(xStoreColorsReq);
     swapl(&stuff->cmap);
     pItem = (xColorItem *) &stuff[1];
-    for (long count = ((client->req_len << 2) - sizeof(xStoreColorsReq)) / sizeof(xColorItem); --count >= 0;)
+    for (count = ((client->req_len << 2) - sizeof(xStoreColorsReq)) / sizeof(xColorItem); --count >= 0;)
         SwapColorItem(pItem++);
     return ((*ProcVector[X_StoreColors]) (client));
 }

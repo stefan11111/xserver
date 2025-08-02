@@ -69,11 +69,20 @@ int
 ProcXGetDeviceButtonMapping(ClientPtr client)
 {
     DeviceIntPtr dev;
+    xGetDeviceButtonMappingReply rep;
     ButtonClassPtr b;
     int rc;
 
     REQUEST(xGetDeviceButtonMappingReq);
     REQUEST_SIZE_MATCH(xGetDeviceButtonMappingReq);
+
+    rep = (xGetDeviceButtonMappingReply) {
+        .repType = X_Reply,
+        .RepType = X_GetDeviceButtonMapping,
+        .sequenceNumber = client->sequence,
+        .nElts = 0,
+        .length = 0
+    };
 
     rc = dixLookupDevice(&dev, stuff->deviceid, client, DixGetAttrAccess);
     if (rc != Success)
@@ -83,19 +92,25 @@ ProcXGetDeviceButtonMapping(ClientPtr client)
     if (b == NULL)
         return BadMatch;
 
-    xGetDeviceButtonMappingReply rep = {
-        .repType = X_Reply,
-        .RepType = X_GetDeviceButtonMapping,
-        .sequenceNumber = client->sequence,
-        .nElts = b->numButtons,
-        .length = bytes_to_int32(b->numButtons),
-    };
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-    }
-    WriteToClient(client, sizeof(xGetDeviceButtonMappingReply), &rep);
+    rep.nElts = b->numButtons;
+    rep.length = bytes_to_int32(rep.nElts);
+    WriteReplyToClient(client, sizeof(xGetDeviceButtonMappingReply), &rep);
     WriteToClient(client, rep.nElts, &b->map[1]);
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XGetDeviceButtonMapping function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXGetDeviceButtonMapping(ClientPtr client, int size,
+                            xGetDeviceButtonMappingReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

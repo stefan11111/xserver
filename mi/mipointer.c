@@ -55,8 +55,6 @@ in this Software without prior written authorization from The Open Group.
 #include   "dix/cursor_priv.h"
 #include   "dix/dix_priv.h"
 #include   "dix/input_priv.h"
-#include   "dix/inpututils_priv.h"
-#include   "dix/screen_hooks_priv.h"
 #include   "mi/mi_priv.h"
 #include   "mi/mipointer_priv.h"
 
@@ -68,6 +66,7 @@ in this Software without prior written authorization from The Open Group.
 #include   "cursorstr.h"
 #include   "dixstruct.h"
 #include   "inputstr.h"
+#include   "inpututils.h"
 #include   "eventstr.h"
 
 typedef struct {
@@ -91,7 +90,7 @@ DevPrivateKeyRec miPointerScreenKeyRec;
 DevPrivateKeyRec miPointerPrivKeyRec;
 
 #define MIPOINTER(dev) \
-    (InputDevIsFloating(dev) ? \
+    (IsFloating(dev) ? \
         (miPointerPtr)dixLookupPrivate(&(dev)->devPrivates, miPointerPrivKey): \
         (miPointerPtr)dixLookupPrivate(&(GetMaster(dev, MASTER_POINTER))->devPrivates, miPointerPrivKey))
 
@@ -108,7 +107,7 @@ static void miPointerCursorLimits(DeviceIntPtr pDev, ScreenPtr pScreen,
                                   BoxPtr pTopLeftBox);
 static Bool miPointerSetCursorPosition(DeviceIntPtr pDev, ScreenPtr pScreen,
                                        int x, int y, Bool generateEvent);
-static void miPointerCloseScreen(CallbackListPtr *pcbl, ScreenPtr pScreen, void *unused);
+static Bool miPointerCloseScreen(ScreenPtr pScreen);
 static void miPointerMove(DeviceIntPtr pDev, ScreenPtr pScreen, int x, int y);
 static Bool miPointerDeviceInitialize(DeviceIntPtr pDev, ScreenPtr pScreen);
 static void miPointerDeviceCleanup(DeviceIntPtr pDev, ScreenPtr pScreen);
@@ -134,14 +133,15 @@ miPointerInitialize(ScreenPtr pScreen,
     if (!dixRegisterPrivateKey(&miPointerPrivKeyRec, PRIVATE_DEVICE, 0))
         return FALSE;
 
-    pScreenPriv = calloc(1, sizeof(miPointerScreenRec));
+    pScreenPriv = malloc(sizeof(miPointerScreenRec));
     if (!pScreenPriv)
         return FALSE;
     pScreenPriv->spriteFuncs = spriteFuncs;
     pScreenPriv->screenFuncs = screenFuncs;
     pScreenPriv->waitForUpdate = waitForUpdate;
     pScreenPriv->showTransparent = FALSE;
-    dixScreenHookPostClose(pScreen, miPointerCloseScreen);
+    pScreenPriv->CloseScreen = pScreen->CloseScreen;
+    pScreen->CloseScreen = miPointerCloseScreen;
     dixSetPrivate(&pScreen->devPrivates, miPointerScreenKey, pScreenPriv);
     /*
      * set up screen cursor method table
@@ -163,17 +163,19 @@ miPointerInitialize(ScreenPtr pScreen,
 /**
  * Destroy screen-specific information.
  *
+ * @param index Screen index of the screen in screenInfo.screens[]
  * @param pScreen The actual screen pointer
  */
-static void miPointerCloseScreen(CallbackListPtr *pcbl, ScreenPtr pScreen, void *unused)
+static Bool
+miPointerCloseScreen(ScreenPtr pScreen)
 {
     SetupScreen(pScreen);
 
-    dixScreenUnhookPostClose(pScreen, miPointerCloseScreen);
+    pScreen->CloseScreen = pScreenPriv->CloseScreen;
     free((void *) pScreenPriv);
-    dixSetPrivate(&pScreen->devPrivates, miPointerScreenKey, NULL);
     FreeEventList(mipointermove_events, GetMaximumEventsNum());
     mipointermove_events = NULL;
+    return (*pScreen->CloseScreen) (pScreen);
 }
 
 /*
@@ -323,9 +325,11 @@ miRecolorCursor(DeviceIntPtr pDev, ScreenPtr pScr,
 static Bool
 miPointerDeviceInitialize(DeviceIntPtr pDev, ScreenPtr pScreen)
 {
+    miPointerPtr pPointer;
+
     SetupScreen(pScreen);
 
-    miPointerPtr pPointer = calloc(1, sizeof(miPointerRec));
+    pPointer = malloc(sizeof(miPointerRec));
     if (!pPointer)
         return FALSE;
 
@@ -363,7 +367,7 @@ miPointerDeviceCleanup(DeviceIntPtr pDev, ScreenPtr pScreen)
 {
     SetupScreen(pScreen);
 
-    if (!InputDevIsMaster(pDev) && !InputDevIsFloating(pDev))
+    if (!IsMaster(pDev) && !IsFloating(pDev))
         return;
 
     (*pScreenPriv->spriteFuncs->DeviceCursorCleanup) (pDev, pScreen);

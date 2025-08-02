@@ -7,7 +7,7 @@
 
 #include <X11/Xdefs.h>
 
-#include "xf86str.h"
+#include "xf86VGAarbiter.h"
 
 #ifdef XSERVER_LIBPCIACCESS
 
@@ -28,7 +28,5 @@ static inline void xf86VGAarbiterLock(ScrnInfoPtr pScrn) {}
 static inline void xf86VGAarbiterUnlock(ScrnInfoPtr pScrn) {}
 
 #endif /* XSERVER_LIBPCIACCESS */
-
-Bool xf86VGAarbiterAllowDRI(ScreenPtr pScreen);
 
 #endif /* _XSERVER_XF86VGAARBITERPRIV_H */

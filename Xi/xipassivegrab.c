@@ -37,7 +37,6 @@
 #include "dix/dix_priv.h"
 #include "dix/dixgrabs_priv.h"
 #include "dix/exevents_priv.h"
-#include "dix/inpututils_priv.h"
 
 #include "inputstr.h"           /* DeviceIntPtr      */
 #include "windowstr.h"          /* window structure  */
@@ -45,6 +44,7 @@
 #include "exglobals.h"          /* BadDevice */
 #include "xipassivegrab.h"
 #include "misc.h"
+#include "inpututils.h"
 
 int _X_COLD
 SProcXIPassiveGrabDevice(ClientPtr client)
@@ -92,6 +92,7 @@ ProcXIPassiveGrabDevice(ClientPtr client)
     GrabParameters param;
     void *tmp;
     int mask_len;
+    uint32_t length;
 
     REQUEST(xXIPassiveGrabDeviceReq);
     REQUEST_FIXED_SIZE(xXIPassiveGrabDeviceReq,
@@ -196,7 +197,7 @@ ProcXIPassiveGrabDevice(ClientPtr client)
         goto out;
     }
 
-    mod_dev = (InputDevIsFloating(dev)) ? dev : GetMaster(dev, MASTER_KEYBOARD);
+    mod_dev = (IsFloating(dev)) ? dev : GetMaster(dev, MASTER_KEYBOARD);
 
     for (i = 0; i < stuff->num_modifiers; i++, modifiers++) {
         uint8_t status = Success;
@@ -246,20 +247,27 @@ ProcXIPassiveGrabDevice(ClientPtr client)
         }
     }
 
-    uint32_t length = rep.length; /* save it before swapping */
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.num_modifiers);
-    }
-    WriteToClient(client, sizeof(rep), &rep);
-    WriteToClient(client, length * 4, modifiers_failed);
+    /* save the value before SRepXIPassiveGrabDevice swaps it */
+    length = rep.length;
+    WriteReplyToClient(client, sizeof(rep), &rep);
+    if (rep.num_modifiers)
+        WriteToClient(client, length * 4, modifiers_failed);
 
  out:
     free(modifiers_failed);
     xi2mask_free(&mask.xi2mask);
     return ret;
+}
+
+void _X_COLD
+SRepXIPassiveGrabDevice(ClientPtr client, int size,
+                        xXIPassiveGrabDeviceReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->num_modifiers);
+
+    WriteToClient(client, size, rep);
 }
 
 int _X_COLD
@@ -337,7 +345,7 @@ ProcXIPassiveUngrabDevice(ClientPtr client)
     if (rc != Success)
         return rc;
 
-    mod_dev = (InputDevIsFloating(dev)) ? dev : GetMaster(dev, MASTER_KEYBOARD);
+    mod_dev = (IsFloating(dev)) ? dev : GetMaster(dev, MASTER_KEYBOARD);
 
     tempGrab = AllocGrab(NULL);
     if (!tempGrab)

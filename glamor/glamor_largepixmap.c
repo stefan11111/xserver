@@ -1,10 +1,5 @@
-#include <dix-config.h>
-
-#include <assert.h>
 #include <stdlib.h>
 #include <stdint.h> /* For INT16_MAX */
-
-#include "os/bug_priv.h"
 
 #include "glamor_priv.h"
 
@@ -82,10 +77,6 @@ __glamor_compute_clipped_regions(int block_w,
     clipped_regions = calloc((end_block_x - start_block_x + 1)
                              * (end_block_y - start_block_y + 1),
                              sizeof(*clipped_regions));
-    if (!clipped_regions) {
-        *n_region = 0;
-        return NULL;
-    }
 
     DEBUGF("startx %d starty %d endx %d endy %d \n",
            start_x, start_y, end_x, end_y);
@@ -199,7 +190,6 @@ glamor_compute_clipped_regions_ext(PixmapPtr pixmap,
         small_box.y2 = block_h;
     }
     else {
-        BUG_RETURN_VAL(!pixmap_priv, NULL);
         glamor_pixmap_private *priv = __glamor_large(pixmap_priv);
 
         clipped_regions = __glamor_compute_clipped_regions(priv->block_w,
@@ -226,11 +216,6 @@ glamor_compute_clipped_regions_ext(PixmapPtr pixmap,
                                inner_block_w)
                             * ((block_h + inner_block_h - 1) /
                                inner_block_h), sizeof(*result_regions));
-    if (!result_regions) {
-        *n_region = 0;
-        return NULL;
-    }
-
     k = 0;
     for (i = 0; i < *n_region; i++) {
         x = box_array[clipped_regions[i].block_idx].x1;
@@ -377,11 +362,6 @@ _glamor_compute_clipped_regions(PixmapPtr pixmap,
     DEBUGRegionPrint(region);
     if (glamor_pixmap_priv_is_small(pixmap_priv)) {
         clipped_regions = calloc(1, sizeof(*clipped_regions));
-        if (!clipped_regions) {
-            *n_region = 0;
-            return NULL;
-        }
-
         clipped_regions[0].region = RegionCreate(NULL, 1);
         clipped_regions[0].block_idx = 0;
         RegionCopy(clipped_regions[0].region, region);
@@ -1191,8 +1171,7 @@ glamor_composite_largepixmap_region(CARD8 op,
         && glamor_pixmap_priv_is_large(source_pixmap_priv)) {
         /* XXX self-copy... */
         need_free_source_pixmap_priv = source_pixmap_priv;
-        source_pixmap_priv = calloc(1, sizeof(*source_pixmap_priv));
-        BUG_RETURN_VAL(!source_pixmap_priv, FALSE);
+        source_pixmap_priv = malloc(sizeof(*source_pixmap_priv));
         *source_pixmap_priv = *need_free_source_pixmap_priv;
         need_free_source_pixmap_priv = source_pixmap_priv;
     }

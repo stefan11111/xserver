@@ -32,20 +32,20 @@ Equipment Corporation.
 #include <X11/Xproto.h>
 
 #include "dix/dix_priv.h"
-#include "dix/rpcbuf_priv.h"
 #include "os/osdep.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
 
 #include "windowstr.h"
 #include "dixfontstr.h"
 #include "gcstruct.h"
+#include "colormapst.h"
 #include "scrnintstr.h"
 #include "opaque.h"
 #include "inputstr.h"
 #include "migc.h"
 #include "misc.h"
 #include "dixstruct.h"
+#include "panoramiX.h"
+#include "panoramiXsrv.h"
 #include "resource.h"
 #include "panoramiXh.h"
 
@@ -117,7 +117,7 @@ PanoramiXCreateWindow(ClientPtr client)
         }
     }
 
-    if (!(newWin = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newWin = malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newWin->type = XRT_WINDOW;
@@ -557,6 +557,7 @@ PanoramiXCirculateWindow(ClientPtr client)
 int
 PanoramiXGetGeometry(ClientPtr client)
 {
+    xGetGeometryReply rep;
     DrawablePtr pDraw;
     int rc;
 
@@ -567,7 +568,7 @@ PanoramiXGetGeometry(ClientPtr client)
     if (rc != Success)
         return rc;
 
-    xGetGeometryReply rep = {
+    rep = (xGetGeometryReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
         .length = 0,
@@ -601,16 +602,7 @@ PanoramiXGetGeometry(ClientPtr client)
         rep.borderWidth = pWin->borderWidth;
     }
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.root);
-        swaps(&rep.x);
-        swaps(&rep.y);
-        swaps(&rep.width);
-        swaps(&rep.height);
-        swaps(&rep.borderWidth);
-    }
-    WriteToClient(client, sizeof(xGetGeometryReply), &rep);
+    WriteReplyToClient(client, sizeof(xGetGeometryReply), &rep);
     return Success;
 }
 
@@ -622,6 +614,7 @@ PanoramiXTranslateCoords(ClientPtr client)
     REQUEST(xTranslateCoordsReq);
     int rc;
     WindowPtr pWin, pDst;
+    xTranslateCoordsReply rep;
 
     REQUEST_SIZE_MATCH(xTranslateCoordsReq);
     rc = dixLookupWindow(&pWin, stuff->srcWid, client, DixReadAccess);
@@ -630,8 +623,7 @@ PanoramiXTranslateCoords(ClientPtr client)
     rc = dixLookupWindow(&pDst, stuff->dstWid, client, DixReadAccess);
     if (rc != Success)
         return rc;
-
-    xTranslateCoordsReply rep = {
+    rep = (xTranslateCoordsReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
         .length = 0,
@@ -682,13 +674,7 @@ PanoramiXTranslateCoords(ClientPtr client)
         rep.dstY += screenInfo.screens[0]->y;
     }
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.child);
-        swaps(&rep.dstX);
-        swaps(&rep.dstY);
-    }
-    WriteToClient(client, sizeof(rep), &rep);
+    WriteReplyToClient(client, sizeof(xTranslateCoordsReply), &rep);
     return Success;
 }
 
@@ -708,7 +694,7 @@ PanoramiXCreatePixmap(ClientPtr client)
     if (result != Success)
         return (result == BadValue) ? BadDrawable : result;
 
-    if (!(newPix = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newPix = malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newPix->type = XRT_PIXMAP;
@@ -815,7 +801,7 @@ PanoramiXCreateGC(ClientPtr client)
         }
     }
 
-    if (!(newGC = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newGC = malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newGC->type = XRT_GC;
@@ -931,7 +917,7 @@ PanoramiXCopyGC(ClientPtr client)
     if (result != Success)
         return result;
 
-    FOR_NSCREENS_BACKWARD(j) {
+    FOR_NSCREENS(j) {
         stuff->srcGC = srcGC->info[j].id;
         stuff->dstGC = dstGC->info[j].id;
         result = (*SavedProcVector[X_CopyGC]) (client);
@@ -1112,11 +1098,11 @@ PanoramiXCopyArea(ClientPtr client)
     if ((dst->type == XRT_PIXMAP) && (src->type == XRT_WINDOW)) {
         DrawablePtr drawables[MAXSCREENS];
         DrawablePtr pDst;
-        GCPtr pGC = NULL;
+        GCPtr pGC;
         char *data;
         int pitch, rc;
 
-        FOR_NSCREENS_BACKWARD(j) {
+        FOR_NSCREENS(j) {
             rc = dixLookupDrawable(drawables + j, src->info[j].id, client, 0,
                                    DixGetAttrAccess);
             if (rc != Success)
@@ -1150,7 +1136,7 @@ PanoramiXCopyArea(ClientPtr client)
         }
         free(data);
 
-        if (pGC && pGC->graphicsExposures) {
+        if (pGC->graphicsExposures) {
             RegionRec rgn;
             int dx, dy;
             BoxRec sourceBox;
@@ -1170,7 +1156,7 @@ PanoramiXCopyArea(ClientPtr client)
             RegionInit(&rgn, &sourceBox, 1);
 
             /* subtract the (screen-space) clips of the source drawables */
-            FOR_NSCREENS_BACKWARD(j) {
+            FOR_NSCREENS(j) {
                 ScreenPtr screen = screenInfo.screens[j];
                 RegionPtr sd;
 
@@ -1388,6 +1374,7 @@ PanoramiXPolyPoint(ClientPtr client)
 {
     PanoramiXRes *gc, *draw;
     int result, npoint, j;
+    xPoint *origPts;
     Bool isRoot;
 
     REQUEST(xPolyPointReq);
@@ -1410,10 +1397,7 @@ PanoramiXPolyPoint(ClientPtr client)
     isRoot = (draw->type == XRT_WINDOW) && draw->u.win.root;
     npoint = bytes_to_int32((client->req_len << 2) - sizeof(xPolyPointReq));
     if (npoint > 0) {
-        xPoint *origPts = calloc(npoint, sizeof(xPoint));
-        if (!origPts)
-            return BadAlloc;
-
+        origPts = xallocarray(npoint, sizeof(xPoint));
         memcpy((char *) origPts, (char *) &stuff[1], npoint * sizeof(xPoint));
         FOR_NSCREENS_FORWARD(j) {
 
@@ -1455,6 +1439,7 @@ PanoramiXPolyLine(ClientPtr client)
 {
     PanoramiXRes *gc, *draw;
     int result, npoint, j;
+    xPoint *origPts;
     Bool isRoot;
 
     REQUEST(xPolyLineReq);
@@ -1477,9 +1462,7 @@ PanoramiXPolyLine(ClientPtr client)
     isRoot = IS_ROOT_DRAWABLE(draw);
     npoint = bytes_to_int32((client->req_len << 2) - sizeof(xPolyLineReq));
     if (npoint > 0) {
-        xPoint *origPts = calloc(npoint, sizeof(xPoint));
-        if (!origPts)
-            return BadAlloc;
+        origPts = xallocarray(npoint, sizeof(xPoint));
         memcpy((char *) origPts, (char *) &stuff[1], npoint * sizeof(xPoint));
         FOR_NSCREENS_FORWARD(j) {
 
@@ -1521,6 +1504,7 @@ PanoramiXPolySegment(ClientPtr client)
 {
     int result, nsegs, i, j;
     PanoramiXRes *gc, *draw;
+    xSegment *origSegs;
     Bool isRoot;
 
     REQUEST(xPolySegmentReq);
@@ -1547,9 +1531,7 @@ PanoramiXPolySegment(ClientPtr client)
         return BadLength;
     nsegs >>= 3;
     if (nsegs > 0) {
-        xSegment *origSegs = calloc(nsegs, sizeof(xSegment));
-        if (!origSegs)
-            return BadAlloc;
+        origSegs = xallocarray(nsegs, sizeof(xSegment));
         memcpy((char *) origSegs, (char *) &stuff[1], nsegs * sizeof(xSegment));
         FOR_NSCREENS_FORWARD(j) {
 
@@ -1591,6 +1573,7 @@ PanoramiXPolyRectangle(ClientPtr client)
     int result, nrects, i, j;
     PanoramiXRes *gc, *draw;
     Bool isRoot;
+    xRectangle *origRecs;
 
     REQUEST(xPolyRectangleReq);
 
@@ -1616,9 +1599,7 @@ PanoramiXPolyRectangle(ClientPtr client)
         return BadLength;
     nrects >>= 3;
     if (nrects > 0) {
-        xRectangle *origRecs = calloc(nrects, sizeof(xRectangle));
-        if (!origRecs)
-            return BadAlloc;
+        origRecs = xallocarray(nrects, sizeof(xRectangle));
         memcpy((char *) origRecs, (char *) &stuff[1],
                nrects * sizeof(xRectangle));
         FOR_NSCREENS_FORWARD(j) {
@@ -1659,6 +1640,7 @@ PanoramiXPolyArc(ClientPtr client)
     int result, narcs, i, j;
     PanoramiXRes *gc, *draw;
     Bool isRoot;
+    xArc *origArcs;
 
     REQUEST(xPolyArcReq);
 
@@ -1684,9 +1666,7 @@ PanoramiXPolyArc(ClientPtr client)
         return BadLength;
     narcs /= sizeof(xArc);
     if (narcs > 0) {
-        xArc *origArcs = calloc(narcs, sizeof(xArc));
-        if (!origArcs)
-            return BadAlloc;
+        origArcs = xallocarray(narcs, sizeof(xArc));
         memcpy((char *) origArcs, (char *) &stuff[1], narcs * sizeof(xArc));
         FOR_NSCREENS_FORWARD(j) {
 
@@ -1725,6 +1705,7 @@ PanoramiXFillPoly(ClientPtr client)
     int result, count, j;
     PanoramiXRes *gc, *draw;
     Bool isRoot;
+    DDXPointPtr locPts;
 
     REQUEST(xFillPolyReq);
 
@@ -1747,9 +1728,7 @@ PanoramiXFillPoly(ClientPtr client)
 
     count = bytes_to_int32((client->req_len << 2) - sizeof(xFillPolyReq));
     if (count > 0) {
-        DDXPointPtr locPts = calloc(count, sizeof(DDXPointRec));
-        if (!locPts)
-            return BadAlloc;
+        locPts = xallocarray(count, sizeof(DDXPointRec));
         memcpy((char *) locPts, (char *) &stuff[1],
                count * sizeof(DDXPointRec));
         FOR_NSCREENS_FORWARD(j) {
@@ -1792,6 +1771,8 @@ PanoramiXPolyFillRectangle(ClientPtr client)
     int result, things, i, j;
     PanoramiXRes *gc, *draw;
     Bool isRoot;
+    xRectangle *origRects;
+
     REQUEST(xPolyFillRectangleReq);
 
     REQUEST_AT_LEAST_SIZE(xPolyFillRectangleReq);
@@ -1816,9 +1797,7 @@ PanoramiXPolyFillRectangle(ClientPtr client)
         return BadLength;
     things >>= 3;
     if (things > 0) {
-        xRectangle *origRects = calloc(things, sizeof(xRectangle));
-        if (!origRects)
-            return BadAlloc;
+        origRects = xallocarray(things, sizeof(xRectangle));
         memcpy((char *) origRects, (char *) &stuff[1],
                things * sizeof(xRectangle));
         FOR_NSCREENS_FORWARD(j) {
@@ -1859,6 +1838,7 @@ PanoramiXPolyFillArc(ClientPtr client)
     PanoramiXRes *gc, *draw;
     Bool isRoot;
     int result, narcs, i, j;
+    xArc *origArcs;
 
     REQUEST(xPolyFillArcReq);
 
@@ -1884,9 +1864,7 @@ PanoramiXPolyFillArc(ClientPtr client)
         return BadLength;
     narcs /= sizeof(xArc);
     if (narcs > 0) {
-        xArc *origArcs = calloc(narcs, sizeof(xArc));
-        if (!origArcs)
-            return BadAlloc;
+        origArcs = xallocarray(narcs, sizeof(xArc));
         memcpy((char *) origArcs, (char *) &stuff[1], narcs * sizeof(xArc));
         FOR_NSCREENS_FORWARD(j) {
 
@@ -1968,11 +1946,13 @@ PanoramiXGetImage(ClientPtr client)
     DrawablePtr drawables[MAXSCREENS];
     DrawablePtr pDraw;
     PanoramiXRes *draw;
+    xGetImageReply xgi;
     Bool isRoot;
+    char *pBuf;
     int i, x, y, w, h, format, rc;
     Mask plane = 0, planemask;
     int linesDone, nlines, linesPerBuf;
-    long widthBytesLine;
+    long widthBytesLine, length;
 
     REQUEST(xGetImageReq);
 
@@ -2040,25 +2020,26 @@ PanoramiXGetImage(ClientPtr client)
                                               IncludeInferiors);
     }
 
-    size_t length;
+    xgi = (xGetImageReply) {
+        .type = X_Reply,
+        .sequenceNumber = client->sequence,
+        .visual = wVisual(((WindowPtr) pDraw)),
+        .depth = pDraw->depth
+    };
     if (format == ZPixmap) {
         widthBytesLine = PixmapBytePad(w, pDraw->depth);
         length = widthBytesLine * h;
+
     }
     else {
         widthBytesLine = BitmapBytePad(w);
         plane = ((Mask) 1) << (pDraw->depth - 1);
         /* only planes asked for */
         length = widthBytesLine * h * Ones(planemask & (plane | (plane - 1)));
+
     }
 
-    xGetImageReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .visual = wVisual(((WindowPtr) pDraw)),
-        .depth = pDraw->depth,
-        .length = bytes_to_int32(length),
-    };
+    xgi.length = bytes_to_int32(length);
 
     if (widthBytesLine == 0 || h == 0)
         linesPerBuf = 0;
@@ -2069,18 +2050,10 @@ PanoramiXGetImage(ClientPtr client)
         if (linesPerBuf > h)
             linesPerBuf = h;
     }
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swapl(&rep.visual);
-    }
-
-    x_rpcbuf_t rpcbuf = { .swapped = client->swapped, .err_clear = TRUE };
-
-    /* can become quite big, so make enough room so we don't need to relloc */
-    if (!x_rpcbuf_makeroom(&rpcbuf, length))
+    if (!(pBuf = xallocarray(linesPerBuf, widthBytesLine)))
         return BadAlloc;
+
+    WriteReplyToClient(client, sizeof(xGetImageReply), &xgi);
 
     if (linesPerBuf == 0) {
         /* nothing to do */
@@ -2090,13 +2063,14 @@ PanoramiXGetImage(ClientPtr client)
         while (h - linesDone > 0) {
             nlines = min(linesPerBuf, h - linesDone);
 
-            char *pBuf = x_rpcbuf_reserve(&rpcbuf, nlines * widthBytesLine);
-            if (!pBuf)
-                return BadAlloc;
+            if (pDraw->depth == 1)
+                memset(pBuf, 0, nlines * widthBytesLine);
+
             XineramaGetImageData(drawables, x, y + linesDone, w, nlines,
                                  format, planemask, pBuf, widthBytesLine,
                                  isRoot);
 
+            WriteToClient(client, (int) (nlines * widthBytesLine), pBuf);
             linesDone += nlines;
         }
     }
@@ -2107,21 +2081,20 @@ PanoramiXGetImage(ClientPtr client)
                 while (h - linesDone > 0) {
                     nlines = min(linesPerBuf, h - linesDone);
 
-                    char *pBuf = x_rpcbuf_reserve(&rpcbuf, nlines * widthBytesLine);
-                    if (!pBuf)
-                        return BadAlloc;
+                    memset(pBuf, 0, nlines * widthBytesLine);
+
                     XineramaGetImageData(drawables, x, y + linesDone, w,
                                          nlines, format, plane, pBuf,
                                          widthBytesLine, isRoot);
+
+                    WriteToClient(client, (int)(nlines * widthBytesLine), pBuf);
 
                     linesDone += nlines;
                 }
             }
         }
     }
-
-    WriteToClient(client, sizeof(rep), &rep);
-    WriteRpcbufToClient(client, &rpcbuf);
+    free(pBuf);
     return Success;
 }
 
@@ -2316,7 +2289,7 @@ PanoramiXCreateColormap(ClientPtr client)
     if (result != Success)
         return result;
 
-    if (!(newCmap = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newCmap = malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newCmap->type = XRT_COLORMAP;
@@ -2388,7 +2361,7 @@ PanoramiXCopyColormapAndFree(ClientPtr client)
     if (result != Success)
         return result;
 
-    if (!(newCmap = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newCmap = malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newCmap->type = XRT_COLORMAP;

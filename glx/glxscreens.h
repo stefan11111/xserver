@@ -1,3 +1,7 @@
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef _GLX_screens_h_
 #define _GLX_screens_h_
 
@@ -38,7 +42,9 @@ typedef struct __GLXconfig __GLXconfig;
 struct __GLXconfig {
     /* Management */
     __GLXconfig *next;
+#ifdef COMPOSITE
     GLboolean duplicatedForComp;
+#endif
     GLuint doubleBufferMode;
     GLuint stereoMode;
 
@@ -143,6 +149,8 @@ struct __GLXscreen {
     char *GLXextensions;
     char *glvnd;
     unsigned char glx_enable_bits[__GLX_EXT_BYTES];
+
+    Bool (*CloseScreen) (ScreenPtr pScreen);
 };
 
 void __glXScreenInit(__GLXscreen * screen, ScreenPtr pScreen);

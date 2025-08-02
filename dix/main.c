@@ -85,14 +85,12 @@ Equipment Corporation.
 #include <X11/fonts/libxfont2.h>
 
 #include "config/hotplug_priv.h"
-#include "dix/atom_priv.h"
 #include "dix/callback_priv.h"
 #include "dix/cursor_priv.h"
 #include "dix/dix_priv.h"
 #include "dix/input_priv.h"
 #include "dix/gc_priv.h"
 #include "dix/registry_priv.h"
-#include "dix/selection_priv.h"
 #include "os/audit.h"
 #include "os/auth.h"
 #include "os/client_priv.h"
@@ -100,7 +98,6 @@ Equipment Corporation.
 #include "os/ddx_priv.h"
 #include "os/osdep.h"
 #include "os/screensaver.h"
-#include "Xext/panoramiXsrv.h"
 
 #include "scrnintstr.h"
 #include "misc.h"
@@ -110,12 +107,20 @@ Equipment Corporation.
 #include "dixstruct.h"
 #include "gcstruct.h"
 #include "extension.h"
+#include "colormap.h"
+#include "colormapst.h"
 #include "cursorstr.h"
+#include "selection.h"
 #include "servermd.h"
 #include "dixfont.h"
 #include "extnsionst.h"
 #include "privates.h"
 #include "exevents.h"
+#ifdef XINERAMA
+#include "panoramiXsrv.h"
+#else
+#include "dixevents.h"          /* InitEvents() */
+#endif /* XINERAMA */
 
 #ifdef DPMSExtension
 #include <X11/extensions/dpmsconst.h>
@@ -125,11 +130,11 @@ Equipment Corporation.
 extern void Dispatch(void);
 
 CallbackListPtr RootWindowFinalizeCallback = NULL;
-CallbackListPtr PostInitRootWindowCallback = NULL;
 
 int
 dix_main(int argc, char *argv[], char *envp[])
 {
+    int i;
     HWEventQueueType alwaysCheckForInput[2];
 
     display = "0";
@@ -156,8 +161,8 @@ dix_main(int argc, char *argv[], char *envp[])
         OsInit();
         if (serverGeneration == 1) {
             CreateWellKnownSockets();
-            for (int i = 1; i < LimitClients; i++)
-                clients[i] = NULL;
+            for (i = 1; i < LimitClients; i++)
+                clients[i] = NullClient;
             serverClient = calloc(1, sizeof(ClientRec));
             if (!serverClient)
                 FatalError("couldn't create server client");
@@ -196,25 +201,24 @@ dix_main(int argc, char *argv[], char *envp[])
 
         if (screenInfo.numScreens < 1)
             FatalError("no screens found");
-        LogMessageVerb(X_INFO, 1, "Output(s) initialized\n");
-
         InitExtensions(argc, argv);
-        LogMessageVerb(X_INFO, 1, "Extensions initialized\n");
 
-        for (int i = 0; i < screenInfo.numGPUScreens; i++) {
+        for (i = 0; i < screenInfo.numGPUScreens; i++) {
             ScreenPtr pScreen = screenInfo.gpuscreens[i];
             if (!PixmapScreenInit(pScreen))
                 FatalError("failed to create screen pixmap properties");
-            if (!dixScreenRaiseCreateResources(pScreen))
+            if (pScreen->CreateScreenResources &&
+                !(*pScreen->CreateScreenResources) (pScreen))
                 FatalError("failed to create screen resources");
         }
 
-        for (int i = 0; i < screenInfo.numScreens; i++) {
+        for (i = 0; i < screenInfo.numScreens; i++) {
             ScreenPtr pScreen = screenInfo.screens[i];
 
             if (!PixmapScreenInit(pScreen))
                 FatalError("failed to create screen pixmap properties");
-            if (!dixScreenRaiseCreateResources(pScreen))
+            if (pScreen->CreateScreenResources &&
+                !(*pScreen->CreateScreenResources) (pScreen))
                 FatalError("failed to create screen resources");
             if (!CreateGCperDepth(i))
                 FatalError("failed to create scratch GCs");
@@ -247,18 +251,12 @@ dix_main(int argc, char *argv[], char *envp[])
             PanoramiXConsolidate();
 #endif /* XINERAMA */
 
-        for (int i = 0; i < screenInfo.numScreens; i++) {
+        for (i = 0; i < screenInfo.numScreens; i++)
             InitRootWindow(screenInfo.screens[i]->root);
-            CallCallbacks(&PostInitRootWindowCallback, screenInfo.screens[i]);
-        }
-
-        LogMessageVerb(X_INFO, 1, "Screen(s) initialized\n");
 
         InitCoreDevices();
         InitInput(argc, argv);
         InitAndStartDevices();
-        LogMessageVerb(X_INFO, 1, "Input(s) initialized\n");
-
         ReserveClientIds(serverClient);
 
         dixSaveScreens(serverClient, SCREEN_SAVER_FORCER, ScreenSaverReset);
@@ -312,24 +310,31 @@ dix_main(int argc, char *argv[], char *envp[])
 
         InputThreadFini();
 
-        for (int i = 0; i < screenInfo.numScreens; i++)
+        for (i = 0; i < screenInfo.numScreens; i++)
             screenInfo.screens[i]->root = NullWindow;
 
         CloseDownDevices();
 
         CloseDownEvents();
 
-        for (int i = screenInfo.numGPUScreens - 1; i >= 0; i--) {
-            dixFreeScreen(screenInfo.gpuscreens[i]);
+        for (i = screenInfo.numGPUScreens - 1; i >= 0; i--) {
+            ScreenPtr pScreen = screenInfo.gpuscreens[i];
+            dixFreeScreenSpecificPrivates(pScreen);
+            (*pScreen->CloseScreen) (pScreen);
+            dixFreePrivates(pScreen->devPrivates, PRIVATE_SCREEN);
+            free(pScreen);
             screenInfo.numGPUScreens = i;
         }
-        memset(&screenInfo.numGPUScreens, 0, sizeof(screenInfo.numGPUScreens));
 
-        for (int i = screenInfo.numScreens - 1; i >= 0; i--) {
-            dixFreeScreen(screenInfo.screens[i]);
+        for (i = screenInfo.numScreens - 1; i >= 0; i--) {
+            FreeGCperDepth(i);
+            FreeDefaultStipple(i);
+            dixFreeScreenSpecificPrivates(screenInfo.screens[i]);
+            (*screenInfo.screens[i]->CloseScreen) (screenInfo.screens[i]);
+            dixFreePrivates(screenInfo.screens[i]->devPrivates, PRIVATE_SCREEN);
+            free(screenInfo.screens[i]);
             screenInfo.numScreens = i;
         }
-        memset(&screenInfo.screens, 0, sizeof(screenInfo.numGPUScreens));
 
         ReleaseClientIds(serverClient);
         dixFreePrivates(serverClient->devPrivates, PRIVATE_CLIENT);

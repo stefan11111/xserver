@@ -29,11 +29,9 @@ THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "stdio.h"
 #include <X11/X.h>
 #include <X11/Xproto.h>
-
-#include "xkb/xkbsrv_priv.h"
-
 #include "misc.h"
 #include "inputstr.h"
+#include <xkbsrv.h>
 #include "xkbstr.h"
 #include "extnsionst.h"
 #include "xkb-procs.h"
@@ -69,10 +67,10 @@ SProcXkbSelectEvents(ClientPtr client)
             CARD16 *c16;
             CARD32 *c32;
         } from;
-        register unsigned bit, ndx, maskLeft, dataLeft;
+        register unsigned bit, ndx, maskLeft, dataLeft, size;
 
         from.c8 = (CARD8 *) &stuff[1];
-        dataLeft = (client->req_len * 4) - sizeof(xkbSelectEventsReq);
+        dataLeft = (client->req_len * 4) - SIZEOF(xkbSelectEventsReq);
         maskLeft = (stuff->affectWhich & (~XkbMapNotifyMask));
         for (ndx = 0, bit = 1; (maskLeft != 0); ndx++, bit <<= 1) {
             if (((bit & maskLeft) == 0) || (ndx == XkbMapNotify))
@@ -81,43 +79,42 @@ SProcXkbSelectEvents(ClientPtr client)
             if ((stuff->selectAll & bit) || (stuff->clear & bit))
                 continue;
             switch (ndx) {
-            // CARD16
             case XkbNewKeyboardNotify:
             case XkbStateNotify:
             case XkbNamesNotify:
             case XkbAccessXNotify:
             case XkbExtensionDeviceNotify:
-                if (dataLeft < sizeof(CARD16)*2)
-                    return BadLength;
-                swaps(&from.c16[0]);
-                swaps(&from.c16[1]);
-                from.c8 += sizeof(CARD16)*2;
-                dataLeft -= sizeof(CARD16)*2;
+                size = 2;
                 break;
-            // CARD32
             case XkbControlsNotify:
             case XkbIndicatorStateNotify:
             case XkbIndicatorMapNotify:
-                if (dataLeft < sizeof(CARD32)*2)
-                    return BadLength;
-                swapl(&from.c32[0]);
-                swapl(&from.c32[1]);
-                from.c8 += sizeof(CARD32)*2;
-                dataLeft -= sizeof(CARD32)*2;
+                size = 4;
                 break;
-            // CARD8
             case XkbBellNotify:
             case XkbActionMessage:
             case XkbCompatMapNotify:
-                if (dataLeft < 2)
-                    return BadLength;
-                from.c8 += 4;
-                dataLeft -= 4;
+                size = 1;
                 break;
             default:
                 client->errorValue = _XkbErrCode2(0x1, bit);
                 return BadValue;
             }
+            if (dataLeft < (size * 2))
+                return BadLength;
+            if (size == 2) {
+                swaps(&from.c16[0]);
+                swaps(&from.c16[1]);
+            }
+            else if (size == 4) {
+                swapl(&from.c32[0]);
+                swapl(&from.c32[1]);
+            }
+            else {
+                size = 2;
+            }
+            from.c8 += (size * 2);
+            dataLeft -= (size * 2);
         }
         if (dataLeft > 2) {
             ErrorF("[xkb] Extra data (%d bytes) after SelectEvents\n",

@@ -60,6 +60,7 @@ SOFTWARE.
 #include "inputstr.h"           /* DeviceIntPtr      */
 #include "windowstr.h"          /* window structure  */
 #include "exglobals.h"
+#include "dixevents.h"          /* GrabDevice */
 #include "grabdev.h"
 
 extern XExtEventInfo EventInfo[];
@@ -100,6 +101,7 @@ int
 ProcXGrabDevice(ClientPtr client)
 {
     int rc;
+    xGrabDeviceReply rep;
     DeviceIntPtr dev;
     GrabMask mask;
     struct tmask tmp[EMASKSIZE];
@@ -111,10 +113,11 @@ ProcXGrabDevice(ClientPtr client)
         bytes_to_int32(sizeof(xGrabDeviceReq)) + stuff->event_count)
         return BadLength;
 
-    xGrabDeviceReply rep = {
+    rep = (xGrabDeviceReply) {
         .repType = X_Reply,
         .RepType = X_GrabDevice,
         .sequenceNumber = client->sequence,
+        .length = 0,
     };
 
     rc = dixLookupDevice(&dev, stuff->deviceid, client, DixGrabAccess);
@@ -136,11 +139,7 @@ ProcXGrabDevice(ClientPtr client)
     if (rc != Success)
         return rc;
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-    }
-    WriteToClient(client, sizeof(xGrabDeviceReply), &rep);
+    WriteReplyToClient(client, sizeof(xGrabDeviceReply), &rep);
     return Success;
 }
 
@@ -197,4 +196,19 @@ CreateMaskFromList(ClientPtr client, XEventClass * list, int count,
             }
     }
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XGrabDevice function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXGrabDevice(ClientPtr client, int size, xGrabDeviceReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

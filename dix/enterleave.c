@@ -33,9 +33,7 @@
 
 #include "dix/dix_priv.h"
 #include "dix/eventconvert.h"
-#include "dix/extension_priv.h"
 #include "dix/input_priv.h"
-#include "dix/inpututils_priv.h"
 #include "os/bug_priv.h"
 
 #include "inputstr.h"
@@ -44,6 +42,7 @@
 #include "exglobals.h"
 #include "enterleave.h"
 #include "xkbsrv.h"
+#include "inpututils.h"
 
 /**
  * @file
@@ -89,6 +88,8 @@ static WindowPtr FocusWindows[MAXDEVICES];
 static BOOL
 HasPointer(DeviceIntPtr dev, WindowPtr win)
 {
+    int i;
+
     /* FIXME: The enter/leave model does not cater for grabbed devices. For
      * now, a quickfix: if the device about to send an enter/leave event to
      * a window is grabbed, assume there is no pointer in that window.
@@ -98,7 +99,7 @@ HasPointer(DeviceIntPtr dev, WindowPtr win)
     if (dev->deviceGrab.grab)
         return FALSE;
 
-    for (int i = 0; i < MAXDEVICES; i++)
+    for (i = 0; i < MAXDEVICES; i++)
         if (PointerWindows[i] == win)
             return TRUE;
 
@@ -112,7 +113,9 @@ HasPointer(DeviceIntPtr dev, WindowPtr win)
 static BOOL
 HasFocus(WindowPtr win)
 {
-    for (int i = 0; i < MAXDEVICES; i++)
+    int i;
+
+    for (i = 0; i < MAXDEVICES; i++)
         if (FocusWindows[i] == win)
             return TRUE;
 
@@ -138,8 +141,10 @@ PointerWin(DeviceIntPtr dev)
 static WindowPtr
 FirstPointerChild(WindowPtr win)
 {
-    for (int i = 0; i < MAXDEVICES; i++) {
-        if (PointerWindows[i] && WindowIsParent(win, PointerWindows[i]))
+    int i;
+
+    for (i = 0; i < MAXDEVICES; i++) {
+        if (PointerWindows[i] && IsParent(win, PointerWindows[i]))
             return PointerWindows[i];
     }
 
@@ -156,9 +161,11 @@ FirstPointerChild(WindowPtr win)
 static WindowPtr
 FirstFocusChild(WindowPtr win)
 {
-    for (int i = 0; i < MAXDEVICES; i++) {
+    int i;
+
+    for (i = 0; i < MAXDEVICES; i++) {
         if (FocusWindows[i] && FocusWindows[i] != PointerRootWin &&
-            WindowIsParent(win, FocusWindows[i]))
+            IsParent(win, FocusWindows[i]))
             return FocusWindows[i];
     }
 
@@ -212,7 +219,7 @@ static WindowPtr
 CommonAncestor(WindowPtr a, WindowPtr b)
 {
     for (b = b->parent; b; b = b->parent)
-        if (WindowIsParent(b, a))
+        if (IsParent(b, a))
             return b;
     return NullWindow;
 }
@@ -279,10 +286,12 @@ static void
 CoreLeaveNotifies(DeviceIntPtr dev,
                   WindowPtr child, WindowPtr ancestor, int mode, int detail)
 {
+    WindowPtr win;
+
     if (ancestor == child)
         return;
 
-    for (WindowPtr win = child->parent; win != ancestor; win = win->parent) {
+    for (win = child->parent; win != ancestor; win = win->parent) {
         /*Case 7:
            A is a descendant of W, B is above W
 
@@ -322,9 +331,11 @@ DeviceLeaveNotifies(DeviceIntPtr dev,
                     int sourceid,
                     WindowPtr child, WindowPtr ancestor, int mode, int detail)
 {
+    WindowPtr win;
+
     if (ancestor == child)
         return;
-    for (WindowPtr win = child->parent; win != ancestor; win = win->parent) {
+    for (win = child->parent; win != ancestor; win = win->parent) {
         DeviceEnterLeaveEvent(dev, sourceid, XI_Leave, mode, detail, win,
                               child->drawable.id);
         child = win;
@@ -529,14 +540,14 @@ CoreEnterLeaveToDescendant(DeviceIntPtr dev, WindowPtr A, WindowPtr B, int mode)
 static void
 CoreEnterLeaveEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
 {
-    if (!InputDevIsMaster(dev))
+    if (!IsMaster(dev))
         return;
 
     LeaveWindow(dev);
 
-    if (WindowIsParent(from, to))
+    if (IsParent(from, to))
         CoreEnterLeaveToDescendant(dev, from, to, mode);
-    else if (WindowIsParent(to, from))
+    else if (IsParent(to, from))
         CoreEnterLeaveToAncestor(dev, from, to, mode);
     else
         CoreEnterLeaveNonLinear(dev, from, to, mode);
@@ -548,14 +559,14 @@ static void
 DeviceEnterLeaveEvents(DeviceIntPtr dev,
                        int sourceid, WindowPtr from, WindowPtr to, int mode)
 {
-    if (WindowIsParent(from, to)) {
+    if (IsParent(from, to)) {
         DeviceEnterLeaveEvent(dev, sourceid, XI_Leave, mode, NotifyInferior,
                               from, None);
         DeviceEnterNotifies(dev, sourceid, from, to, mode, NotifyVirtual);
         DeviceEnterLeaveEvent(dev, sourceid, XI_Enter, mode, NotifyAncestor, to,
                               None);
     }
-    else if (WindowIsParent(to, from)) {
+    else if (IsParent(to, from)) {
         DeviceEnterLeaveEvent(dev, sourceid, XI_Leave, mode, NotifyAncestor,
                               from, None);
         DeviceLeaveNotifies(dev, sourceid, from, to, mode, NotifyVirtual);
@@ -760,10 +771,11 @@ DeviceFocusEvent(DeviceIntPtr dev, int type, int mode, int detail,
                  WindowPtr pWin)
 {
     deviceFocus event;
-    int btlen, len;
+    xXIFocusInEvent *xi2event;
+    DeviceIntPtr mouse;
+    int btlen, len, i;
 
-    DeviceIntPtr mouse = InputDevIsFloating(dev) ?
-            dev : GetMaster(dev, MASTER_POINTER);
+    mouse = IsFloating(dev) ? dev : GetMaster(dev, MASTER_POINTER);
 
     /* XI 2 event contains the logical button map - maps are CARD8
      * so we need 256 bits for the possibly maximum mapping */
@@ -771,12 +783,9 @@ DeviceFocusEvent(DeviceIntPtr dev, int type, int mode, int detail,
     btlen = bytes_to_int32(btlen);
     len = sizeof(xXIFocusInEvent) + btlen * 4;
 
-    xXIFocusInEvent *xi2event = calloc(1, len);
-    if (!xi2event)
-        return;
-
+    xi2event = calloc(1, len);
     xi2event->type = GenericEvent;
-    xi2event->extension = EXTENSION_MAJOR_XINPUT;
+    xi2event->extension = IReqCode;
     xi2event->evtype = type;
     xi2event->length = bytes_to_int32(len - sizeof(xEvent));
     xi2event->buttons_len = btlen;
@@ -788,7 +797,7 @@ DeviceFocusEvent(DeviceIntPtr dev, int type, int mode, int detail,
     xi2event->root_x = double_to_fp1616(mouse->spriteInfo->sprite->hot.x);
     xi2event->root_y = double_to_fp1616(mouse->spriteInfo->sprite->hot.y);
 
-    for (int i = 0; mouse && mouse->button && i < mouse->button->numButtons; i++)
+    for (i = 0; mouse && mouse->button && i < mouse->button->numButtons; i++)
         if (BitIsOn(mouse->button->down, i))
             SetBit(&xi2event[1], mouse->button->map[i]);
 
@@ -837,9 +846,11 @@ static void
 DeviceFocusOutEvents(DeviceIntPtr dev,
                      WindowPtr child, WindowPtr ancestor, int mode, int detail)
 {
+    WindowPtr win;
+
     if (ancestor == child)
         return;
-    for (WindowPtr win = child->parent; win != ancestor; win = win->parent)
+    for (win = child->parent; win != ancestor; win = win->parent)
         DeviceFocusEvent(dev, XI_FocusOut, mode, detail, win);
 }
 
@@ -901,10 +912,12 @@ static void
 CoreFocusOutEvents(DeviceIntPtr dev,
                    WindowPtr child, WindowPtr ancestor, int mode, int detail)
 {
+    WindowPtr win;
+
     if (ancestor == child)
         return;
 
-    for (WindowPtr win = child->parent; win != ancestor; win = win->parent) {
+    for (win = child->parent; win != ancestor; win = win->parent) {
         /*Case 7:
            A is a descendant of W, B is above W
 
@@ -953,12 +966,12 @@ CoreFocusOutNotifyPointerEvents(DeviceIntPtr dev,
 
     if (!P)
         return;
-    if (!WindowIsParent(pwin_parent, P))
+    if (!IsParent(pwin_parent, P))
         if (!(pwin_parent == P && inclusive))
             return;
 
     if (exclude != None && exclude != PointerRootWin &&
-        (WindowIsParent(exclude, P) || WindowIsParent(P, exclude)))
+        (IsParent(exclude, P) || IsParent(P, exclude)))
         return;
 
     stopAt = (inclusive) ? pwin_parent->parent : pwin_parent;
@@ -1000,10 +1013,10 @@ CoreFocusInNotifyPointerEvents(DeviceIntPtr dev,
 
     P = PointerWin(GetMaster(dev, POINTER_OR_FLOAT));
 
-    if (!P || P == exclude || (pwin_parent != P && !WindowIsParent(pwin_parent, P)))
+    if (!P || P == exclude || (pwin_parent != P && !IsParent(pwin_parent, P)))
         return;
 
-    if (exclude != None && (WindowIsParent(exclude, P) || WindowIsParent(P, exclude)))
+    if (exclude != None && (IsParent(exclude, P) || IsParent(P, exclude)))
         return;
 
     CoreFocusInRecurse(dev, P, pwin_parent, mode, inclusive);
@@ -1216,7 +1229,9 @@ CoreFocusToDescendant(DeviceIntPtr dev, WindowPtr A, WindowPtr B, int mode)
 static BOOL
 HasOtherPointer(WindowPtr win, DeviceIntPtr exclude)
 {
-    for (int i = 0; i < MAXDEVICES; i++)
+    int i;
+
+    for (i = 0; i < MAXDEVICES; i++)
         if (i != exclude->id && PointerWindows[i] == win)
             return TRUE;
 
@@ -1234,6 +1249,7 @@ CoreFocusPointerRootNoneSwitch(DeviceIntPtr dev,
                                int mode)
 {
     WindowPtr root;
+    int i;
     int nscreens = screenInfo.numScreens;
 
 #ifdef XINERAMA
@@ -1241,7 +1257,7 @@ CoreFocusPointerRootNoneSwitch(DeviceIntPtr dev,
         nscreens = 1;
 #endif /* XINERAMA */
 
-    for (int i = 0; i < nscreens; i++) {
+    for (i = 0; i < nscreens; i++) {
         root = screenInfo.screens[i]->root;
         if (!HasOtherPointer(root, GetMaster(dev, POINTER_OR_FLOAT)) &&
             !FirstFocusChild(root)) {
@@ -1252,7 +1268,7 @@ CoreFocusPointerRootNoneSwitch(DeviceIntPtr dev,
                 B != PointerRootWin) {
                 WindowPtr ptrwin = PointerWin(GetMaster(dev, POINTER_OR_FLOAT));
 
-                if (ptrwin && WindowIsParent(root, ptrwin))
+                if (ptrwin && IsParent(root, ptrwin))
                     CoreFocusOutNotifyPointerEvents(dev, root, None, mode,
                                                     TRUE);
             }
@@ -1277,6 +1293,7 @@ CoreFocusToPointerRootOrNone(DeviceIntPtr dev, WindowPtr A,
                              int mode)
 {
     WindowPtr root;
+    int i;
     int nscreens = screenInfo.numScreens;
 
 #ifdef XINERAMA
@@ -1302,7 +1319,7 @@ CoreFocusToPointerRootOrNone(DeviceIntPtr dev, WindowPtr A,
     /* NullWindow means we include the root window */
     CoreFocusOutEvents(dev, A, NullWindow, mode, NotifyNonlinearVirtual);
 
-    for (int i = 0; i < nscreens; i++) {
+    for (i = 0; i < nscreens; i++) {
         root = screenInfo.screens[i]->root;
         if (!HasFocus(root) && !FirstFocusChild(root)) {
             CoreFocusEvent(dev, FocusIn, mode,
@@ -1323,6 +1340,7 @@ CoreFocusFromPointerRootOrNone(DeviceIntPtr dev,
                                WindowPtr B, int mode)
 {
     WindowPtr root;
+    int i;
     int nscreens = screenInfo.numScreens;
 
 #ifdef XINERAMA
@@ -1330,7 +1348,7 @@ CoreFocusFromPointerRootOrNone(DeviceIntPtr dev,
         nscreens = 1;
 #endif /* XINERAMA */
 
-    for (int i = 0; i < nscreens; i++) {
+    for (i = 0; i < nscreens; i++) {
         root = screenInfo.screens[i]->root;
         if (!HasFocus(root) && !FirstFocusChild(root)) {
             /* If pointer was on PointerRootWin and changes to NoneWin, and
@@ -1378,7 +1396,7 @@ CoreFocusFromPointerRootOrNone(DeviceIntPtr dev,
 static void
 CoreFocusEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
 {
-    if (!InputDevIsMaster(dev))
+    if (!IsMaster(dev))
         return;
 
     SetFocusOut(dev);
@@ -1390,9 +1408,9 @@ CoreFocusEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
         CoreFocusToPointerRootOrNone(dev, from, to, mode);
     else if ((from == NullWindow) || (from == PointerRootWin))
         CoreFocusFromPointerRootOrNone(dev, from, to, mode);
-    else if (WindowIsParent(from, to))
+    else if (IsParent(from, to))
         CoreFocusToDescendant(dev, from, to, mode);
-    else if (WindowIsParent(to, from))
+    else if (IsParent(to, from))
         CoreFocusToAncestor(dev, from, to, mode);
     else
         CoreFocusNonLinear(dev, from, to, mode);
@@ -1405,6 +1423,7 @@ DeviceFocusEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
 {
     int out, in;                /* for holding details for to/from
                                    PointerRoot/None */
+    int i;
     int nscreens = screenInfo.numScreens;
     SpritePtr sprite = dev->spriteInfo->sprite;
 
@@ -1425,16 +1444,16 @@ DeviceFocusEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
                 DeviceFocusEvent(dev, XI_FocusOut, mode, NotifyPointer,
                                  sprite->win);
                 DeviceFocusOutEvents(dev, sprite->win,
-                                     InputDevCurrentRootWindow(dev), mode,
+                                     GetCurrentRootWindow(dev), mode,
                                      NotifyPointer);
             }
             /* Notify all the roots */
-            for (int i = 0; i < nscreens; i++)
+            for (i = 0; i < nscreens; i++)
                 DeviceFocusEvent(dev, XI_FocusOut, mode, out,
                                  screenInfo.screens[i]->root);
         }
         else {
-            if (WindowIsParent(from, sprite->win)) {
+            if (IsParent(from, sprite->win)) {
                 DeviceFocusEvent(dev, XI_FocusOut, mode, NotifyPointer,
                                  sprite->win);
                 DeviceFocusOutEvents(dev, sprite->win, from, mode,
@@ -1446,11 +1465,11 @@ DeviceFocusEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
                                  NotifyNonlinearVirtual);
         }
         /* Notify all the roots */
-        for (int i = 0; i < nscreens; i++)
+        for (i = 0; i < nscreens; i++)
             DeviceFocusEvent(dev, XI_FocusIn, mode, in,
                              screenInfo.screens[i]->root);
         if (to == PointerRootWin) {
-            DeviceFocusInEvents(dev, InputDevCurrentRootWindow(dev), sprite->win,
+            DeviceFocusInEvents(dev, GetCurrentRootWindow(dev), sprite->win,
                                 mode, NotifyPointer);
             DeviceFocusEvent(dev, XI_FocusIn, mode, NotifyPointer, sprite->win);
         }
@@ -1461,36 +1480,36 @@ DeviceFocusEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
                 DeviceFocusEvent(dev, XI_FocusOut, mode, NotifyPointer,
                                  sprite->win);
                 DeviceFocusOutEvents(dev, sprite->win,
-                                     InputDevCurrentRootWindow(dev), mode,
+                                     GetCurrentRootWindow(dev), mode,
                                      NotifyPointer);
             }
-            for (int i = 0; i < nscreens; i++)
+            for (i = 0; i < nscreens; i++)
                 DeviceFocusEvent(dev, XI_FocusOut, mode, out,
                                  screenInfo.screens[i]->root);
             if (to->parent != NullWindow)
-                DeviceFocusInEvents(dev, InputDevCurrentRootWindow(dev), to, mode,
+                DeviceFocusInEvents(dev, GetCurrentRootWindow(dev), to, mode,
                                     NotifyNonlinearVirtual);
             DeviceFocusEvent(dev, XI_FocusIn, mode, NotifyNonlinear, to);
-            if (WindowIsParent(to, sprite->win))
+            if (IsParent(to, sprite->win))
                 DeviceFocusInEvents(dev, to, sprite->win, mode, NotifyPointer);
         }
         else {
-            if (WindowIsParent(to, from)) {
+            if (IsParent(to, from)) {
                 DeviceFocusEvent(dev, XI_FocusOut, mode, NotifyAncestor, from);
                 DeviceFocusOutEvents(dev, from, to, mode, NotifyVirtual);
                 DeviceFocusEvent(dev, XI_FocusIn, mode, NotifyInferior, to);
-                if ((WindowIsParent(to, sprite->win)) &&
+                if ((IsParent(to, sprite->win)) &&
                     (sprite->win != from) &&
-                    (!WindowIsParent(from, sprite->win)) &&
-                    (!WindowIsParent(sprite->win, from)))
+                    (!IsParent(from, sprite->win)) &&
+                    (!IsParent(sprite->win, from)))
                     DeviceFocusInEvents(dev, to, sprite->win, mode,
                                         NotifyPointer);
             }
-            else if (WindowIsParent(from, to)) {
-                if ((WindowIsParent(from, sprite->win)) &&
+            else if (IsParent(from, to)) {
+                if ((IsParent(from, sprite->win)) &&
                     (sprite->win != from) &&
-                    (!WindowIsParent(to, sprite->win)) &&
-                    (!WindowIsParent(sprite->win, to))) {
+                    (!IsParent(to, sprite->win)) &&
+                    (!IsParent(sprite->win, to))) {
                     DeviceFocusEvent(dev, XI_FocusOut, mode, NotifyPointer,
                                      sprite->win);
                     DeviceFocusOutEvents(dev, sprite->win, from, mode,
@@ -1505,7 +1524,7 @@ DeviceFocusEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
                 WindowPtr common = CommonAncestor(to, from);
 
                 /* common == NullWindow ==> different screens */
-                if (WindowIsParent(from, sprite->win))
+                if (IsParent(from, sprite->win))
                     DeviceFocusOutEvents(dev, sprite->win, from, mode,
                                          NotifyPointer);
                 DeviceFocusEvent(dev, XI_FocusOut, mode, NotifyNonlinear, from);
@@ -1516,7 +1535,7 @@ DeviceFocusEvents(DeviceIntPtr dev, WindowPtr from, WindowPtr to, int mode)
                     DeviceFocusInEvents(dev, common, to, mode,
                                         NotifyNonlinearVirtual);
                 DeviceFocusEvent(dev, XI_FocusIn, mode, NotifyNonlinear, to);
-                if (WindowIsParent(to, sprite->win))
+                if (IsParent(to, sprite->win))
                     DeviceFocusInEvents(dev, to, sprite->win, mode,
                                         NotifyPointer);
             }

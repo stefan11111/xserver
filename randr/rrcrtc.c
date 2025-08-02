@@ -20,25 +20,19 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
  * OF THIS SOFTWARE.
  */
-#include <dix-config.h>
 
-#include <X11/Xatom.h>
-
-#include "dix/dix_priv.h"
-#include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
-#include "os/bug_priv.h"
-
+#include "randrstr_priv.h"
 #include "swaprep.h"
 #include "mipointer.h"
 
+#include <X11/Xatom.h>
 
 RESTYPE RRCrtcType = 0;
 
 /*
  * Notify the CRTC of some change
  */
-static void
+void
 RRCrtcChanged(RRCrtcPtr crtc, Bool layoutChanged)
 {
     ScreenPtr pScreen = crtc->pScreen;
@@ -81,7 +75,7 @@ RRCrtcCreate(ScreenPtr pScreen, void *devPrivate)
     crtc = calloc(1, sizeof(RRCrtcRec));
     if (!crtc)
         return NULL;
-    crtc->id = dixAllocServerXID();
+    crtc->id = FakeClientID(0);
     crtc->pScreen = pScreen;
     crtc->rotation = RR_Rotate_0;
     crtc->rotations = RR_Rotate_0;
@@ -176,7 +170,7 @@ RRCrtcNotify(RRCrtcPtr crtc,
                 newoutputs = reallocarray(crtc->outputs,
                                           numOutputs, sizeof(RROutputPtr));
             else
-                newoutputs = calloc(numOutputs, sizeof(RROutputPtr));
+                newoutputs = xallocarray(numOutputs, sizeof(RROutputPtr));
             if (!newoutputs)
                 return FALSE;
         }
@@ -187,13 +181,10 @@ RRCrtcNotify(RRCrtcPtr crtc,
         crtc->outputs = newoutputs;
         crtc->numOutputs = numOutputs;
     }
-
     /*
      * Copy the new list of outputs into the crtc
      */
-    BUG_RETURN_VAL(numOutputs != 0 && outputs == NULL, FALSE);
     memcpy(crtc->outputs, outputs, numOutputs * sizeof(RROutputPtr));
-
     /*
      * Update remaining crtc fields
      */
@@ -454,7 +445,7 @@ rrGetPixmapSharingSyncProp(int numOutputs, RROutputPtr * outputs)
     /* Determine if the user wants prime syncing */
     int o;
     const char *syncStr = PRIME_SYNC_PROP;
-    Atom syncProp = dixGetAtomID(syncStr);
+    Atom syncProp = MakeAtom(syncStr, strlen(syncStr), FALSE);
     if (syncProp == None)
         return TRUE;
 
@@ -478,7 +469,7 @@ rrSetPixmapSharingSyncProp(char val, int numOutputs, RROutputPtr * outputs)
 {
     int o;
     const char *syncStr = PRIME_SYNC_PROP;
-    Atom syncProp = dixGetAtomID(syncStr);
+    Atom syncProp = MakeAtom(syncStr, strlen(syncStr), FALSE);
     if (syncProp == None)
         return;
 
@@ -715,9 +706,10 @@ static Bool
 rrCheckEmulated(RROutputPtr output)
 {
     const char *emulStr = XRANDR_EMULATION_PROP;
+    Atom emulProp;
     RRPropertyValuePtr val;
 
-    Atom emulProp = dixGetAtomID(emulStr);
+    emulProp = MakeAtom(emulStr, strlen(emulStr), FALSE);
     if (emulProp == None)
         return FALSE;
 
@@ -726,17 +718,6 @@ rrCheckEmulated(RROutputPtr output)
         return !!val->data;
 
     return FALSE;
-}
-
-
-/*
- * Check whether the pending and current transforms are the same
- */
-static inline Bool
-RRCrtcPendingTransform(RRCrtcPtr crtc)
-{
-    return !RRTransformEqual(&crtc->client_current_transform,
-                             &crtc->client_pending_transform);
 }
 
 /*
@@ -753,8 +734,6 @@ RRCrtcSet(RRCrtcPtr crtc,
     Bool recompute = TRUE;
     Bool crtcChanged;
     int  o;
-
-    BUG_RETURN_VAL(numOutputs != 0 && outputs == NULL, FALSE);
 
     rrScrPriv(pScreen);
 
@@ -876,6 +855,16 @@ RRCrtcGetTransform(RRCrtcPtr crtc)
 }
 
 /*
+ * Check whether the pending and current transforms are the same
+ */
+Bool
+RRCrtcPendingTransform(RRCrtcPtr crtc)
+{
+    return !RRTransformEqual(&crtc->client_current_transform,
+                             &crtc->client_pending_transform);
+}
+
+/*
  * Destroy a Crtc at shutdown
  */
 void
@@ -957,7 +946,7 @@ RRCrtcGammaSet(RRCrtcPtr crtc, CARD16 *red, CARD16 *green, CARD16 *blue)
  * Request current gamma back from the DDX (if possible).
  * This includes gamma size.
  */
-static Bool
+Bool
 RRCrtcGammaGet(RRCrtcPtr crtc)
 {
     Bool ret = TRUE;
@@ -1016,6 +1005,19 @@ Bool RRCrtcExists(ScreenPtr pScreen, RRCrtcPtr findCrtc)
     return FALSE;
 }
 
+
+/*
+ * Notify the extension that the Crtc gamma has been changed
+ * The driver calls this whenever it has changed the gamma values
+ * in the RRCrtcRec
+ */
+
+Bool
+RRCrtcGammaNotify(RRCrtcPtr crtc)
+{
+    return TRUE;                /* not much going on here */
+}
+
 static void
 RRModeGetScanoutSize(RRModePtr mode, PictTransformPtr transform,
                      int *width, int *height)
@@ -1057,7 +1059,7 @@ RRCrtcGammaSetSize(RRCrtcPtr crtc, int size)
     if (size == crtc->gammaSize)
         return TRUE;
     if (size) {
-        gamma = calloc(size, 3 * sizeof(CARD16));
+        gamma = xallocarray(size, 3 * sizeof(CARD16));
         if (!gamma)
             return FALSE;
     }
@@ -1075,7 +1077,7 @@ RRCrtcGammaSetSize(RRCrtcPtr crtc, int size)
  * Set the pending CRTC transformation
  */
 
-static int
+int
 RRCrtcTransformSet(RRCrtcPtr crtc,
                    PictTransformPtr transform,
                    struct pixman_f_transform *f_transform,
@@ -1204,7 +1206,7 @@ ProcRRGetCrtcInfo(ClientPtr client)
         rep.length = bytes_to_int32(extraLen);
 
         if (extraLen) {
-            extra = calloc(1, extraLen);
+            extra = malloc(extraLen);
             if (!extra)
                 return BadAlloc;
         }
@@ -1293,7 +1295,7 @@ ProcRRSetCrtcConfig(ClientPtr client)
             return BadMatch;
     }
     if (numOutputs) {
-        outputs = calloc(numOutputs, sizeof(RROutputPtr));
+        outputs = xallocarray(numOutputs, sizeof(RROutputPtr));
         if (!outputs)
             return BadAlloc;
     }
@@ -1658,7 +1660,7 @@ ProcRRGetCrtcGamma(ClientPtr client)
     len = crtc->gammaSize * 3 * 2;
 
     if (crtc->gammaSize) {
-        extra = calloc(1, len);
+        extra = malloc(len);
         if (!extra)
             return BadAlloc;
     }
@@ -1954,7 +1956,7 @@ RRReplaceScanoutPixmap(DrawablePtr pDrawable, PixmapPtr pPixmap, Bool enable)
     PixmapPtr *saved_scanout_pixmap;
     int i;
 
-    saved_scanout_pixmap = calloc(pScrPriv->numCrtcs, sizeof(PixmapPtr));
+    saved_scanout_pixmap = malloc(sizeof(PixmapPtr)*pScrPriv->numCrtcs);
     if (saved_scanout_pixmap == NULL)
         return FALSE;
 

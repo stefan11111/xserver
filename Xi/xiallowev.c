@@ -104,15 +104,15 @@ ProcXIAllowEvents(ClientPtr client)
         AllowSome(client, time, dev, GRAB_STATE_THAWED);
         break;
     case XIAsyncPairedDevice:
-        if (InputDevIsMaster(dev))
+        if (IsMaster(dev))
             AllowSome(client, time, dev, GRAB_STATE_THAW_OTHERS);
         break;
     case XISyncPair:
-        if (InputDevIsMaster(dev))
+        if (IsMaster(dev))
             AllowSome(client, time, dev, GRAB_STATE_FREEZE_BOTH_NEXT_EVENT);
         break;
     case XIAsyncPair:
-        if (InputDevIsMaster(dev))
+        if (IsMaster(dev))
             AllowSome(client, time, dev, GRAB_STATE_THAWED_BOTH);
         break;
     case XIRejectTouch:

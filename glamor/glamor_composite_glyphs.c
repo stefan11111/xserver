@@ -19,14 +19,9 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
  * OF THIS SOFTWARE.
  */
-#include <dix-config.h>
-
 #include <stdlib.h>
-#include <stdio.h>
-
-#include "os/bug_priv.h"
-
 #include "Xprintf.h"
+
 #include "glamor_priv.h"
 #include "glamor_transform.h"
 #include "glamor_transfer.h"
@@ -97,7 +92,7 @@ glamor_copy_glyph(PixmapPtr     glyph_pixmap,
         }
         changes[0].val = 0xff;
         changes[1].val = 0x00;
-        if (ChangeGC(NULL, scratch_gc,
+        if (ChangeGC(NullClient, scratch_gc,
                      GCForeground|GCBackground, changes) != Success) {
             glamor_destroy_pixmap(upload_pixmap);
             FreeScratchGC(scratch_gc);
@@ -127,8 +122,6 @@ glamor_copy_glyph(PixmapPtr     glyph_pixmap,
 static Bool
 glamor_glyph_atlas_init(ScreenPtr screen, struct glamor_glyph_atlas *atlas)
 {
-    BUG_RETURN_VAL(!atlas, FALSE);
-
     glamor_screen_private       *glamor_priv = glamor_get_screen_private(screen);
     PictFormatPtr               format = atlas->format;
 
@@ -184,24 +177,6 @@ glamor_glyph_add(struct glamor_glyph_atlas *atlas, DrawablePtr glyph_draw)
 
     return TRUE;
 }
-
-static const glamor_facet glamor_facet_composite_glyphs_es300 = {
-    .name = "composite_glyphs",
-    .version = 130,
-    .fs_extensions = ("#extension GL_EXT_blend_func_extended : enable\n"),
-    .vs_vars = ("in vec4 primitive;\n"
-                "in vec2 source;\n"
-                "out vec2 glyph_pos;\n"),
-    .vs_exec = ("       vec2 pos = primitive.zw * vec2(gl_VertexID&1, (gl_VertexID&2)>>1);\n"
-                GLAMOR_POS(gl_Position, (primitive.xy + pos))
-                "       glyph_pos = (source + pos) * ATLAS_DIM_INV;\n"),
-    .fs_vars = ("in vec2 glyph_pos;\n"
-                "out vec4 color0;\n"
-                "out vec4 color1;\n"),
-    .fs_exec = ("       vec4 mask = texture(atlas, glyph_pos);\n"),
-    .source_name = "source",
-    .locations = glamor_program_location_atlas,
-};
 
 static const glamor_facet glamor_facet_composite_glyphs_130 = {
     .name = "composite_glyphs",
@@ -291,8 +266,6 @@ glamor_glyphs_flush(CARD8 op, PicturePtr src, PicturePtr dst,
             break;
 
         glUniform1i(prog->atlas_uniform, 1);
-
-        BUG_RETURN(!pixmap_priv);
 
         glamor_pixmap_loop(pixmap_priv, box_index) {
             BoxPtr box = RegionRects(dst->pCompositeClip);
@@ -456,7 +429,6 @@ glamor_composite_glyphs(CARD8 op,
 
                     /* Glyph not cached in current atlas?
                      */
-                    BUG_RETURN(!glyph_atlas);
                     if (_X_UNLIKELY(glyph_priv->serial != glyph_atlas->serial)) {
                         if (!glamor_glyph_can_add(glyph_atlas, glyph_atlas_dim, glyph_draw)) {
                             if (glyphs_queued) {
@@ -482,9 +454,7 @@ glamor_composite_glyphs(CARD8 op,
                         if (glamor_glsl_has_ints(glamor_priv))
                             prog = glamor_setup_program_render(op, src, glyph_pict, dst,
                                                                glyphs_program,
-                                                               glamor_priv->is_gles ?
-                                                                   &glamor_facet_composite_glyphs_es300 :
-                                                                   &glamor_facet_composite_glyphs_130,
+                                                               &glamor_facet_composite_glyphs_130,
                                                                glamor_priv->glyph_defines);
                         else
                             prog = glamor_setup_program_render(op, src, glyph_pict, dst,

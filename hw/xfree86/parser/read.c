@@ -104,7 +104,7 @@ xf86readConfigFile(void)
             xf86_lex_val.str = NULL;
             break;
         case SECTION:
-            if (xf86getSubToken(&(ptr->conf_comment)) != XF86_TOKEN_STRING) {
+            if (xf86getSubToken(&(ptr->conf_comment)) != STRING) {
                 xf86parseError(QUOTE_MSG, "Section");
                 CLEANUP(ptr);
                 return NULL;
@@ -113,12 +113,12 @@ xf86readConfigFile(void)
             if (xf86nameCompare(xf86_lex_val.str, "files") == 0) {
                 free(xf86_lex_val.str);
                 xf86_lex_val.str = NULL;
-                HANDLE_RETURN(conf_files, xf86parseFilesSection(ptr->conf_files));
+                HANDLE_RETURN(conf_files, xf86parseFilesSection());
             }
             else if (xf86nameCompare(xf86_lex_val.str, "serverflags") == 0) {
                 free(xf86_lex_val.str);
                 xf86_lex_val.str = NULL;
-                HANDLE_RETURN(conf_flags, xf86parseFlagsSection(ptr->conf_flags));
+                HANDLE_RETURN(conf_flags, xf86parseFlagsSection());
             }
             else if (xf86nameCompare(xf86_lex_val.str, "pointer") == 0) {
                 free(xf86_lex_val.str);
@@ -177,7 +177,7 @@ xf86readConfigFile(void)
             else if (xf86nameCompare(xf86_lex_val.str, "module") == 0) {
                 free(xf86_lex_val.str);
                 xf86_lex_val.str = NULL;
-                HANDLE_RETURN(conf_modules, xf86parseModuleSection(ptr->conf_modules));
+                HANDLE_RETURN(conf_modules, xf86parseModuleSection());
             }
             else if (xf86nameCompare(xf86_lex_val.str, "serverlayout") == 0) {
                 free(xf86_lex_val.str);

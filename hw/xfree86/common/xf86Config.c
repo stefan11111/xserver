@@ -50,12 +50,9 @@
 #include <sys/types.h>
 #include <grp.h>
 
-#include "dix/resource_priv.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
-#include "xkb/xkbsrv_priv.h"
 
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Modes.h"
 #include "xf86Parser_priv.h"
 #include "xf86tokens.h"
@@ -70,6 +67,7 @@
 #include "loaderProcs.h"
 #include "xf86Xinput_priv.h"
 
+#include "xkbsrv.h"
 #include "picture.h"
 #ifdef DPMSExtension
 #include "dpmsproc.h"
@@ -118,6 +116,11 @@
 static ModuleDefault ModuleDefaults[] = {
 #ifdef GLXEXT
     {.name = "glx",.toLoad = TRUE,.load_opt = NULL},
+#endif
+#ifdef __CYGWIN__
+    /* load DIX modules used by drivers first */
+    {.name = "fb",.toLoad = TRUE,.load_opt = NULL},
+    {.name = "shadow",.toLoad = TRUE,.load_opt = NULL},
 #endif
     {.name = NULL,.toLoad = FALSE,.load_opt = NULL}
 };
@@ -824,11 +827,13 @@ configServerFlags(XF86ConfFlagsPtr flagsconf, XF86OptionPtr layoutopts)
     {
         if ((s = xf86GetOptValString(FlagOptions, FLAG_LOG))) {
             if (!xf86NameCmp(s, "flush")) {
-                LogMessageVerb(X_CONFIG, 1, "flush log flag is noop\n");
+                LogMessageVerb(X_CONFIG, 1, "Flushing logfile enabled\n");
+                LogSetParameter(XLOG_FLUSH, TRUE);
             }
             else if (!xf86NameCmp(s, "sync")) {
                 LogMessageVerb(X_CONFIG, 1, "Syncing logfile enabled\n");
-                xorgLogSync = TRUE;
+                LogSetParameter(XLOG_FLUSH, TRUE);
+                LogSetParameter(XLOG_SYNC, TRUE);
             }
             else {
                 LogMessageVerb(X_WARNING, 1, "Unknown Log option\n");
@@ -957,7 +962,7 @@ configServerFlags(XF86ConfFlagsPtr flagsconf, XF86OptionPtr layoutopts)
 #endif
 
     from = X_DEFAULT;
-    if (LimitClients != DIX_LIMITCLIENTS)
+    if (LimitClients != LIMITCLIENTS)
 	from = X_CMDLINE;
     i = -1;
     if (xf86GetOptValInteger(FlagOptions, FLAG_MAX_CLIENTS, &i)) {
@@ -970,6 +975,12 @@ configServerFlags(XF86ConfFlagsPtr flagsconf, XF86OptionPtr layoutopts)
     }
     LogMessageVerb(from, 1, "Max clients allowed: %i, resource mask: 0x%x\n",
 	    LimitClients, RESOURCE_ID_MASK);
+}
+
+Bool
+xf86DRI2Enabled(void)
+{
+    return xf86Info.dri2;
 }
 
 /**

@@ -35,6 +35,7 @@
 #include "windowstr.h"
 #include "input.h"
 #include "resource.h"
+#include "colormapst.h"
 #include "cursorstr.h"
 #include "dixstruct.h"
 #include "gcstruct.h"
@@ -122,10 +123,6 @@ FindGlyphRef(GlyphHashPtr hash,
     CARD32 elt, step, s;
     GlyphPtr glyph;
     GlyphRefPtr table, gr, del;
-
-    if ((hash == NULL) || (hash->hashSet == NULL))
-        return NULL;
-
     CARD32 tableSize = hash->hashSet->size;
 
     table = hash->table;
@@ -270,7 +267,7 @@ FreeGlyph(GlyphPtr glyph, int format)
         gr = FindGlyphRef(&globalGlyphs[format], signature, TRUE, glyph->sha1);
         if (gr - globalGlyphs[format].table != first)
             DuplicateRef(glyph, "Found wrong one");
-        if (gr && gr->glyph && gr->glyph != DeletedGlyph) {
+        if (gr->glyph && gr->glyph != DeletedGlyph) {
             gr->glyph = DeletedGlyph;
             gr->signature = 0;
             globalGlyphs[format].tableEntries--;
@@ -346,12 +343,13 @@ AllocateGlyph(xGlyphInfo * gi, int fdepth)
 {
     PictureScreenPtr ps;
     int size;
+    GlyphPtr glyph;
     int i;
     int head_size;
 
     head_size = sizeof(GlyphRec) + screenInfo.numScreens * sizeof(PicturePtr);
     size = (head_size + dixPrivatesSize(PRIVATE_GLYPH));
-    GlyphPtr glyph = calloc(1, size);
+    glyph = (GlyphPtr) malloc(size);
     if (!glyph)
         return 0;
     glyph->refcnt = 1;
@@ -386,7 +384,6 @@ AllocateGlyph(xGlyphInfo * gi, int fdepth)
 static Bool
 AllocateGlyphHash(GlyphHashPtr hash, GlyphHashSetPtr hashSet)
 {
-    assert(hashSet);
     hash->table = calloc(hashSet->size, sizeof(GlyphRefRec));
     if (!hash->table)
         return FALSE;
@@ -421,10 +418,10 @@ ResizeGlyphHash(GlyphHashPtr hash, CARD32 change, Bool global)
             glyph = hash->table[i].glyph;
             if (glyph && glyph != DeletedGlyph) {
                 s = hash->table[i].signature;
-                if ((gr = FindGlyphRef(&newHash, s, global, glyph->sha1))) {
-                    gr->signature = s;
-                    gr->glyph = glyph;
-                }
+                gr = FindGlyphRef(&newHash, s, global, glyph->sha1);
+
+                gr->signature = s;
+                gr->glyph = glyph;
                 ++newHash.tableEntries;
             }
         }

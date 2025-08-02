@@ -32,7 +32,6 @@
 #include <xwin-config.h>
 #endif
 
-#include "os/log_priv.h"
 #include "os/osdep.h"
 
 #include <../xfree86/common/xorgVersion.h>

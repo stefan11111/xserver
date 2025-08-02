@@ -79,6 +79,10 @@ SOFTWARE.
 #endif
 
 /* some DDXes must explicitly prohibit some extensions */
+#ifdef DISABLE_EXT_COMPOSITE
+#undef COMPOSITE
+#endif
+
 #ifdef DISABLE_EXT_DPMS
 #undef DPMSExtension
 #endif
@@ -87,10 +91,9 @@ SOFTWARE.
 #undef MITSHM
 #endif
 
-#include "miext/extinit_priv.h"
-
 #include "misc.h"
 #include "extension.h"
+#include "extinit_priv.h"
 #include "micmap.h"
 #include "os.h"
 #include "globals.h"
@@ -115,9 +118,6 @@ static const ExtensionModule staticExtensions[] = {
 #ifdef XCSECURITY
     {SecurityExtensionInit, "SECURITY", &noSecurityExtension},
 #endif
-#ifdef CONFIG_NAMESPACE
-    {NamespaceExtensionInit, "NAMESPACE", &noNamespaceExtension},
-#endif
 #ifdef XINERAMA
     {PanoramiXExtensionInit, "XINERAMA", &noPanoramiXExtension},
 #endif /* XINERAMA */
@@ -130,7 +130,7 @@ static const ExtensionModule staticExtensions[] = {
 #ifdef RANDR
     {RRExtensionInit, "RANDR", &noRRExtension},
 #endif
-#ifndef DISABLE_EXT_COMPOSITE
+#ifdef COMPOSITE
     {CompositeExtensionInit, "COMPOSITE", &noCompositeExtension},
 #endif
 #ifdef DAMAGE

@@ -56,7 +56,6 @@ SOFTWARE.
 #include <X11/extensions/XIproto.h>
 
 #include "dix/exevents_priv.h"
-#include "dix/input_priv.h"
 
 #include "inputstr.h"           /* DeviceIntPtr      */
 #include "windowstr.h"          /* window structure  */
@@ -100,6 +99,7 @@ ProcXGrabDeviceButton(ClientPtr client)
     DeviceIntPtr mdev;
     XEventClass *class;
     struct tmask tmp[EMASKSIZE];
+    GrabParameters param;
     GrabMask mask;
 
     REQUEST(xGrabDeviceButtonReq);
@@ -135,7 +135,7 @@ ProcXGrabDeviceButton(ClientPtr client)
                                   X_GrabDeviceButton)) != Success)
         return ret;
 
-    GrabParameters param = {
+    param = (GrabParameters) {
         .grabtype = XI,
         .ownerEvents = stuff->ownerEvents,
         .this_device_mode = stuff->this_device_mode,

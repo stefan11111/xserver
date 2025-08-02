@@ -59,6 +59,40 @@ typedef struct _fbOverlayScrPriv {
 
 #define fbOverlayGetScrPriv(s) \
     dixLookupPrivate(&(s)->devPrivates, fbOverlayGetScreenPrivateKey())
+extern _X_EXPORT Bool
+ fbOverlayCreateWindow(WindowPtr pWin);
+
+extern _X_EXPORT Bool
+ fbOverlayCloseScreen(ScreenPtr pScreen);
+
+extern _X_EXPORT int
+ fbOverlayWindowLayer(WindowPtr pWin);
+
+extern _X_EXPORT Bool
+ fbOverlayCreateScreenResources(ScreenPtr pScreen);
+
+extern _X_EXPORT void
+
+fbOverlayPaintKey(DrawablePtr pDrawable,
+                  RegionPtr pRegion, CARD32 pixel, int layer);
+extern _X_EXPORT void
+ fbOverlayUpdateLayerRegion(ScreenPtr pScreen, int layer, RegionPtr prgn);
+
+extern _X_EXPORT void
+ fbOverlayCopyWindow(WindowPtr pWin, DDXPointRec ptOldOrg, RegionPtr prgnSrc);
+
+extern _X_EXPORT void
+fbOverlayWindowExposures(WindowPtr pWin, RegionPtr prgn);
+
+extern _X_EXPORT Bool
+
+fbOverlaySetupScreen(ScreenPtr pScreen,
+                     void *pbits1,
+                     void *pbits2,
+                     int xsize,
+                     int ysize,
+                     int dpix,
+                     int dpiy, int width1, int width2, int bpp1, int bpp2);
 
 extern _X_EXPORT Bool
 

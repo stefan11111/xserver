@@ -26,8 +26,6 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #ifndef SWAPREP_H
 #define SWAPREP_H 1
 
-void SwapFont(xQueryFontReply * pr, Bool hasGlyphs);
-
 extern void Swap32Write(ClientPtr /* pClient */ ,
                         int /* size */ ,
                         CARD32 * /* pbuf */ );
@@ -43,6 +41,173 @@ extern void CopySwap16Write(ClientPtr /* pClient */ ,
 extern void SGenericReply(ClientPtr /* pClient */ ,
                           int /* size */ ,
                           xGenericReply * /* pRep */ );
+
+extern void SGetWindowAttributesReply(ClientPtr /* pClient */ ,
+                                      int /* size */ ,
+                                      xGetWindowAttributesReply *
+                                      /* pRep */ );
+
+extern void SGetGeometryReply(ClientPtr /* pClient */ ,
+                              int /* size */ ,
+                              xGetGeometryReply * /* pRep */ );
+
+extern void SQueryTreeReply(ClientPtr /* pClient */ ,
+                            int /* size */ ,
+                            xQueryTreeReply * /* pRep */ );
+
+extern void SInternAtomReply(ClientPtr /* pClient */ ,
+                             int /* size */ ,
+                             xInternAtomReply * /* pRep */ );
+
+extern void SGetAtomNameReply(ClientPtr /* pClient */ ,
+                              int /* size */ ,
+                              xGetAtomNameReply * /* pRep */ );
+
+extern void SGetPropertyReply(ClientPtr /* pClient */ ,
+                              int /* size */ ,
+                              xGetPropertyReply * /* pRep */ );
+
+extern void SListPropertiesReply(ClientPtr /* pClient */ ,
+                                 int /* size */ ,
+                                 xListPropertiesReply * /* pRep */ );
+
+extern void SGetSelectionOwnerReply(ClientPtr /* pClient */ ,
+                                    int /* size */ ,
+                                    xGetSelectionOwnerReply *
+                                    /* pRep */ );
+
+extern void SQueryPointerReply(ClientPtr /* pClient */ ,
+                               int /* size */ ,
+                               xQueryPointerReply * /* pRep */ );
+
+extern void SwapTimeCoordWrite(ClientPtr /* pClient */ ,
+                               int /* size */ ,
+                               xTimecoord * /* pRep */ );
+
+extern void SGetMotionEventsReply(ClientPtr /* pClient */ ,
+                                  int /* size */ ,
+                                  xGetMotionEventsReply *       /* pRep */
+    );
+
+extern void STranslateCoordsReply(ClientPtr /* pClient */ ,
+                                  int /* size */ ,
+                                  xTranslateCoordsReply *       /* pRep */
+    );
+
+extern void SGetInputFocusReply(ClientPtr /* pClient */ ,
+                                int /* size */ ,
+                                xGetInputFocusReply * /* pRep */ );
+
+extern void SQueryKeymapReply(ClientPtr /* pClient */ ,
+                              int /* size */ ,
+                              xQueryKeymapReply * /* pRep */ );
+
+extern void SQueryFontReply(ClientPtr /* pClient */ ,
+                            int /* size */ ,
+                            xQueryFontReply * /* pRep */ );
+
+extern void SQueryTextExtentsReply(ClientPtr /* pClient */ ,
+                                   int /* size */ ,
+                                   xQueryTextExtentsReply *     /* pRep */
+    );
+
+extern void SListFontsReply(ClientPtr /* pClient */ ,
+                            int /* size */ ,
+                            xListFontsReply * /* pRep */ );
+
+extern void SListFontsWithInfoReply(ClientPtr /* pClient */ ,
+                                    int /* size */ ,
+                                    xListFontsWithInfoReply *
+                                    /* pRep */ );
+
+extern void SGetFontPathReply(ClientPtr /* pClient */ ,
+                              int /* size */ ,
+                              xGetFontPathReply * /* pRep */ );
+
+extern void SGetImageReply(ClientPtr /* pClient */ ,
+                           int /* size */ ,
+                           xGetImageReply * /* pRep */ );
+
+extern void SListInstalledColormapsReply(ClientPtr /* pClient */ ,
+                                         int /* size */ ,
+                                         xListInstalledColormapsReply
+                                         * /* pRep */ );
+
+extern void SAllocColorReply(ClientPtr /* pClient */ ,
+                             int /* size */ ,
+                             xAllocColorReply * /* pRep */ );
+
+extern void SAllocNamedColorReply(ClientPtr /* pClient */ ,
+                                  int /* size */ ,
+                                  xAllocNamedColorReply *       /* pRep */
+    );
+
+extern void SAllocColorCellsReply(ClientPtr /* pClient */ ,
+                                  int /* size */ ,
+                                  xAllocColorCellsReply *       /* pRep */
+    );
+
+extern void SAllocColorPlanesReply(ClientPtr /* pClient */ ,
+                                   int /* size */ ,
+                                   xAllocColorPlanesReply *     /* pRep */
+    );
+
+extern void SQColorsExtend(ClientPtr /* pClient */ ,
+                           int /* size */ ,
+                           xrgb * /* prgb */ );
+
+extern void SQueryColorsReply(ClientPtr /* pClient */ ,
+                              int /* size */ ,
+                              xQueryColorsReply * /* pRep */ );
+
+extern void SLookupColorReply(ClientPtr /* pClient */ ,
+                              int /* size */ ,
+                              xLookupColorReply * /* pRep */ );
+
+extern void SQueryBestSizeReply(ClientPtr /* pClient */ ,
+                                int /* size */ ,
+                                xQueryBestSizeReply * /* pRep */ );
+
+extern void SListExtensionsReply(ClientPtr /* pClient */ ,
+                                 int /* size */ ,
+                                 xListExtensionsReply * /* pRep */ );
+
+extern void SGetKeyboardMappingReply(ClientPtr /* pClient */ ,
+                                     int /* size */ ,
+                                     xGetKeyboardMappingReply *
+                                     /* pRep */ );
+
+extern void SGetPointerMappingReply(ClientPtr /* pClient */ ,
+                                    int /* size */ ,
+                                    xGetPointerMappingReply *
+                                    /* pRep */ );
+
+extern void SGetModifierMappingReply(ClientPtr /* pClient */ ,
+                                     int /* size */ ,
+                                     xGetModifierMappingReply *
+                                     /* pRep */ );
+
+extern void SGetKeyboardControlReply(ClientPtr /* pClient */ ,
+                                     int /* size */ ,
+                                     xGetKeyboardControlReply *
+                                     /* pRep */ );
+
+extern void SGetPointerControlReply(ClientPtr /* pClient */ ,
+                                    int /* size */ ,
+                                    xGetPointerControlReply *
+                                    /* pRep */ );
+
+extern void SGetScreenSaverReply(ClientPtr /* pClient */ ,
+                                 int /* size */ ,
+                                 xGetScreenSaverReply * /* pRep */ );
+
+extern void SLHostsExtend(ClientPtr /* pClient */ ,
+                          int /* size */ ,
+                          char * /* buf */ );
+
+extern void SListHostsReply(ClientPtr /* pClient */ ,
+                            int /* size */ ,
+                            xListHostsReply * /* pRep */ );
 
 extern void SErrorEvent(xError * /* from */ ,
                         xError * /* to */ );

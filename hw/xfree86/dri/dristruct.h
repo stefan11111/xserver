@@ -58,6 +58,10 @@ struct _DRIContextPrivRec {
     void **pContextStore;
 };
 
+#define DRI_SCREEN_PRIV(pScreen) ((DRIScreenPrivPtr) \
+    (dixPrivateKeyRegistered(DRIScreenPrivKey) ?			\
+     dixLookupPrivate(&(pScreen)->devPrivates, DRIScreenPrivKey) : NULL))
+
 #define DRI_SCREEN_PRIV_FROM_INDEX(screenIndex) ((DRIScreenPrivPtr) \
     dixLookupPrivate(&screenInfo.screens[screenIndex]->devPrivates, \
 		     DRIScreenPrivKey))
@@ -86,7 +90,7 @@ typedef struct _DRIScreenPrivRec {
     DrawablePtr fullscreen;     /* pointer to fullscreen drawable */
     drm_clip_rect_t fullscreen_rect;    /* fake rect for fullscreen mode */
     DRIWrappedFuncsRec wrap;
-    void *_dummy1; // required in place of a removed field for ABI compatibility
+    DestroyWindowProcPtr DestroyWindow;
     DrawablePtr DRIDrawables[SAREA_MAX_DRAWABLES];
     DRIContextPrivPtr dummyCtxPriv;     /* Pointer to dummy context */
     Bool createDummyCtx;

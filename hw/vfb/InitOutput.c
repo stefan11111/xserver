@@ -39,7 +39,6 @@ from The Open Group.
 #include "dix/colormap_priv.h"
 #include "dix/dix_priv.h"
 #include "dix/screenint_priv.h"
-#include "mi/mi_priv.h"
 #include "mi/mipointer_priv.h"
 #include "os/cmdline.h"
 #include "os/ddx_priv.h"
@@ -49,6 +48,7 @@ from The Open Group.
 #include "servermd.h"
 #define PSZ 8
 #include "fb.h"
+#include "colormapst.h"
 #include "gcstruct.h"
 #include "input.h"
 #include "mipointer.h"
@@ -259,6 +259,13 @@ ddxGiveUp(enum ExitCode error)
     }
 }
 
+#ifdef __APPLE__
+void
+DarwinHandleGUI(int argc, char *argv[])
+{
+}
+#endif
+
 void
 OsVendorInit(void)
 {
@@ -388,7 +395,9 @@ ddxProcessArgument(int argc, char *argv[], int i)
 
     if (strcmp(argv[i], "-render") == 0) {      /* -render */
         Render = FALSE;
+#ifdef COMPOSITE
         noCompositeExtension = TRUE;
+#endif
         return 1;
     }
 
@@ -474,11 +483,9 @@ vfbInstallColormap(ColormapPtr pmap)
         swapcopy32(pXWDHeader->bits_per_rgb, pVisual->bitsPerRGBValue);
         swapcopy32(pXWDHeader->colormap_entries, pVisual->ColormapEntries);
 
-        ppix = calloc(entries, sizeof(Pixel));
-        prgb = calloc(entries, sizeof(xrgb));
-        defs = calloc(entries, sizeof(xColorItem));
-        if (!ppix || !prgb || !defs)
-            goto out;
+        ppix = xallocarray(entries, sizeof(Pixel));
+        prgb = xallocarray(entries, sizeof(xrgb));
+        defs = xallocarray(entries, sizeof(xColorItem));
 
         for (i = 0; i < entries; i++)
             ppix[i] = i;
@@ -494,7 +501,6 @@ vfbInstallColormap(ColormapPtr pmap)
         }
         (*pmap->pScreen->StoreColors) (pmap, entries, defs);
 
-out:
         free(ppix);
         free(prgb);
         free(defs);
@@ -688,7 +694,7 @@ vfbAllocateFramebufferMemory(vfbScreenInfoPtr pvfb)
 #endif
 
     case NORMAL_MEMORY_FB:
-        pvfb->pXWDHeader = (XWDFileHeader *) calloc(1, pvfb->sizeInBytes);
+        pvfb->pXWDHeader = (XWDFileHeader *) malloc(pvfb->sizeInBytes);
         break;
     }
 

@@ -29,8 +29,6 @@
 #include "dix/dixgrabs_priv.h"
 #include "dix/eventconvert.h"
 #include "dix/input_priv.h"
-#include "dix/inpututils_priv.h"
-#include "dix/resource_priv.h"
 #include "mi/mi_priv.h"
 #include "os/bug_priv.h"
 
@@ -39,6 +37,7 @@
 #include "eventstr.h"
 #include "exevents.h"
 #include "exglobals.h"
+#include "inpututils.h"
 #include "windowstr.h"
 
 #define GESTURE_HISTORY_SIZE 100
@@ -237,7 +236,7 @@ GestureAddRegularListener(DeviceIntPtr dev, GestureInfoPtr gi, WindowPtr win, In
 
     inputMasks = wOtherInputMasks(win);
 
-    if ((mask & EVENT_XI2_MASK) && (inputMasks != NULL)) {
+    if (mask & EVENT_XI2_MASK) {
         nt_list_for_each_entry(iclients, inputMasks->inputClients, next) {
             if (!xi2mask_isset(iclients->xi2mask, dev, evtype))
                 continue;
@@ -282,8 +281,8 @@ GestureSetupListener(DeviceIntPtr dev, GestureInfoPtr gi, InternalEvent *ev)
 
     /* Find the first client with an applicable event selection,
      * going from deepest child window back up to the root window. */
-    for (int j = sprite->spriteTraceGood - 1; j >= 0; j--) {
-        win = sprite->spriteTrace[j];
+    for (i = sprite->spriteTraceGood - 1; i >= 0; i--) {
+        win = sprite->spriteTrace[i];
         GestureAddRegularListener(dev, gi, win, ev);
         if (gi->has_listener)
             return;
@@ -296,12 +295,13 @@ void
 GestureListenerGone(XID resource)
 {
     GestureInfoPtr gi;
+    DeviceIntPtr dev;
     InternalEvent *events = InitEventList(GetMaximumEventsNum());
 
     if (!events)
         FatalError("GestureListenerGone: couldn't allocate events\n");
 
-    for (DeviceIntPtr dev = inputInfo.devices; dev; dev = dev->next) {
+    for (dev = inputInfo.devices; dev; dev = dev->next) {
         if (!dev->gesture)
             continue;
 
@@ -333,11 +333,12 @@ GestureEndActiveGestures(DeviceIntPtr dev)
     input_lock();
     mieqProcessInputEvents();
     if (g->gesture.active) {
+        int j;
         int type = GetXI2Type(GestureTypeToEnd(g->gesture.type));
         int nevents = GetGestureEvents(eventlist, dev, type, g->gesture.num_touches,
                                        0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
-        for (int j = 0; j < nevents; j++)
+        for (j = 0; j < nevents; j++)
             mieqProcessDeviceEvent(dev, eventlist + j, NULL);
     }
     input_unlock();

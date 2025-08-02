@@ -51,7 +51,6 @@ SOFTWARE.
 #include <X11/X.h>
 #include <X11/Xatom.h>
 
-#include "dix/atom_priv.h"
 #include "dix/dix_priv.h"
 
 #include "misc.h"
@@ -76,11 +75,12 @@ Atom
 MakeAtom(const char *string, unsigned len, Bool makeit)
 {
     NodePtr *np;
+    unsigned i;
     int comp;
     unsigned int fp = 0;
 
     np = &atomRoot;
-    for (unsigned int i = 0; i < (len + 1) / 2; i++) {
+    for (i = 0; i < (len + 1) / 2; i++) {
         fp = fp * 27 + string[i];
         fp = fp * 27 + string[len - 1 - i];
     }
@@ -100,7 +100,9 @@ MakeAtom(const char *string, unsigned len, Bool makeit)
         }
     }
     if (makeit) {
-        NodePtr nd = calloc(1, sizeof(NodeRec));
+        NodePtr nd;
+
+        nd = malloc(sizeof(NodeRec));
         if (!nd)
             return BAD_RESOURCE;
         if (lastAtom < XA_LAST_PREDEFINED) {
@@ -157,6 +159,12 @@ NameForAtom(Atom atom)
     return node->string;
 }
 
+void
+AtomError(void)
+{
+    FatalError("initializing atoms");
+}
+
 static void
 FreeAtom(NodePtr patom)
 {
@@ -191,11 +199,11 @@ InitAtoms(void)
 {
     FreeAllAtoms();
     tableLength = InitialTableSize;
-    nodeTable = calloc(InitialTableSize, sizeof(NodePtr));
+    nodeTable = xallocarray(InitialTableSize, sizeof(NodePtr));
     if (!nodeTable)
-        FatalError("creating atom table");
+        AtomError();
     nodeTable[None] = NULL;
     MakePredeclaredAtoms();
     if (lastAtom != XA_LAST_PREDEFINED)
-        FatalError("builtin atom number mismatch");
+        AtomError();
 }

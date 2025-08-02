@@ -80,7 +80,7 @@ ProcXIChangeCursor(ClientPtr client)
     if (rc != Success)
         return rc;
 
-    if (!InputDevIsMaster(pDev) || !IsPointerDevice(pDev))
+    if (!IsMaster(pDev) || !IsPointerDevice(pDev))
         return BadDevice;
 
     if (stuff->win != None) {

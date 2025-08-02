@@ -32,12 +32,13 @@ Equipment Corporation.
  *	PanoramiX definitions
  */
 
+#ifdef HAVE_DIX_CONFIG_H
 #include <dix-config.h>
+#endif
 
 #ifndef _PANORAMIX_H_
 #define _PANORAMIX_H_
 
-#include <X11/Xmd.h>
 #include <X11/extensions/panoramiXproto.h>
 
 #include "gcstruct.h"
@@ -69,6 +70,7 @@ typedef struct {
 #define FOR_NSCREENS_FORWARD(j) for(j = 0; j < PanoramiXNumScreens; j++)
 #define FOR_NSCREENS_FORWARD_SKIP(j) for(j = 1; j < PanoramiXNumScreens; j++)
 #define FOR_NSCREENS_BACKWARD(j) for(j = PanoramiXNumScreens - 1; j >= 0; j--)
+#define FOR_NSCREENS(j) FOR_NSCREENS_FORWARD(j)
 
 #define IS_SHARED_PIXMAP(r) (((r)->type == XRT_PIXMAP) && (r)->u.pix.shared)
 

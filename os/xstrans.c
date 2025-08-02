@@ -2,4 +2,7 @@
 
 #include <X11/Xfuncproto.h>
 
-#include "os/transport.c"
+#define TRANS_REOPEN
+#define TRANS_SERVER
+#define XSERV_t
+#include <X11/Xtrans/transport.c>

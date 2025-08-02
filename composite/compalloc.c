@@ -43,9 +43,6 @@
 
 #include <dix-config.h>
 
-#include "dix/resource_priv.h"
-#include "os/bug_priv.h"
-
 #include "compint.h"
 
 static Bool
@@ -136,9 +133,8 @@ compHandleMarkedWindows(WindowPtr pWin, WindowPtr pLayerWin)
 int
 compRedirectWindow(ClientPtr pClient, WindowPtr pWin, int update)
 {
-    BUG_RETURN_VAL(!pClient, BadMatch);
-
     CompWindowPtr cw = GetCompWindow(pWin);
+    CompClientWindowPtr ccw;
     CompScreenPtr cs = GetCompScreen(pWin->drawable.pScreen);
     WindowPtr pLayerWin;
     Bool anyMarked = FALSE;
@@ -155,7 +151,7 @@ compRedirectWindow(ClientPtr pClient, WindowPtr pWin, int update)
      * Only one Manual update is allowed
      */
     if (cw && update == CompositeRedirectManual)
-        for (CompClientWindowPtr ccw = cw->clients; ccw; ccw = ccw->next)
+        for (ccw = cw->clients; ccw; ccw = ccw->next)
             if (ccw->update == CompositeRedirectManual)
                 return BadAccess;
 
@@ -164,7 +160,7 @@ compRedirectWindow(ClientPtr pClient, WindowPtr pWin, int update)
      * The client *could* allocate multiple, but while supported,
      * it is not expected to be common
      */
-    CompClientWindowPtr ccw = calloc(1, sizeof(CompClientWindowRec));
+    ccw = malloc(sizeof(CompClientWindowRec));
     if (!ccw)
         return BadAlloc;
     ccw->id = FakeClientID(pClient->index);
@@ -173,7 +169,7 @@ compRedirectWindow(ClientPtr pClient, WindowPtr pWin, int update)
      * Now make sure there's a per-window structure to hang this from
      */
     if (!cw) {
-        cw = calloc(1, sizeof(CompWindowRec));
+        cw = malloc(sizeof(CompWindowRec));
         if (!cw) {
             free(ccw);
             return BadAlloc;
@@ -248,7 +244,7 @@ compRestoreWindow(WindowPtr pWin, PixmapPtr pPixmap)
             ChangeGCVal val;
 
             val.val = IncludeInferiors;
-            ChangeGC(NULL, pGC, GCSubwindowMode, &val);
+            ChangeGC(NullClient, pGC, GCSubwindowMode, &val);
             ValidateGC(&pWin->drawable, pGC);
             (void) (*pGC->ops->CopyArea) (&pPixmap->drawable,
                                    &pWin->drawable, pGC, x, y, w, h, 0, 0);
@@ -327,13 +323,11 @@ compUnredirectWindow(ClientPtr pClient, WindowPtr pWin, int update)
     CompWindowPtr cw = GetCompWindow(pWin);
     CompClientWindowPtr ccw;
 
-    BUG_RETURN_VAL(!pClient, BadValue);
-
     if (!cw)
         return BadValue;
 
     for (ccw = cw->clients; ccw; ccw = ccw->next)
-        if (ccw->update == update && dixClientIdForXID(ccw->id) == pClient->index) {
+        if (ccw->update == update && CLIENT_ID(ccw->id) == pClient->index) {
             FreeResource(ccw->id, X11_RESTYPE_NONE);
             return Success;
         }
@@ -348,13 +342,14 @@ int
 compRedirectSubwindows(ClientPtr pClient, WindowPtr pWin, int update)
 {
     CompSubwindowsPtr csw = GetCompSubwindows(pWin);
+    CompClientWindowPtr ccw;
     WindowPtr pChild;
 
     /*
      * Only one Manual update is allowed
      */
     if (csw && update == CompositeRedirectManual)
-        for (CompClientWindowPtr ccw = csw->clients; ccw; ccw = ccw->next)
+        for (ccw = csw->clients; ccw; ccw = ccw->next)
             if (ccw->update == CompositeRedirectManual)
                 return BadAccess;
     /*
@@ -362,7 +357,7 @@ compRedirectSubwindows(ClientPtr pClient, WindowPtr pWin, int update)
      * The client *could* allocate multiple, but while supported,
      * it is not expected to be common
      */
-    CompClientWindowPtr ccw = calloc(1, sizeof(CompClientWindowRec));
+    ccw = malloc(sizeof(CompClientWindowRec));
     if (!ccw)
         return BadAlloc;
     ccw->id = FakeClientID(pClient->index);
@@ -371,7 +366,7 @@ compRedirectSubwindows(ClientPtr pClient, WindowPtr pWin, int update)
      * Now make sure there's a per-window structure to hang this from
      */
     if (!csw) {
-        csw = calloc(1, sizeof(CompSubwindowsRec));
+        csw = malloc(sizeof(CompSubwindowsRec));
         if (!csw) {
             free(ccw);
             return BadAlloc;
@@ -431,7 +426,7 @@ compFreeClientSubwindows(WindowPtr pWin, XID id)
         return;
     for (prev = &csw->clients; (ccw = *prev); prev = &ccw->next) {
         if (ccw->id == id) {
-            ClientPtr pClient = dixClientForXID(id);
+            ClientPtr pClient = clients[CLIENT_ID(id)];
 
             *prev = ccw->next;
             if (ccw->update == CompositeRedirectManual) {
@@ -480,7 +475,7 @@ compUnredirectSubwindows(ClientPtr pClient, WindowPtr pWin, int update)
     if (!csw)
         return BadValue;
     for (ccw = csw->clients; ccw; ccw = ccw->next)
-        if (ccw->update == update && dixClientIdForXID(ccw->id) == pClient->index) {
+        if (ccw->update == update && CLIENT_ID(ccw->id) == pClient->index) {
             FreeResource(ccw->id, X11_RESTYPE_NONE);
             return Success;
         }
@@ -500,8 +495,9 @@ compRedirectOneSubwindow(WindowPtr pParent, WindowPtr pWin)
     if (!csw)
         return Success;
     for (ccw = csw->clients; ccw; ccw = ccw->next) {
-        int ret = compRedirectWindow(dixClientForXID(ccw->id),
+        int ret = compRedirectWindow(clients[CLIENT_ID(ccw->id)],
                                      pWin, ccw->update);
+
         if (ret != Success)
             return ret;
     }
@@ -521,8 +517,9 @@ compUnredirectOneSubwindow(WindowPtr pParent, WindowPtr pWin)
     if (!csw)
         return Success;
     for (ccw = csw->clients; ccw; ccw = ccw->next) {
-        int ret = compUnredirectWindow(dixClientForXID(ccw->id),
+        int ret = compUnredirectWindow(clients[CLIENT_ID(ccw->id)],
                                        pWin, ccw->update);
+
         if (ret != Success)
             return ret;
     }
@@ -552,7 +549,7 @@ compNewPixmap(WindowPtr pWin, int x, int y, int w, int h)
             ChangeGCVal val;
 
             val.val = IncludeInferiors;
-            ChangeGC(NULL, pGC, GCSubwindowMode, &val);
+            ChangeGC(NullClient, pGC, GCSubwindowMode, &val);
             ValidateGC(&pPixmap->drawable, pGC);
             (void) (*pGC->ops->CopyArea) (&pParent->drawable,
                                           &pPixmap->drawable,

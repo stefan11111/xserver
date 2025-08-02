@@ -46,22 +46,15 @@ static struct auth {
     XID id;
 } *mit_auth;
 
-XID
-MitAddCookie(unsigned short data_length, const char *data)
+int
+MitAddCookie(unsigned short data_length, const char *data, XID id)
 {
     struct auth *new;
 
-    // check for possible duplicate and return it instead
-    for (struct auth *walk=mit_auth; walk; walk=walk->next) {
-        if ((walk->len == data_length) &&
-            (memcmp(walk->data, data, data_length) == 0))
-            return walk->id;
-    }
-
-    new = calloc(1, sizeof(struct auth));
+    new = malloc(sizeof(struct auth));
     if (!new)
         return 0;
-    new->data = calloc(1, (unsigned) data_length);
+    new->data = malloc((unsigned) data_length);
     if (!new->data) {
         free(new);
         return 0;
@@ -70,8 +63,8 @@ MitAddCookie(unsigned short data_length, const char *data)
     mit_auth = new;
     memcpy(new->data, data, (size_t) data_length);
     new->len = data_length;
-    new->id = dixAllocServerXID();
-    return new->id;
+    new->id = id;
+    return 1;
 }
 
 XID
@@ -141,26 +134,13 @@ MitRemoveCookie(unsigned short data_length, const char *data)
 
 static char cookie[16];         /* 128 bits */
 
-static void
-GenerateRandomData(int len, char *buf)
-{
-#ifdef HAVE_ARC4RANDOM_BUF
-    arc4random_buf(buf, len);
-#else
-    int fd;
-
-    fd = open("/dev/urandom", O_RDONLY);
-    read(fd, buf, len);
-    close(fd);
-#endif
-}
-
 XID
 MitGenerateCookie(unsigned data_length,
                   const char *data,
-                  unsigned *data_length_return, char **data_return)
+                  XID id, unsigned *data_length_return, char **data_return)
 {
     int i = 0;
+    int status;
 
     while (data_length--) {
         cookie[i++] += *data++;
@@ -168,11 +148,13 @@ MitGenerateCookie(unsigned data_length,
             i = 0;
     }
     GenerateRandomData(sizeof(cookie), cookie);
-    XID id = MitAddCookie(sizeof(cookie), cookie);
-    if (!id)
-        return 0;
-
-    *data_return = cookie;
-    *data_length_return = sizeof(cookie);
+    status = MitAddCookie(sizeof(cookie), cookie, id);
+    if (!status) {
+        id = -1;
+    }
+    else {
+        *data_return = cookie;
+        *data_length_return = sizeof(cookie);
+    }
     return id;
 }

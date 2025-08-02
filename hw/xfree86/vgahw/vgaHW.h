@@ -16,6 +16,7 @@
 #include "misc.h"
 #include "input.h"
 #include "scrnintstr.h"
+#include "colormapst.h"
 
 #include "xf86str.h"
 #include "xf86Pci.h"

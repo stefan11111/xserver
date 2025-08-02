@@ -38,7 +38,6 @@
 #include "darwinEvents.h"
 #include <Xplugin.h>
 
-#include "dix/input_priv.h"
 #include "mi/mipointer_priv.h"
 
 #include "mi.h"
@@ -48,6 +47,7 @@
 #include "windowstr.h"
 #include "globals.h"
 #include "servermd.h"
+#include "dixevents.h"
 #include "x-hash.h"
 
 typedef struct {
@@ -396,11 +396,11 @@ QuartzResumeXCursor(ScreenPtr pScreen)
 
     /* TODO: Tablet? */
 
-    pWin = InputDevSpriteWindow(darwinPointer);
+    pWin = GetSpriteWindow(darwinPointer);
     if (pWin->drawable.pScreen != pScreen)
         return;
 
-    pCursor = InputDevGetSpriteCursor(darwinPointer);
+    pCursor = GetSpriteCursor(darwinPointer);
     if (pCursor == NULL)
         return;
 

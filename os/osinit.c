@@ -60,7 +60,6 @@ SOFTWARE.
 
 #include "dix/dix_priv.h"
 #include "os/busfault.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
 #include "os/serverlock.h"
 
@@ -74,8 +73,22 @@ SOFTWARE.
 #include <sys/resource.h>
 #endif
 
+#ifndef ADMPATH
+#define ADMPATH "/usr/adm/X%smsgs"
+#endif
+
+#ifdef RLIMIT_DATA
+int limitDataSpace = -1;
+#endif
+#ifdef RLIMIT_STACK
+int limitStackSpace = -1;
+#endif
+#ifdef RLIMIT_NOFILE
+int limitNoFile = -1;
+#endif
+
 /* The actual user defined max number of clients */
-int LimitClients = DIX_LIMITCLIENTS;
+int LimitClients = LIMITCLIENTS;
 
 static OsSigWrapperPtr OsSigWrapper = NULL;
 
@@ -93,7 +106,7 @@ OsRegisterSigWrapper(OsSigWrapperPtr newSigWrapper)
  * OsSigHandler --
  *    Catch unexpected signals and exit or continue cleanly.
  */
-#if !defined(WIN32)
+#if !defined(WIN32) || defined(__CYGWIN__)
 static void
 #ifdef SA_SIGINFO
 OsSigHandler(int signo, siginfo_t * sip, void *unused)
@@ -143,15 +156,19 @@ OsSigHandler(int signo)
     FatalError("Caught signal %d (%s). Server aborting\n",
                signo, strsignal(signo));
 }
-#endif /* !WIN32 */
+#endif /* !WIN32 || __CYGWIN__ */
 
 void
 OsInit(void)
 {
     static Bool been_here = FALSE;
+#ifndef XQUARTZ
+    static const char *devnull = "/dev/null";
+    char fname[PATH_MAX];
+#endif
 
     if (!been_here) {
-#if !defined(WIN32)
+#if !defined(WIN32) || defined(__CYGWIN__)
         struct sigaction act, oact;
         int i;
 
@@ -179,7 +196,7 @@ OsInit(void)
                        siglist[i], strerror(errno));
             }
         }
-#endif /* !WIN32 */
+#endif /* !WIN32 || __CYGWIN__ */
         busfault_init();
         server_poll = ospoll_create();
         if (!server_poll)
@@ -209,9 +226,85 @@ OsInit(void)
         }
 #endif
 
-#if !defined(WIN32)
+#if !defined(XQUARTZ)    /* STDIN is already /dev/null and STDOUT/STDERR is managed by console_redirect.c */
+        /*
+         * If a write of zero bytes to stderr returns non-zero, i.e. -1,
+         * then writing to stderr failed, and we'll write somewhere else
+         * instead. (Apparently this never happens in the Real World.)
+         */
+        if (write(2, fname, 0) == -1) {
+            FILE *err;
+
+            if (strlen(display) + strlen(ADMPATH) + 1 < sizeof fname)
+                snprintf(fname, sizeof(fname), ADMPATH, display);
+            else
+                strcpy(fname, devnull);
+            /*
+             * uses stdio to avoid os dependencies here,
+             * a real os would use
+             *  open (fname, O_WRONLY|O_APPEND|O_CREAT, 0666)
+             */
+            if (!(err = fopen(fname, "a+")))
+                err = fopen(devnull, "w");
+            if (err && (fileno(err) != 2)) {
+                dup2(fileno(err), 2);
+                fclose(err);
+            }
+#if defined(SVR4) || defined(WIN32) || defined(__CYGWIN__)
+            {
+                static char buf[BUFSIZ];
+
+                setvbuf(stderr, buf, _IOLBF, BUFSIZ);
+            }
+#else
+            setlinebuf(stderr);
+#endif
+        }
+#endif /* !XQUARTZ */
+
+#if !defined(WIN32) || defined(__CYGWIN__)
         if (getpgrp() == 0)
             setpgid(0, 0);
+#endif
+
+#ifdef RLIMIT_DATA
+        if (limitDataSpace >= 0) {
+            struct rlimit rlim;
+
+            if (!getrlimit(RLIMIT_DATA, &rlim)) {
+                if ((limitDataSpace > 0) && (limitDataSpace < rlim.rlim_max))
+                    rlim.rlim_cur = limitDataSpace;
+                else
+                    rlim.rlim_cur = rlim.rlim_max;
+                (void) setrlimit(RLIMIT_DATA, &rlim);
+            }
+        }
+#endif
+#ifdef RLIMIT_STACK
+        if (limitStackSpace >= 0) {
+            struct rlimit rlim;
+
+            if (!getrlimit(RLIMIT_STACK, &rlim)) {
+                if ((limitStackSpace > 0) && (limitStackSpace < rlim.rlim_max))
+                    rlim.rlim_cur = limitStackSpace;
+                else
+                    rlim.rlim_cur = rlim.rlim_max;
+                (void) setrlimit(RLIMIT_STACK, &rlim);
+            }
+        }
+#endif
+#ifdef RLIMIT_NOFILE
+        if (limitNoFile >= 0) {
+            struct rlimit rlim;
+
+            if (!getrlimit(RLIMIT_NOFILE, &rlim)) {
+                if ((limitNoFile > 0) && (limitNoFile < rlim.rlim_max))
+                    rlim.rlim_cur = limitNoFile;
+                else
+                    rlim.rlim_cur = rlim.rlim_max;
+                (void) setrlimit(RLIMIT_NOFILE, &rlim);
+            }
+        }
 #endif
         LockServer();
         been_here = TRUE;

@@ -58,25 +58,25 @@
 #include <X11/Xatom.h>
 
 #include "dix/dix_priv.h"
-#include "dix/input_priv.h"
-#include "dix/inpututils_priv.h"
 #include "dix/ptrveloc_priv.h"
+#include "dix/input_priv.h"
 
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
 #include "xf86Config.h"
 #include "xf86Xinput_priv.h"
 #include "XIstubs.h"
 #include "xf86Optrec.h"
 #include "mipointer.h"
+#include "extinit.h"
 #include "loaderProcs.h"
-#include "../os-support/linux/systemd-logind.h"
+#include "systemd-logind.h"
 #include "exevents.h"           /* AddInputDevice */
 #include "exglobals.h"
 #include "eventstr.h"
+#include "inpututils.h"
 #include "optionstr.h"
 #include "xf86Module_priv.h"
-#include "xf86Opt_priv.h"
 
 #ifdef HAVE_FNMATCH_H
 #include <fnmatch.h>
@@ -393,6 +393,7 @@ static DeviceIntPtr
 xf86ActivateDevice(InputInfoPtr pInfo)
 {
     DeviceIntPtr dev;
+    Atom atom;
 
     dev = AddInputDevice(serverClient, pInfo->device_control, TRUE);
 
@@ -402,7 +403,7 @@ xf86ActivateDevice(InputInfoPtr pInfo)
         return NULL;
     }
 
-    Atom atom = dixAddAtom(pInfo->type_name);
+    atom = MakeAtom(pInfo->type_name, strlen(pInfo->type_name), TRUE);
     AssignTypeAndName(dev, atom, pInfo->name);
     dev->public.devicePrivate = pInfo;
     pInfo->dev = dev;
@@ -1137,7 +1138,7 @@ DeleteInputDeviceRequest(DeviceIntPtr pDev)
 {
     InputInfoPtr pInfo = (InputInfoPtr) pDev->public.devicePrivate;
     InputDriverPtr drv = NULL;
-    Bool isMaster = InputDevIsMaster(pDev);
+    Bool isMaster = IsMaster(pDev);
 
     if (pInfo)                  /* need to get these before RemoveDevice */
         drv = pInfo->drv;
@@ -1190,6 +1191,20 @@ xf86PostMotionEvent(DeviceIntPtr device,
 
     va_end(var);
 
+    xf86PostMotionEventM(device, is_absolute, &mask);
+}
+
+void
+xf86PostMotionEventP(DeviceIntPtr device,
+                     int is_absolute,
+                     int first_valuator,
+                     int num_valuators, const int *valuators)
+{
+    ValuatorMask mask;
+
+    XI_VERIFY_VALUATORS(num_valuators);
+
+    valuator_mask_set_range(&mask, first_valuator, num_valuators, valuators);
     xf86PostMotionEventM(device, is_absolute, &mask);
 }
 
@@ -1320,6 +1335,20 @@ xf86PostProximityEvent(DeviceIntPtr device,
 }
 
 void
+xf86PostProximityEventP(DeviceIntPtr device,
+                        int is_in,
+                        int first_valuator,
+                        int num_valuators, const int *valuators)
+{
+    ValuatorMask mask;
+
+    XI_VERIFY_VALUATORS(num_valuators);
+
+    valuator_mask_set_range(&mask, first_valuator, num_valuators, valuators);
+    xf86PostProximityEventM(device, is_in, &mask);
+}
+
+void
 xf86PostProximityEventM(DeviceIntPtr device,
                         int is_in, const ValuatorMask *mask)
 {
@@ -1393,8 +1422,22 @@ xf86PostButtonEventM(DeviceIntPtr device,
                        flags, mask);
 }
 
-static void
+void
 xf86PostKeyEvent(DeviceIntPtr device, unsigned int key_code, int is_down)
+{
+    xf86PostKeyEventM(device, key_code, is_down);
+}
+
+void
+xf86PostKeyEventP(DeviceIntPtr device,
+                  unsigned int key_code,
+                  int is_down)
+{
+    xf86PostKeyEventM(device, key_code, is_down);
+}
+
+void
+xf86PostKeyEventM(DeviceIntPtr device, unsigned int key_code, int is_down)
 {
 #ifdef XFreeXDGA
     DeviceIntPtr pointer;
@@ -1419,7 +1462,7 @@ xf86PostKeyboardEvent(DeviceIntPtr device, unsigned int key_code, int is_down)
     ValuatorMask mask;
 
     valuator_mask_zero(&mask);
-    xf86PostKeyEvent(device, key_code, is_down);
+    xf86PostKeyEventM(device, key_code, is_down);
 }
 
 InputInfoPtr
@@ -1515,6 +1558,17 @@ xf86DisableDevice(DeviceIntPtr dev, Bool panic)
         SendDevicePresenceEvent(dev->id, DeviceUnrecoverable);
         DeleteInputDeviceRequest(dev);
     }
+}
+
+/**
+ * Reactivate a device. Call this function from the driver if you just found
+ * out that the read error wasn't quite that bad after all.
+ * Device will be re-activated, and an event sent to the client.
+ */
+void
+xf86EnableDevice(DeviceIntPtr dev)
+{
+    EnableDevice(dev, TRUE);
 }
 
 /**

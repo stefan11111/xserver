@@ -120,7 +120,6 @@ request_XIQueryPointer(ClientPtr client, xXIQueryPointerReq * req, int error)
 {
     int rc;
 
-    client_request.swapped = FALSE;
     rc = ProcXIQueryPointer(&client_request);
     assert(rc == error);
 

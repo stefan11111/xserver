@@ -37,11 +37,12 @@
 #include "xf86Parser.h"
 #include "xf86str.h"
 
+#ifdef HAVE_PARSER_DECLS
 /*
  * global structure that holds the result of parsing the config file
  */
-/* only exported for funny Nvidia legacy - no driver should ever use it */
 extern _X_EXPORT XF86ConfigPtr xf86configptr;
+#endif
 
 typedef enum _ConfigStatus {
     CONFIG_OK = 0,
@@ -69,12 +70,5 @@ GDevPtr autoConfigDevice(GDevPtr preconf_device);
 
 void xf86SetVerbosity(int verb);
 void xf86SetLogVerbosity(int verb);
-
-extern confDRIRec xf86ConfigDRI;
-
-extern const char *xf86ConfigFile;
-extern const char *xf86ConfigDir;
-
-Bool xf86PathIsSafe(const char *path);
 
 #endif                          /* _xf86_config_h */

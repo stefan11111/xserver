@@ -44,7 +44,6 @@
 #include "dix/dix_priv.h"
 #include "dix/input_priv.h"
 #include "mi/mi_priv.h"
-#include "os/log_priv.h"
 
 #include "os.h"
 #include "servermd.h"
@@ -53,11 +52,10 @@
 #include "propertyst.h"
 #include "gcstruct.h"
 #include "loaderProcs.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
 #include "xf86_OSlib.h"
 #include "micmap.h"
-#include "xf86Bus.h"
 #include "xf86DDC.h"
 #include "xf86Xinput_priv.h"
 #include "xf86InPriv.h"
@@ -126,6 +124,15 @@ xf86AddInputDriver(InputDriverPtr driver, void *module, int flags)
         XNFalloc(sizeof(InputDriverRec));
     *xf86InputDriverList[xf86NumInputDrivers - 1] = *driver;
     xf86InputDriverList[xf86NumInputDrivers - 1]->module = module;
+}
+
+void
+xf86DeleteInputDriver(int drvIndex)
+{
+    if (xf86InputDriverList[drvIndex] && xf86InputDriverList[drvIndex]->module)
+        UnloadModule(xf86InputDriverList[drvIndex]->module);
+    free(xf86InputDriverList[drvIndex]);
+    xf86InputDriverList[drvIndex] = NULL;
 }
 
 InputDriverPtr
@@ -305,7 +312,7 @@ xf86AllocateScrnInfoPrivateIndex(void)
     return idx;
 }
 
-static Bool
+Bool
 xf86AddPixFormat(ScrnInfoPtr pScrn, int depth, int bpp, int pad)
 {
     int i;
@@ -1045,14 +1052,9 @@ xf86DrvMsg(int scrnIndex, MessageType type, const char *format, ...)
     va_end(ap);
 }
 
-static void
-xf86VIDrvMsgVerb(InputInfoPtr dev, MessageType type, int verb,
-                 const char *format, va_list args)
-    _X_ATTRIBUTE_PRINTF(4, 0);
-
 /* Print input driver messages in the standard format of
    (<type>) <driver>: <device name>: <message> */
-static void
+void
 xf86VIDrvMsgVerb(InputInfoPtr dev, MessageType type, int verb,
                  const char *format, va_list args)
 {
@@ -1366,10 +1368,28 @@ xf86GetVerbosity(void)
     return max(xf86Verbose, xf86LogVerbose);
 }
 
+int
+xf86GetDepth(void)
+{
+    return xf86Depth;
+}
+
+rgb
+xf86GetWeight(void)
+{
+    return xf86Weight;
+}
+
 Gamma
 xf86GetGamma(void)
 {
     return xf86Gamma;
+}
+
+Bool
+xf86GetFlipPixels(void)
+{
+    return xf86FlipPixels;
 }
 
 Bool
@@ -1379,9 +1399,39 @@ xf86ServerIsExiting(void)
 }
 
 Bool
+xf86ServerIsResetting(void)
+{
+    return xf86Resetting;
+}
+
+Bool
 xf86ServerIsOnlyDetecting(void)
 {
     return xf86DoConfigure;
+}
+
+Bool
+xf86GetVidModeAllowNonLocal(void)
+{
+    return xf86Info.vidModeAllowNonLocal;
+}
+
+Bool
+xf86GetVidModeEnabled(void)
+{
+    return xf86Info.vidModeEnabled;
+}
+
+Bool
+xf86GetModInDevAllowNonLocal(void)
+{
+    return xf86Info.miscModInDevAllowNonLocal;
+}
+
+Bool
+xf86GetModInDevEnabled(void)
+{
+    return xf86Info.miscModInDevEnabled;
 }
 
 Bool
@@ -1553,6 +1603,36 @@ xf86SetSilkenMouse(ScreenPtr pScreen)
                    pScrn->silkenMouse ? "enabled" : "disabled");
 }
 
+/* Wrote this function for the PM2 Xv driver, preliminary. */
+
+void *
+xf86FindXvOptions(ScrnInfoPtr pScrn, int adaptor_index, const char *port_name,
+                  const char **adaptor_name, void **adaptor_options)
+{
+    confXvAdaptorPtr adaptor;
+    int i;
+
+    if (adaptor_index >= pScrn->confScreen->numxvadaptors) {
+        if (adaptor_name)
+            *adaptor_name = NULL;
+        if (adaptor_options)
+            *adaptor_options = NULL;
+        return NULL;
+    }
+
+    adaptor = &pScrn->confScreen->xvadaptors[adaptor_index];
+    if (adaptor_name)
+        *adaptor_name = adaptor->identifier;
+    if (adaptor_options)
+        *adaptor_options = adaptor->options;
+
+    for (i = 0; i < adaptor->numports; i++)
+        if (!xf86NameCmp(adaptor->ports[i].identifier, port_name))
+            return adaptor->ports[i].options;
+
+    return NULL;
+}
+
 static void
 xf86ConfigFbEntityInactive(EntityInfoPtr pEnt, EntityProc init,
                            EntityProc enter, EntityProc leave, void *private)
@@ -1593,6 +1673,18 @@ xf86ConfigFbEntity(ScrnInfoPtr pScrn, int scrnFlag, int entityIndex,
 
     free(pEnt);
     return pScrn;
+}
+
+Bool
+xf86IsScreenPrimary(ScrnInfoPtr pScrn)
+{
+    int i;
+
+    for (i = 0; i < pScrn->numEntities; i++) {
+        if (xf86IsEntityPrimary(i))
+            return TRUE;
+    }
+    return FALSE;
 }
 
 Bool
@@ -1640,6 +1732,13 @@ xf86ScrnToScreen(ScrnInfoPtr pScrn)
         return screenInfo.screens[pScrn->scrnIndex];
     }
 }
+
+void
+xf86UpdateDesktopDimensions(void)
+{
+    update_desktop_dimensions();
+}
+
 
 void
 xf86AddInputEventDrainCallback(CallbackProcPtr callback, void *param)

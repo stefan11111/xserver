@@ -28,7 +28,6 @@
 
 #include "dix/dix_priv.h"
 #include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
 
 #include "swaprep.h"
 
@@ -107,7 +106,7 @@ ProcRRGetProviders (ClientPtr client)
     };
 
     if (extraLen) {
-        extra = calloc(1, extraLen);
+        extra = malloc(extraLen);
         if (!extra)
             return BadAlloc;
     } else
@@ -184,7 +183,7 @@ ProcRRGetProviderInfo (ClientPtr client)
 
     extraLen = rep.length << 2;
     if (extraLen) {
-        extra = calloc(1, extraLen);
+        extra = malloc(extraLen);
         if (!extra)
             return BadAlloc;
     }
@@ -275,7 +274,7 @@ RRInitPrimeSyncProps(ScreenPtr pScreen)
     rrScrPrivPtr pScrPriv = rrGetScrPriv(pScreen);
 
     const char *syncStr = PRIME_SYNC_PROP;
-    Atom syncProp = dixAddAtom(syncStr);
+    Atom syncProp = MakeAtom(syncStr, strlen(syncStr), TRUE);
 
     int defaultVal = TRUE;
     INT32 validVals[2] = {FALSE, TRUE};
@@ -306,7 +305,7 @@ RRFiniPrimeSyncProps(ScreenPtr pScreen)
     int i;
 
     const char *syncStr = PRIME_SYNC_PROP;
-    Atom syncProp = dixGetAtomID(syncStr);
+    Atom syncProp = MakeAtom(syncStr, strlen(syncStr), FALSE);
     if (syncProp == None)
         return;
 
@@ -402,7 +401,7 @@ RRProviderCreate(ScreenPtr pScreen, const char *name,
     if (!provider)
         return NULL;
 
-    provider->id = dixAllocServerXID();
+    provider->id = FakeClientID(0);
     provider->pScreen = pScreen;
     provider->name = (char *) (provider + 1);
     provider->nameLength = nameLength;
@@ -458,6 +457,16 @@ RRProviderInit(void)
         return FALSE;
 
     return TRUE;
+}
+
+Bool
+RRProviderLookup(XID id, RRProviderPtr *provider_p)
+{
+    int rc = dixLookupResourceByType((void **)provider_p, id,
+                                   RRProviderType, NullClient, DixReadAccess);
+    if (rc == Success)
+        return TRUE;
+    return FALSE;
 }
 
 void

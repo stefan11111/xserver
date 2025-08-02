@@ -126,6 +126,7 @@ static int dispatch_GLXQueryVersion(ClientPtr client)
 static int dispatch_GLXClientInfo(ClientPtr client)
 {
     GlxServerVendor *vendor;
+    void *requestCopy = NULL;
     size_t requestSize = client->req_len * 4;
 
     if (client->minorOp == X_GLXClientInfo) {
@@ -141,7 +142,7 @@ static int dispatch_GLXClientInfo(ClientPtr client)
     // We'll forward this request to each vendor library. Since a vendor might
     // modify the request data in place (e.g., for byte swapping), make a copy
     // of the request first.
-    void *requestCopy = calloc(1, requestSize);
+    requestCopy = malloc(requestSize);
     if (requestCopy == NULL) {
         return BadAlloc;
     }

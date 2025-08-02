@@ -24,9 +24,6 @@
  *
  */
 
-#ifndef XSERVER_XFREE86_XF86VGAARBITERPRIV_H
-#define XSERVER_XFREE86_XF86VGAARBITERPRIV_H
-
 #ifdef HAVE_XORG_CONFIG_H
 #include <xorg-config.h>
 #endif
@@ -35,6 +32,7 @@
 #include "xf86.h"
 #include "xf86_OSproc.h"
 #include <X11/X.h>
+#include "colormapst.h"
 #include "scrnintstr.h"
 #include "screenint.h"
 #include "gcstruct.h"
@@ -204,7 +202,7 @@ static void VGAarbiterDestroyClip(GCPtr pGC);
 static void VGAarbiterCopyClip(GCPtr pgcDst, GCPtr pgcSrc);
 
 /* GC ops */
-static void VGAarbiterFillSpans(DrawablePtr pDraw, GCPtr pGC, int nInit,
+static void VGAarbiterFillSpans(DrawablePtr pDraw, GC * pGC, int nInit,
                                 DDXPointPtr pptInit, int *pwidthInit,
                                 int fSorted);
 static void VGAarbiterSetSpans(DrawablePtr pDraw, GCPtr pGC, char *pcharsrc,
@@ -214,7 +212,7 @@ static void VGAarbiterPutImage(DrawablePtr pDraw, GCPtr pGC, int depth, int x,
                                int y, int w, int h, int leftPad, int format,
                                char *pImage);
 static RegionPtr VGAarbiterCopyArea(DrawablePtr pSrc, DrawablePtr pDst,
-                                    GCPtr pGC, int srcx, int srcy, int width,
+                                    GC * pGC, int srcx, int srcy, int width,
                                     int height, int dstx, int dsty);
 static RegionPtr VGAarbiterCopyPlane(DrawablePtr pSrc, DrawablePtr pDst,
                                      GCPtr pGC, int srcx, int srcy, int width,
@@ -276,5 +274,3 @@ static void VGAarbiterGlyphs(CARD8 op, PicturePtr pSrc, PicturePtr pDst,
 static void VGAarbiterCompositeRects(CARD8 op, PicturePtr pDst,
                                      xRenderColor * color, int nRect,
                                      xRectangle *rects);
-
-#endif /* XSERVER_XFREE86_XF86VGAARBITERPRIV_H */

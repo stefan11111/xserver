@@ -53,6 +53,7 @@ cat > sdksyms.c << EOF
 #include "xvdix.h"
 #include "xvmcext.h"
 #endif
+#include "geext.h"
 #ifdef MITSHM
 #include "shmint.h"
 #endif
@@ -121,6 +122,9 @@ cat > sdksyms.c << EOF
 #include "xf86.h"
 #include "xf86Module.h"
 #include "xf86Opt.h"
+#ifdef XSERVER_LIBPCIACCESS
+ #include "xf86VGAarbiter.h"
+#endif
 #include "xf86Priv.h"
 #include "xf86Privstr.h"
 #include "xf86cmap.h"
@@ -131,6 +135,7 @@ cat > sdksyms.c << EOF
 #ifdef XV
 # include "xf86xv.h"
 # include "xf86xvmc.h"
+# include "xf86xvpriv.h"
 #endif
 #include "xorgVersion.h"
 #if defined(__sparc__) || defined(__sparc)
@@ -207,7 +212,9 @@ cat > sdksyms.c << EOF
 #include "exa.h"
  */
 
+#ifdef COMPOSITE
 #include "compositeext.h"
+#endif
 
 /* xfixes/Makefile.am */
 #include "xfixes.h"
@@ -224,6 +231,7 @@ cat > sdksyms.c << EOF
 #include "cursorstr.h"
 #include "dix.h"
 #include "dixaccess.h"
+#include "dixevents.h"
 #define _FONTPROTO_H
 #include "dixfont.h"
 #include "dixfontstr.h"
@@ -248,6 +256,7 @@ cat > sdksyms.c << EOF
 #include "pixmapstr.h"
 #include "privates.h"
 #include "property.h"
+#include "propertyst.h"
 #include "ptrveloc.h"
 #include "region.h"
 #include "regionstr.h"
@@ -255,6 +264,7 @@ cat > sdksyms.c << EOF
 #include "rgb.h"
 #include "screenint.h"
 #include "scrnintstr.h"
+#include "selection.h"
 #include "servermd.h"
 #include "validate.h"
 #include "window.h"

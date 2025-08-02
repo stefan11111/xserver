@@ -149,6 +149,19 @@ if get_option('xvfb')
     endif
 endif
 
+if build_xwayland
+    xwayland_args = [
+        xwayland_server.full_path(),
+    ]
+
+    test('XTS',
+        find_program('scripts/xwayland-piglit.sh'),
+        env: piglit_env,
+        timeout: 1200,
+        suite: 'xwayland'
+    )
+endif
+
 subdir('bigreq')
 subdir('damage')
 subdir('sync')
@@ -205,7 +218,7 @@ if build_xorg
        unit_includes += [include_directories('xi1', 'xi2')]
        ldwraps = [
         '-Wl,-wrap,dixLookupWindow',
-        '-Wl,-wrap,dixLookupResourceOwner',
+        '-Wl,-wrap,dixLookupClient',
         '-Wl,-wrap,WriteToClient',
         '-Wl,-wrap,dixLookupWindow',
         '-Wl,-wrap,XISetEventMask',

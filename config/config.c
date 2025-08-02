@@ -32,8 +32,7 @@
 #include "os.h"
 #include "inputstr.h"
 #include "config-backends.h"
-
-#include "../hw/xfree86/os-support/linux/systemd-logind.h"
+#include "systemd-logind.h"
 
 void
 config_pre_init(void)
@@ -74,7 +73,7 @@ config_fini(void)
 void
 config_odev_probe(config_odev_probe_proc_ptr probe_callback)
 {
-#if defined(CONFIG_UDEV) && defined(CONFIG_UDEV_KMS)
+#if defined(CONFIG_UDEV_KMS)
     config_udev_odev_probe(probe_callback);
 #endif
 }

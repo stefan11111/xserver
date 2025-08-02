@@ -58,15 +58,6 @@ SOFTWARE.
 
 #include <X11/Xfuncproto.h>
 
-/*
- * @brief macro for specifying non-null arguments
- *
- * part of public SDK / driver API
- */
-#ifndef _X_ATTRIBUTE_NONNULL_ARG
-#define _X_ATTRIBUTE_NONNULL_ARG(...) __attribute__((nonnull(__VA_ARGS__)))
-#endif
-
 #define SCREEN_SAVER_ON   0
 #define SCREEN_SAVER_OFF  1
 #define SCREEN_SAVER_FORCER 2
@@ -86,6 +77,8 @@ typedef struct _NewClientRec *NewClientPtr;
 
 #define xstrdup(s) Xstrdup(s)
 #define xnfstrdup(s) XNFstrdup(s)
+
+#define xallocarray(num, size) reallocarray(NULL, (num), (size))
 #endif
 
 #include <stdio.h>
@@ -98,7 +91,10 @@ extern _X_EXPORT int WriteToClient(ClientPtr /*who */ , int /*count */ ,
 
 typedef void (*NotifyFdProcPtr)(int fd, int ready, void *data);
 
-#include "fd_notify.h"
+#define X_NOTIFY_NONE   0x0
+#define X_NOTIFY_READ   0x1
+#define X_NOTIFY_WRITE  0x2
+#define X_NOTIFY_ERROR  0x4     /* don't need to select for, always reported */
 
 extern _X_EXPORT Bool SetNotifyFd(int fd, NotifyFdProcPtr notify_fd, int mask, void *data);
 
@@ -141,7 +137,7 @@ extern _X_EXPORT void GiveUp(int /*sig */ );
  * enough memory.
  */
 extern _X_EXPORT void *
-XNFalloc(unsigned long /*amount */ ) __attribute__((returns_nonnull));;
+XNFalloc(unsigned long /*amount */ );
 
 /*
  * This function calloc(3)s buffer, terminating the server if there is not
@@ -155,7 +151,7 @@ XNFcalloc(unsigned long /*amount */ ) _X_DEPRECATED;
  * enough memory or the arguments overflow when multiplied
  */
 extern _X_EXPORT void *
-XNFcallocarray(size_t nmemb, size_t size) __attribute__((returns_nonnull));;
+XNFcallocarray(size_t nmemb, size_t size);
 
 /*
  * This function realloc(3)s passed buffer, terminating the server if there is
@@ -187,6 +183,24 @@ XNFstrdup(const char *s);
 
 /* Include new X*asprintf API */
 #include "Xprintf.h"
+
+/* Older api deprecated in favor of the asprintf versions */
+extern _X_EXPORT char *
+Xprintf(const char *fmt, ...)
+_X_ATTRIBUTE_PRINTF(1, 2)
+    _X_DEPRECATED;
+extern _X_EXPORT char *
+Xvprintf(const char *fmt, va_list va)
+_X_ATTRIBUTE_PRINTF(1, 0)
+    _X_DEPRECATED;
+extern _X_EXPORT char *
+XNFprintf(const char *fmt, ...)
+_X_ATTRIBUTE_PRINTF(1, 2)
+    _X_DEPRECATED;
+extern _X_EXPORT char *
+XNFvprintf(const char *fmt, va_list va)
+_X_ATTRIBUTE_PRINTF(1, 0)
+    _X_DEPRECATED;
 
 typedef int (*OsSigWrapperPtr) (int /* sig */ );
 
@@ -231,6 +245,18 @@ extern _X_EXPORT void *
 reallocarray(void *optr, size_t nmemb, size_t size);
 #endif
 
+#ifndef HAVE_STRCASECMP
+#define strcasecmp xstrcasecmp
+extern _X_EXPORT int
+xstrcasecmp(const char *s1, const char *s2);
+#endif
+
+#ifndef HAVE_STRNCASECMP
+#define strncasecmp xstrncasecmp
+extern _X_EXPORT int
+xstrncasecmp(const char *s1, const char *s2, size_t n);
+#endif
+
 #ifndef HAVE_STRCASESTR
 #define strcasestr xstrcasestr
 extern _X_EXPORT char *
@@ -254,6 +280,14 @@ extern _X_EXPORT int
 timingsafe_memcmp(const void *b1, const void *b2, size_t len);
 #endif
 
+/* Logging. */
+typedef enum _LogParameter {
+    XLOG_FLUSH,
+    XLOG_SYNC,
+    XLOG_VERBOSITY,
+    XLOG_FILE_VERBOSITY
+} LogParameter;
+
 /* Flags for log messages. */
 typedef enum {
     X_PROBED,                   /* Value was probed */
@@ -270,6 +304,14 @@ typedef enum {
     X_UNKNOWN = -1              /* unknown -- this must always be last */
 } MessageType;
 
+extern _X_EXPORT const char *
+LogInit(const char *fname, const char *backup);
+extern void
+LogSetDisplay(void);
+extern _X_EXPORT void
+LogClose(enum ExitCode error);
+extern _X_EXPORT Bool
+LogSetParameter(LogParameter param, int value);
 extern _X_EXPORT void
 LogVMessageVerb(MessageType type, int verb, const char *format, va_list args)
 _X_ATTRIBUTE_PRINTF(3, 0);
@@ -280,7 +322,7 @@ extern _X_EXPORT void
 LogMessage(MessageType type, const char *format, ...)
 _X_ATTRIBUTE_PRINTF(2, 3);
 
-void
+extern _X_EXPORT void
 LogVHdrMessageVerb(MessageType type, int verb,
                    const char *msg_format, va_list msg_args,
                    const char *hdr_format, va_list hdr_args)
@@ -298,18 +340,24 @@ FatalError(const char *f, ...)
 _X_ATTRIBUTE_PRINTF(1, 2)
     _X_NORETURN;
 
+#ifdef DEBUG
+#define DebugF ErrorF
+#else
+#define DebugF(...)             /* */
+#endif
+
 extern _X_EXPORT void
 ErrorF(const char *f, ...)
 _X_ATTRIBUTE_PRINTF(1, 2);
-
-void LogPrintMarkers(void);
+extern _X_EXPORT void
+LogPrintMarkers(void);
 
 extern _X_EXPORT void
 xorg_backtrace(void);
 
 #include <signal.h>
 
-#if defined(WIN32)
+#if defined(WIN32) && !defined(__CYGWIN__)
 typedef _sigset_t sigset_t;
 #endif
 

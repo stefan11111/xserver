@@ -36,10 +36,8 @@
 #include <assert.h>
 #include <X11/Xatom.h>
 
-#include "dix/dix_priv.h"
-#include "dix/screen_hooks_priv.h"
-#include "fb/fb_priv.h"
 #include "mi/mi_priv.h"
+#include "dix_priv.h"
 
 #ifdef __APPLE__
 #include <Xplugin.h>
@@ -49,6 +47,7 @@
 extern int darwinMainScreenX, darwinMainScreenY;
 extern Bool no_configure_window;
 #endif
+#include "fb.h"
 
 #include "rootlessCommon.h"
 #include "rootlessWindow.h"
@@ -64,7 +63,7 @@ extern Bool no_configure_window;
     static Atom atom;                                           \
     if (generation != serverGeneration) {                       \
       generation = serverGeneration;                          \
-      atom = dixAddAtom(atom_name);                             \
+      atom = MakeAtom (atom_name, strlen (atom_name), TRUE);  \
     }                                                           \
     return atom;                                                \
   }
@@ -122,7 +121,7 @@ RootlessNativeWindowMoved(WindowPtr pWin)
 
     /* pretend we're the owner of the window! */
     err =
-        dixLookupResourceOwner(&pClient, pWin->drawable.id, serverClient,
+        dixLookupClient(&pClient, pWin->drawable.id, serverClient,
                         DixUnknownAccess);
     if (err != Success) {
         ErrorF("RootlessNativeWindowMoved(): Failed to lookup window: 0x%x\n",
@@ -190,14 +189,24 @@ RootlessDestroyFrame(WindowPtr pWin, RootlessWindowPtr winRec)
 }
 
 /*
- * @brief window destructor: remove physical window associated with given window
+ * RootlessDestroyWindow
+ *  Destroy the physical window associated with the given window.
  */
-void
-RootlessWindowDestroy(CallbackListPtr *pcbl, ScreenPtr pScreen, WindowPtr pWin)
+Bool
+RootlessDestroyWindow(WindowPtr pWin)
 {
     RootlessWindowRec *winRec = WINREC(pWin);
-    if (winRec != NULL)
+    Bool result;
+
+    if (winRec != NULL) {
         RootlessDestroyFrame(pWin, winRec);
+    }
+
+    SCREEN_UNWRAP(pWin->drawable.pScreen, DestroyWindow);
+    result = pWin->drawable.pScreen->DestroyWindow(pWin);
+    SCREEN_WRAP(pWin->drawable.pScreen, DestroyWindow);
+
+    return result;
 }
 
 static Bool
@@ -304,20 +313,20 @@ RootlessChangeWindowAttributes(WindowPtr pWin, unsigned long vmask)
 }
 
 /*
- * @brief DIX move/resize hook
- *
- * This is a hook for when DIX moves or resizes a window.
- * Update the frame position now although the physical window is moved
- * in RootlessMoveWindow. (x, y) are *inside* position. After this,
- * mi and fb are expecting the pixmap to be at the new location.
+ * RootlessPositionWindow
+ *  This is a hook for when DIX moves or resizes a window.
+ *  Update the frame position now although the physical window is moved
+ *  in RootlessMoveWindow. (x, y) are *inside* position. After this,
+ *  mi and fb are expecting the pixmap to be at the new location.
  */
-void RootlessWindowPosition(CallbackListPtr *pcbl, ScreenPtr pScreen, XorgScreenWindowPositionParamRec *param)
+Bool
+RootlessPositionWindow(WindowPtr pWin, int x, int y)
 {
-    WindowPtr pWin = param->window;
+    ScreenPtr pScreen = pWin->drawable.pScreen;
     RootlessWindowRec *winRec = WINREC(pWin);
+    Bool result;
 
-    RL_DEBUG_MSG("positionwindow start (win %p (%lu) @ %i, %i)\n", pWin,
-                 RootlessWID(pWin), param->x, param->y);
+    RL_DEBUG_MSG("positionwindow start (win %p (%lu) @ %i, %i)\n", pWin, RootlessWID(pWin), x, y);
 
     if (winRec) {
         if (winRec->is_drawing) {
@@ -325,11 +334,16 @@ void RootlessWindowPosition(CallbackListPtr *pcbl, ScreenPtr pScreen, XorgScreen
             int bw = wBorderWidth(pWin);
 
             winRec->pixmap->devPrivate.ptr = winRec->pixelData;
-            SetPixmapBaseToScreen(winRec->pixmap, param->x - bw, param->y - bw);
+            SetPixmapBaseToScreen(winRec->pixmap, x - bw, y - bw);
         }
     }
 
+    SCREEN_UNWRAP(pScreen, PositionWindow);
+    result = pScreen->PositionWindow(pWin, x, y);
+    SCREEN_WRAP(pScreen, PositionWindow);
+
     RL_DEBUG_MSG("positionwindow end\n");
+    return result;
 }
 
 /*
@@ -363,6 +377,7 @@ static RootlessWindowRec *
 RootlessEnsureFrame(WindowPtr pWin)
 {
     ScreenPtr pScreen = pWin->drawable.pScreen;
+    RootlessWindowRec *winRec;
     RegionRec shape;
     RegionPtr pShape = NULL;
 
@@ -375,7 +390,8 @@ RootlessEnsureFrame(WindowPtr pWin)
     if (pWin->drawable.class != InputOutput)
         return NULL;
 
-    RootlessWindowRec *winRec = calloc(1, sizeof(RootlessWindowRec));
+    winRec = malloc(sizeof(RootlessWindowRec));
+
     if (!winRec)
         return NULL;
 

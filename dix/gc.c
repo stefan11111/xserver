@@ -73,7 +73,7 @@ static Bool CreateDefaultTile(GCPtr pGC);
 static unsigned char DefaultDash[2] = { 4, 4 };
 
 void
-ValidateGC(DrawablePtr pDraw, GCPtr pGC)
+ValidateGC(DrawablePtr pDraw, GC * pGC)
 {
     (*pGC->funcs->ValidateGC) (pGC, pGC->stateChanges, pDraw);
     pGC->stateChanges = 0;
@@ -86,7 +86,7 @@ ValidateGC(DrawablePtr pDraw, GCPtr pGC)
  * The client performing the gc change must be passed so that access
  * checks can be performed on any tiles, stipples, or fonts that are
  * specified.  ddxen can call this too; they should normally pass
- * NULL for the client since any access checking should have
+ * NullClient for the client since any access checking should have
  * already been done at a higher level.
  *
  * If you have any XIDs, you must use ChangeGCXIDs:
@@ -121,7 +121,7 @@ ValidateGC(DrawablePtr pDraw, GCPtr pGC)
     _var = (_type)pUnion->ptr; pUnion++; }
 
 int
-ChangeGC(ClientPtr client, GCPtr pGC, BITS32 mask, ChangeGCValPtr pUnion)
+ChangeGC(ClientPtr client, GC * pGC, BITS32 mask, ChangeGCValPtr pUnion)
 {
     BITS32 index2;
     int error = 0;
@@ -361,7 +361,9 @@ ChangeGC(ClientPtr client, GCPtr pGC, BITS32 mask, ChangeGCValPtr pUnion)
                 }
             }
             else if (newdash != 0) {
-                unsigned char *dash = calloc(2, sizeof(unsigned char));
+                unsigned char *dash;
+
+                dash = malloc(2 * sizeof(unsigned char));
                 if (dash) {
                     if (pGC->dash != DefaultDash)
                         free(pGC->dash);
@@ -427,17 +429,18 @@ static const struct {
 };
 
 int
-ChangeGCXIDs(ClientPtr client, GCPtr pGC, BITS32 mask, CARD32 *pC32)
+ChangeGCXIDs(ClientPtr client, GC * pGC, BITS32 mask, CARD32 *pC32)
 {
     ChangeGCVal vals[GCLastBit + 1];
+    int i;
 
     if (mask & ~GCAllBits) {
         client->errorValue = mask;
         return BadValue;
     }
-    for (int i = Ones(mask); i--;)
+    for (i = Ones(mask); i--;)
         vals[i].val = pC32[i];
-    for (int i = 0; i < ARRAY_SIZE(xidfields); ++i) {
+    for (i = 0; i < ARRAY_SIZE(xidfields); ++i) {
         int offset, rc;
 
         if (!(mask & xidfields[i].mask))
@@ -463,7 +466,7 @@ NewGCObject(ScreenPtr pScreen, int depth)
 {
     GCPtr pGC;
 
-    pGC = dixAllocateScreenObjectWithPrivates(pScreen, GCRec, PRIVATE_GC);
+    pGC = dixAllocateScreenObjectWithPrivates(pScreen, GC, PRIVATE_GC);
     if (!pGC) {
         return (GCPtr) NULL;
     }
@@ -593,7 +596,7 @@ CreateDefaultTile(GCPtr pGC)
     tmpval[0].val = GXcopy;
     tmpval[1].val = pGC->tile.pixel;
     tmpval[2].val = FillSolid;
-    (void) ChangeGC(NULL, pgcScratch,
+    (void) ChangeGC(NullClient, pgcScratch,
                     GCFunction | GCForeground | GCFillStyle, tmpval);
     ValidateGC((DrawablePtr) pTile, pgcScratch);
     rect.x = 0;
@@ -611,7 +614,7 @@ CreateDefaultTile(GCPtr pGC)
 }
 
 int
-CopyGC(GCPtr pgcSrc, GCPtr pgcDst, BITS32 mask)
+CopyGC(GC * pgcSrc, GC * pgcDst, BITS32 mask)
 {
     BITS32 index2;
     BITS32 maskQ;
@@ -723,13 +726,16 @@ CopyGC(GCPtr pgcSrc, GCPtr pgcDst, BITS32 mask)
                 }
             }
             else {
-                unsigned char *dash = calloc(pgcSrc->numInDashList, sizeof(unsigned char));
+                unsigned char *dash;
+                unsigned int i;
+
+                dash = malloc(pgcSrc->numInDashList * sizeof(unsigned char));
                 if (dash) {
                     if (pgcDst->dash != DefaultDash)
                         free(pgcDst->dash);
                     pgcDst->numInDashList = pgcSrc->numInDashList;
                     pgcDst->dash = dash;
-                    for (unsigned int i = 0; i < pgcSrc->numInDashList; i++)
+                    for (i = 0; i < pgcSrc->numInDashList; i++)
                         dash[i] = pgcSrc->dash[i];
                 }
                 else
@@ -762,8 +768,6 @@ int
 FreeGC(void *value, XID gid)
 {
     GCPtr pGC = (GCPtr) value;
-    if (!pGC)
-        return BadMatch;
 
     CloseFont(pGC->font, (Font) 0);
     if (pGC->funcs)
@@ -815,16 +819,16 @@ CreateScratchGC(ScreenPtr pScreen, unsigned depth)
 }
 
 void
-FreeGCperDepth(ScreenPtr pScreen)
+FreeGCperDepth(int screenNum)
 {
+    int i;
+    ScreenPtr pScreen;
     GCPtr *ppGC;
 
-    if (!pScreen)
-        return;
-
+    pScreen = screenInfo.screens[screenNum];
     ppGC = pScreen->GCperDepth;
 
-    for (int i = 0; i <= pScreen->numDepths; i++) {
+    for (i = 0; i <= pScreen->numDepths; i++) {
         (void) FreeGC(ppGC[i], (XID) 0);
         ppGC[i] = NULL;
     }
@@ -833,6 +837,7 @@ FreeGCperDepth(ScreenPtr pScreen)
 Bool
 CreateGCperDepth(int screenNum)
 {
+    int i;
     ScreenPtr pScreen;
     DepthPtr pDepth;
     GCPtr *ppGC;
@@ -847,7 +852,7 @@ CreateGCperDepth(int screenNum)
         return FALSE;
 
     pDepth = pScreen->allowedDepths;
-    for (int i = 0; i < pScreen->numDepths; i++, pDepth++) {
+    for (i = 0; i < pScreen->numDepths; i++, pDepth++) {
         if (!(ppGC[i + 1] = CreateScratchGC(pScreen, pDepth->depth))) {
             for (; i >= 0; i--)
                 (void) FreeGC(ppGC[i], (XID) 0);
@@ -882,7 +887,7 @@ CreateDefaultStipple(int screenNum)
         dixDestroyPixmap(pScreen->defaultStipple, 0);
         return FALSE;
     }
-    (void) ChangeGC(NULL, pgcScratch,
+    (void) ChangeGC(NullClient, pgcScratch,
                     GCFunction | GCForeground | GCFillStyle, tmpval);
     ValidateGC((DrawablePtr) pScreen->defaultStipple, pgcScratch);
     rect.x = 0;
@@ -893,6 +898,13 @@ CreateDefaultStipple(int screenNum)
                                       pgcScratch, 1, &rect);
     FreeScratchGC(pgcScratch);
     return TRUE;
+}
+
+void
+FreeDefaultStipple(int screenNum)
+{
+    ScreenPtr pScreen = screenInfo.screens[screenNum];
+    dixDestroyPixmap(pScreen->defaultStipple, 0);
 }
 
 int
@@ -912,9 +924,9 @@ SetDashes(GCPtr pGC, unsigned offset, unsigned ndash, unsigned char *pdash)
     }
 
     if (ndash & 1)
-        p = calloc(2 * ndash, sizeof(unsigned char));
+        p = malloc(2 * ndash * sizeof(unsigned char));
     else
-        p = calloc(ndash, sizeof(unsigned char));
+        p = malloc(ndash * sizeof(unsigned char));
     if (!p)
         return BadAlloc;
 
@@ -993,13 +1005,13 @@ SetClipRects(GCPtr pGC, int xOrigin, int yOrigin, int nrects,
              xRectangle *prects, int ordering)
 {
     int newct, size;
+    xRectangle *prectsNew;
 
     newct = VerifyRectOrder(nrects, prects, ordering);
     if (newct < 0)
         return BadMatch;
     size = nrects * sizeof(xRectangle);
-
-    xRectangle *prectsNew = calloc(1, size);
+    prectsNew = malloc(size);
     if (!prectsNew && size)
         return BadAlloc;
 
@@ -1010,7 +1022,7 @@ SetClipRects(GCPtr pGC, int xOrigin, int yOrigin, int nrects,
     pGC->clipOrg.y = yOrigin;
     pGC->stateChanges |= GCClipYOrigin;
 
-    if (size && prectsNew)
+    if (size)
         memmove((char *) prectsNew, (char *) prects, size);
     (*pGC->funcs->ChangeClip) (pGC, newct, (void *) prectsNew, nrects);
     if (pGC->funcs->ChangeGC)
@@ -1028,9 +1040,10 @@ SetClipRects(GCPtr pGC, int xOrigin, int yOrigin, int nrects,
 GCPtr
 GetScratchGC(unsigned depth, ScreenPtr pScreen)
 {
+    int i;
     GCPtr pGC;
 
-    for (int i = 0; i <= pScreen->numDepths; i++) {
+    for (i = 0; i <= pScreen->numDepths; i++) {
         pGC = pScreen->GCperDepth[i];
         if (pGC && pGC->depth == depth && !pGC->scratch_inuse) {
             pGC->scratch_inuse = TRUE;

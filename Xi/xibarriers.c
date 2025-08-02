@@ -46,13 +46,13 @@
 #include "dix/cursor_priv.h"
 #include "dix/dix_priv.h"
 #include "dix/input_priv.h"
-#include "dix/resource_priv.h"
 #include "mi/mi_priv.h"
 #include "os/bug_priv.h"
 
 #include "xibarriers.h"
 #include "scrnintstr.h"
 #include "cursorstr.h"
+#include "dixevents.h"
 #include "servermd.h"
 #include "mipointer.h"
 #include "inputstr.h"
@@ -104,7 +104,9 @@ typedef struct _BarrierScreen {
 
 static struct PointerBarrierDevice *AllocBarrierDevice(void)
 {
-    struct PointerBarrierDevice *pbd = calloc(1, sizeof(struct PointerBarrierDevice));
+    struct PointerBarrierDevice *pbd = NULL;
+
+    pbd = malloc(sizeof(struct PointerBarrierDevice));
     if (!pbd)
         return NULL;
 
@@ -122,10 +124,8 @@ static void FreePointerBarrierClient(struct PointerBarrierClient *c)
 {
     struct PointerBarrierDevice *pbd = NULL, *tmp = NULL;
 
-    if (!xorg_list_is_empty(&c->per_device)) {
-        xorg_list_for_each_entry_safe(pbd, tmp, &c->per_device, entry) {
-            free(pbd);
-        }
+    xorg_list_for_each_entry_safe(pbd, tmp, &c->per_device, entry) {
+        free(pbd);
     }
     free(c);
 }
@@ -422,7 +422,7 @@ input_constrain_cursor(DeviceIntPtr dev, ScreenPtr screen,
     if (nevents)
         *nevents = 0;
 
-    if (xorg_list_is_empty(&cs->barriers) || InputDevIsFloating(dev))
+    if (xorg_list_is_empty(&cs->barriers) || IsFloating(dev))
         goto out;
 
     /**
@@ -557,13 +557,15 @@ CreatePointerBarrierClient(ClientPtr client,
     ScreenPtr screen;
     BarrierScreenPtr cs;
     int err;
+    int size;
     int i;
+    struct PointerBarrierClient *ret;
     CARD16 *in_devices;
     DeviceIntPtr dev;
 
-    const int size = sizeof(struct PointerBarrierClient)
-                   + sizeof(DeviceIntPtr) * stuff->num_devices;
-    struct PointerBarrierClient *ret = calloc(1, size);
+    size = sizeof(*ret) + sizeof(DeviceIntPtr) * stuff->num_devices;
+    ret = malloc(size);
+
     if (!ret) {
         return BadAlloc;
     }
@@ -598,7 +600,7 @@ CreatePointerBarrierClient(ClientPtr client,
             goto error;
         }
 
-        if (!InputDevIsMaster (device)) {
+        if (!IsMaster (device)) {
             client->errorValue = device_id;
             err = BadDevice;
             goto error;
@@ -719,14 +721,14 @@ static void add_master_func(void *res, XID id, void *devid)
 {
     struct PointerBarrier *b;
     struct PointerBarrierClient *barrier;
+    struct PointerBarrierDevice *pbd;
     int *deviceid = devid;
 
     b = res;
     barrier = container_of(b, struct PointerBarrierClient, barrier);
 
-    struct PointerBarrierDevice *pbd = AllocBarrierDevice();
-    if (!pbd)
-        return;
+
+    pbd = AllocBarrierDevice();
     pbd->deviceid = *deviceid;
 
     input_lock();
@@ -842,7 +844,7 @@ XIDestroyPointerBarrier(ClientPtr client,
         return err;
     }
 
-    if (dixClientIdForXID(stuff->barrier) != client->index)
+    if (CLIENT_ID(stuff->barrier) != client->index)
         return BadAccess;
 
     FreeResource(stuff->barrier, X11_RESTYPE_NONE);
@@ -911,8 +913,9 @@ ProcXIBarrierReleasePointer(ClientPtr client)
             return err;
         }
 
-        if (dixClientIdForXID(barrier_id) != client->index)
+        if (CLIENT_ID(barrier_id) != client->index)
             return BadAccess;
+
 
         barrier = container_of(b, struct PointerBarrierClient, barrier);
 

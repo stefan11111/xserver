@@ -26,7 +26,6 @@
 
 #include "dix/dix_priv.h"
 #include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
 
 RESTYPE RROutputType;
 
@@ -70,7 +69,7 @@ RROutputCreate(ScreenPtr pScreen,
     RROutputPtr output;
     RROutputPtr *outputs;
     rrScrPrivPtr pScrPriv;
-    Atom DPIAtom;
+    Atom nonDesktopAtom;
 
     if (!RRInit())
         return NULL;
@@ -87,7 +86,7 @@ RROutputCreate(ScreenPtr pScreen,
     output = calloc(1, sizeof(RROutputRec) + nameLength + 1);
     if (!output)
         return NULL;
-    output->id = dixAllocServerXID();
+    output->id = FakeClientID(0);
     output->pScreen = pScreen;
     output->name = (char *) (output + 1);
     output->nameLength = nameLength;
@@ -102,25 +101,13 @@ RROutputCreate(ScreenPtr pScreen,
 
     pScrPriv->outputs[pScrPriv->numOutputs++] = output;
 
-    Atom nonDesktopAtom = dixAddAtom(RR_PROPERTY_NON_DESKTOP);
+    nonDesktopAtom = MakeAtom(RR_PROPERTY_NON_DESKTOP, strlen(RR_PROPERTY_NON_DESKTOP), TRUE);
     if (nonDesktopAtom != BAD_RESOURCE) {
         static const INT32 values[2] = { 0, 1 };
         (void) RRConfigureOutputProperty(output, nonDesktopAtom, FALSE, FALSE, FALSE,
                                             2, values);
     }
     RROutputSetNonDesktop(output, FALSE);
-
-    /* Initialize DPI property for all outputs. */
-    DPIAtom = dixAddAtom("DPI");
-    if (DPIAtom != BAD_RESOURCE) {
-        static const INT32 values[2] = { 0, 960 }; // arbitrary range
-        (void) RRConfigureOutputProperty(output, DPIAtom, FALSE, TRUE, FALSE,
-                                         2, values);
-        INT32 value = monitorResolution ? monitorResolution : 96;
-        (void) RRChangeOutputProperty(output, DPIAtom, XA_INTEGER, 32,
-                                      PropModeReplace, 1, &value, FALSE, FALSE);
-    }
-
     RRResourcesChanged(pScreen);
 
     return output;
@@ -132,6 +119,7 @@ RROutputCreate(ScreenPtr pScreen,
 Bool
 RROutputSetClones(RROutputPtr output, RROutputPtr * clones, int numClones)
 {
+    RROutputPtr *newClones;
     int i;
 
     if (numClones == output->numClones) {
@@ -141,16 +129,15 @@ RROutputSetClones(RROutputPtr output, RROutputPtr * clones, int numClones)
         if (i == numClones)
             return TRUE;
     }
-
-    RROutputPtr *newClones = NULL;
     if (numClones) {
-        newClones = calloc(numClones, sizeof(RROutputPtr));
+        newClones = xallocarray(numClones, sizeof(RROutputPtr));
         if (!newClones)
             return FALSE;
-        memcpy(newClones, clones, numClones * sizeof(RROutputPtr));
     }
-
+    else
+        newClones = NULL;
     free(output->clones);
+    memcpy(newClones, clones, numClones * sizeof(RROutputPtr));
     output->clones = newClones;
     output->numClones = numClones;
     RROutputChanged(output, TRUE);
@@ -161,6 +148,7 @@ Bool
 RROutputSetModes(RROutputPtr output,
                  RRModePtr * modes, int numModes, int numPreferred)
 {
+    RRModePtr *newModes;
     int i;
 
     if (numModes == output->numModes && numPreferred == output->numPreferred) {
@@ -174,19 +162,19 @@ RROutputSetModes(RROutputPtr output,
         }
     }
 
-    RRModePtr *newModes = NULL;
     if (numModes) {
-        newModes = calloc(numModes, sizeof(RRModePtr));
+        newModes = xallocarray(numModes, sizeof(RRModePtr));
         if (!newModes)
             return FALSE;
-        memcpy(newModes, modes, numModes * sizeof(RRModePtr));
     }
-
+    else
+        newModes = NULL;
     if (output->modes) {
         for (i = 0; i < output->numModes; i++)
             RRModeDestroy(output->modes[i]);
         free(output->modes);
     }
+    memcpy(newModes, modes, numModes * sizeof(RRModePtr));
     output->modes = newModes;
     output->numModes = numModes;
     output->numPreferred = numPreferred;
@@ -221,7 +209,7 @@ RROutputAddUserMode(RROutputPtr output, RRModePtr mode)
         newModes = reallocarray(output->userModes,
                                 output->numUserModes + 1, sizeof(RRModePtr));
     else
-        newModes = calloc(1, sizeof(RRModePtr));
+        newModes = malloc(sizeof(RRModePtr));
     if (!newModes)
         return BadAlloc;
 
@@ -263,6 +251,7 @@ RROutputDeleteUserMode(RROutputPtr output, RRModePtr mode)
 Bool
 RROutputSetCrtcs(RROutputPtr output, RRCrtcPtr * crtcs, int numCrtcs)
 {
+    RRCrtcPtr *newCrtcs;
     int i;
 
     if (numCrtcs == output->numCrtcs) {
@@ -272,16 +261,15 @@ RROutputSetCrtcs(RROutputPtr output, RRCrtcPtr * crtcs, int numCrtcs)
         if (i == numCrtcs)
             return TRUE;
     }
-
-    RRCrtcPtr *newCrtcs = NULL;
     if (numCrtcs) {
-        newCrtcs = calloc(numCrtcs, sizeof(RRCrtcPtr));
+        newCrtcs = xallocarray(numCrtcs, sizeof(RRCrtcPtr));
         if (!newCrtcs)
             return FALSE;
-        memcpy(newCrtcs, crtcs, numCrtcs * sizeof(RRCrtcPtr));
     }
-
+    else
+        newCrtcs = NULL;
     free(output->crtcs);
+    memcpy(newCrtcs, crtcs, numCrtcs * sizeof(RRCrtcPtr));
     output->crtcs = newCrtcs;
     output->numCrtcs = numCrtcs;
     RROutputChanged(output, TRUE);
@@ -298,13 +286,15 @@ RROutputSetConnection(RROutputPtr output, CARD8 connection)
     return TRUE;
 }
 
-void RROutputSetSubpixelOrder(RROutputPtr output, int subpixelOrder)
+Bool
+RROutputSetSubpixelOrder(RROutputPtr output, int subpixelOrder)
 {
     if (output->subpixelOrder == subpixelOrder)
-        return;
+        return TRUE;
 
     output->subpixelOrder = subpixelOrder;
     RROutputChanged(output, FALSE);
+    return TRUE;
 }
 
 Bool
@@ -322,7 +312,7 @@ Bool
 RROutputSetNonDesktop(RROutputPtr output, Bool nonDesktop)
 {
     const char *nonDesktopStr = RR_PROPERTY_NON_DESKTOP;
-    Atom nonDesktopProp = dixAddAtom(nonDesktopStr);
+    Atom nonDesktopProp = MakeAtom(nonDesktopStr, strlen(nonDesktopStr), TRUE);
     uint32_t value = nonDesktop ? 1 : 0;
 
     if (nonDesktopProp == None || nonDesktopProp == BAD_RESOURCE)
@@ -449,12 +439,14 @@ ProcRRGetOutputInfo(ClientPtr client)
     REQUEST(xRRGetOutputInfoReq);
     xRRGetOutputInfoReply rep;
     RROutputPtr output;
+    CARD8 *extra;
     unsigned long extraLen;
     ScreenPtr pScreen;
     rrScrPrivPtr pScrPriv;
     RRCrtc *crtcs;
     RRMode *modes;
     RROutput *clones;
+    char *name;
     int i;
     Bool leased;
 
@@ -465,8 +457,6 @@ ProcRRGetOutputInfo(ClientPtr client)
 
     pScreen = output->pScreen;
     pScrPriv = rrGetScrPriv(pScreen);
-
-    CARD8 *extra = NULL;
 
     if (leased) {
         rep = (xRRGetOutputInfoReply) {
@@ -480,14 +470,16 @@ ProcRRGetOutputInfo(ClientPtr client)
             .nameLength = output->nameLength
         };
         extraLen = bytes_to_int32(rep.nameLength) << 2;
-        if (!extraLen)
-            goto sendout;
+        if (extraLen) {
+            rep.length += bytes_to_int32(extraLen);
+            extra = calloc(1, extraLen);
+            if (!extra)
+                return BadAlloc;
+        }
+        else
+            extra = NULL;
 
-        rep.length += bytes_to_int32(extraLen);
-        extra = calloc(1, extraLen);
-        if (!extra)
-            return BadAlloc;
-        memcpy(extra, output->name, output->nameLength);
+        name = (char *) extra;
     } else {
         rep = (xRRGetOutputInfoReply) {
             .type = X_Reply,
@@ -510,26 +502,25 @@ ProcRRGetOutputInfo(ClientPtr client)
                      output->numModes + output->numUserModes +
                      output->numClones + bytes_to_int32(rep.nameLength)) << 2);
 
-        if (!extraLen)
-            goto sendout;
-
-        rep.length += bytes_to_int32(extraLen);
-        extra = calloc(1, extraLen);
-        if (!extra)
-            return BadAlloc;
+        if (extraLen) {
+            rep.length += bytes_to_int32(extraLen);
+            extra = calloc(1, extraLen);
+            if (!extra)
+                return BadAlloc;
+        }
+        else
+            extra = NULL;
 
         crtcs = (RRCrtc *) extra;
         modes = (RRMode *) (crtcs + output->numCrtcs);
         clones = (RROutput *) (modes + output->numModes + output->numUserModes);
-
-        memcpy((clones + output->numClones), output->name, output->nameLength);
+        name = (char *) (clones + output->numClones);
 
         for (i = 0; i < output->numCrtcs; i++) {
             crtcs[i] = output->crtcs[i]->id;
             if (client->swapped)
                 swapl(&crtcs[i]);
         }
-
         for (i = 0; i < output->numModes + output->numUserModes; i++) {
             if (i < output->numModes)
                 modes[i] = output->modes[i]->mode.id;
@@ -544,8 +535,7 @@ ProcRRGetOutputInfo(ClientPtr client)
                 swapl(&clones[i]);
         }
     }
-
-sendout:
+    memcpy(name, output->name, output->nameLength);
     if (client->swapped) {
         swaps(&rep.sequenceNumber);
         swapl(&rep.length);
@@ -559,10 +549,11 @@ sendout:
         swaps(&rep.nClones);
         swaps(&rep.nameLength);
     }
-
     WriteToClient(client, sizeof(xRRGetOutputInfoReply), &rep);
-    WriteToClient(client, extraLen, extra);
-    free(extra);
+    if (extraLen) {
+        WriteToClient(client, extraLen, extra);
+        free(extra);
+    }
 
     return Success;
 }

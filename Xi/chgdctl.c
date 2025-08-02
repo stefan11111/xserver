@@ -57,7 +57,6 @@ SOFTWARE.
 
 #include "dix/exevents_priv.h"
 #include "dix/input_priv.h"
-#include "dix/resource_priv.h"
 
 #include "inputstr.h"           /* DeviceIntPtr      */
 #include "XIstubs.h"
@@ -108,6 +107,7 @@ ProcXChangeDeviceControl(ClientPtr client)
     int i, status, ret = BadValue;
     DeviceIntPtr dev;
     xDeviceResolutionCtl *r;
+    xChangeDeviceControlReply rep;
     AxisInfoPtr a;
     CARD32 *resolution;
     xDeviceEnableCtl *e;
@@ -126,9 +126,11 @@ ProcXChangeDeviceControl(ClientPtr client)
         goto out;
     }
 
-    xChangeDeviceControlReply rep = {
+    rep = (xChangeDeviceControlReply) {
+        .repType = X_Reply,
         .RepType = X_ChangeDeviceControl,
         .sequenceNumber = client->sequence,
+        .length = 0,
         .status = Success,
     };
 
@@ -230,11 +232,24 @@ ProcXChangeDeviceControl(ClientPtr client)
         SendEventToAllWindows(dev, DevicePresenceNotifyMask,
                               (xEvent *) &dpn, 1);
 
-        if (client->swapped) {
-            swaps(&rep.sequenceNumber);
-        }
-        WriteToClient(client, sizeof(xChangeDeviceControlReply), &rep);
+        WriteReplyToClient(client, sizeof(xChangeDeviceControlReply), &rep);
     }
 
     return ret;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the xChangeDeviceControl function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXChangeDeviceControl(ClientPtr client, int size,
+                         xChangeDeviceControlReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

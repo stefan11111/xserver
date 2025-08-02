@@ -1,8 +1,5 @@
 
 #include <dix-config.h>
-
-#include "dix/dix_priv.h"
-
 #include <dix.h>
 #include "vndserver.h"
 

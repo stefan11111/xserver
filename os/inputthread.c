@@ -35,7 +35,6 @@
 
 #include "dix/input_priv.h"
 #include "os/ddx_priv.h"
-#include "os/log_priv.h"
 
 #include "inputstr.h"
 #include "opaque.h"
@@ -410,7 +409,7 @@ InputThreadPreInit(void)
      if (pipe(hotplugPipe) < 0)
         FatalError("input-thread: could not create pipe");
 
-    inputThreadInfo = calloc(1, sizeof(InputThreadInfo));
+    inputThreadInfo = malloc(sizeof(InputThreadInfo));
     if (!inputThreadInfo)
         FatalError("input-thread: could not allocate memory");
 

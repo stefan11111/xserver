@@ -39,16 +39,15 @@ THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <X11/extensions/XKM.h>
 
 #include "dix/dix_priv.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
 #include "xkb/xkbfile_priv.h"
 #include "xkb/xkbfmisc_priv.h"
 #include "xkb/xkbrules_priv.h"
-#include "xkb/xkbsrv_priv.h"
 
 #include "inputstr.h"
 #include "scrnintstr.h"
 #include "windowstr.h"
+#include <xkbsrv.h>
 
 #define	PRE_ERROR_MSG "\"The XKEYBOARD keymap compiler (xkbcomp) reports:\""
 #define	ERROR_PREFIX	"\"> \""
@@ -195,7 +194,7 @@ RunXkbComp(xkbcomp_buffer_callback callback, void *userdata)
 #ifdef WIN32
             unlink(tmpname);
 #endif
-            return strdup(keymap);
+            return XNFstrdup(keymap);
         }
         else {
             LogMessage(X_ERROR, "Error compiling keymap (%s) executing '%s'\n",
@@ -390,7 +389,7 @@ XkbDDXLoadKeymapByNames(DeviceIntPtr keybd,
         (names->compat == NULL) && (names->symbols == NULL) &&
         (names->geometry == NULL)) {
         LogMessage(X_ERROR, "XKB: No components provided for device %s\n",
-                   keybd && keybd->name ? keybd->name : "(unnamed keyboard)");
+                   keybd->name ? keybd->name : "(unnamed keyboard)");
         return 0;
     }
     else if (!XkbDDXCompileKeymapByNames(xkb, names, want, need,

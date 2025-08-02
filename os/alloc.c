@@ -12,7 +12,7 @@
 void *
 XNFalloc(unsigned long amount)
 {
-    void *ptr = calloc(1, amount);
+    void *ptr = malloc(amount);
 
     if (!ptr)
         FatalError("Out of memory");

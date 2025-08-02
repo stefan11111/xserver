@@ -100,21 +100,14 @@ Equipment Corporation.
 
 #include "dix/colormap_priv.h"
 #include "dix/cursor_priv.h"
-#include "dix/dispatch.h"
 #include "dix/dix_priv.h"
 #include "dix/exevents_priv.h"
 #include "dix/input_priv.h"
-#include "dix/inpututils_priv.h"
 #include "dix/property_priv.h"
-#include "dix/resource_priv.h"
-#include "dix/selection_priv.h"
-#include "dix/window_priv.h"
 #include "mi/mi_priv.h"         /* miPaintWindow */
 #include "os/auth.h"
 #include "os/client_priv.h"
 #include "os/screensaver.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
 
 #include "misc.h"
 #include "scrnintstr.h"
@@ -125,13 +118,23 @@ Equipment Corporation.
 #include "propertyst.h"
 #include "inputstr.h"
 #include "resource.h"
+#include "colormapst.h"
 #include "cursorstr.h"
 #include "dixstruct.h"
 #include "gcstruct.h"
 #include "servermd.h"
 #include "mivalidate.h"
+#ifdef XINERAMA
+#include "panoramiX.h"
+#include "panoramiXsrv.h"
+#endif /* XINERAMA */
+#include "dixevents.h"
 #include "globals.h"
+#ifdef COMPOSITE
 #include "compint.h"
+#endif
+#include "selection.h"
+#include "inpututils.h"
 #include "privates.h"
 #include "xace.h"
 
@@ -140,7 +143,7 @@ Equipment Corporation.
 /******
  * Window stuff for server
  *
- *    CreateRootWindow, dixCreateWindow, ChangeWindowAttributes,
+ *    CreateRootWindow, CreateWindow, ChangeWindowAttributes,
  *    GetWindowAttributes, DeleteWindow, DestroySubWindows,
  *    HandleSaveSet, ReparentWindow, MapWindow, MapSubWindows,
  *    UnmapWindow, UnmapSubWindows, ConfigureWindow, CirculateWindow,
@@ -184,21 +187,26 @@ static Bool TileScreenSaver(ScreenPtr pScreen, int kind);
 
 #define SubStrSend(pWin,pParent) (StrSend(pWin) || SubSend(pParent))
 
+#ifdef COMPOSITE
 static const char *overlay_win_name = "<composite overlay>";
+#endif
 
 static const char *
 get_window_name(WindowPtr pWin)
 {
 #define WINDOW_NAME_BUF_LEN 512
+    PropertyPtr prop;
     static char buf[WINDOW_NAME_BUF_LEN];
     int len;
 
+#ifdef COMPOSITE
     CompScreenPtr comp_screen = GetCompScreen(pWin->drawable.pScreen);
 
     if (comp_screen && pWin == comp_screen->pOverlayWin)
         return overlay_win_name;
+#endif
 
-    for (PropertyPtr prop = pWin->properties; prop; prop = prop->next) {
+    for (prop = wUserProps(pWin); prop; prop = prop->next) {
         if (prop->propertyName == XA_WM_NAME && prop->type == XA_STRING &&
             prop->data) {
             len = min(prop->size, WINDOW_NAME_BUF_LEN - 1);
@@ -215,10 +223,11 @@ get_window_name(WindowPtr pWin)
 static void
 log_window_info(WindowPtr pWin, int depth)
 {
+    int i;
     const char *win_name, *visibility;
     BoxPtr rects;
 
-    for (int i = 0; i < (depth << 2); i++)
+    for (i = 0; i < (depth << 2); i++)
         ErrorF(" ");
 
     win_name = get_window_name(pWin);
@@ -231,11 +240,13 @@ log_window_info(WindowPtr pWin, int depth)
 
     if (pWin->overrideRedirect)
         ErrorF(" (override redirect)");
+#ifdef COMPOSITE
     if (pWin->redirectDraw)
         ErrorF(" (%s compositing: pixmap %x)",
                (pWin->redirectDraw == RedirectDrawAutomatic) ?
                "automatic" : "manual",
                (unsigned) pWin->drawable.pScreen->GetWindowPixmap(pWin)->drawable.id);
+#endif
 
     switch (pWin->visibility) {
     case VisibilityUnobscured:
@@ -256,7 +267,7 @@ log_window_info(WindowPtr pWin, int depth)
     if (RegionNotEmpty(&pWin->clipList)) {
         ErrorF(", clip list:");
         rects = RegionRects(&pWin->clipList);
-        for (int i = 0; i < RegionNumRects(&pWin->clipList); i++)
+        for (i = 0; i < RegionNumRects(&pWin->clipList); i++)
             ErrorF(" [(%d, %d) to (%d, %d)]",
                    rects[i].x1, rects[i].y1, rects[i].x2, rects[i].y2);
         ErrorF("; extents [(%d, %d) to (%d, %d)]",
@@ -300,6 +311,7 @@ grab_type_to_text(GrabPtr pGrab)
 static void
 log_grab_info(void *value, XID id, void *cdata)
 {
+    int i, j;
     GrabPtr pGrab = (GrabPtr)value;
 
     ErrorF("  grab 0x%lx (%s), type '%s' on window 0x%lx\n",
@@ -326,12 +338,12 @@ log_grab_info(void *value, XID id, void *cdata)
                (unsigned long) pGrab->eventMask);
     }
     else if (pGrab->grabtype == XI2) {
-        for (int i = 0; i < xi2mask_num_masks(pGrab->xi2mask); i++) {
+        for (i = 0; i < xi2mask_num_masks(pGrab->xi2mask); i++) {
             const unsigned char *mask;
             int print;
 
             print = 0;
-            for (int j = 0; j < XI2MASKSIZE; j++) {
+            for (j = 0; j < XI2MASKSIZE; j++) {
                 mask = xi2mask_get_one_mask(pGrab->xi2mask, i);
                 if (mask[j]) {
                     print = 1;
@@ -341,7 +353,7 @@ log_grab_info(void *value, XID id, void *cdata)
             if (!print)
                 continue;
             ErrorF("      xi2 event mask 0x");
-            for (int j = 0; j < xi2mask_mask_size(pGrab->xi2mask); j++)
+            for (j = 0; j < xi2mask_mask_size(pGrab->xi2mask); j++)
                 ErrorF("%x ", mask[j]);
             ErrorF("\n");
         }
@@ -356,6 +368,7 @@ log_grab_info(void *value, XID id, void *cdata)
 void
 PrintPassiveGrabs(void)
 {
+    int i;
     LocalClientCredRec *lcc;
     pid_t clientpid;
     const char *cmdname;
@@ -363,7 +376,7 @@ PrintPassiveGrabs(void)
 
     ErrorF("Printing all currently registered grabs\n");
 
-    for (int i = 1; i < currentMaxClients; i++) {
+    for (i = 1; i < currentMaxClients; i++) {
         if (!clients[i] || clients[i]->clientState != ClientStateRunning)
             continue;
 
@@ -393,11 +406,11 @@ PrintPassiveGrabs(void)
 void
 PrintWindowTree(void)
 {
-    int depth;
+    int scrnum, depth;
     ScreenPtr pScreen;
     WindowPtr pWin;
 
-    for (int scrnum = 0; scrnum < screenInfo.numScreens; scrnum++) {
+    for (scrnum = 0; scrnum < screenInfo.numScreens; scrnum++) {
         pScreen = screenInfo.screens[scrnum];
         ErrorF("[dix] Dumping windows for screen %d (pixmap %x):\n", scrnum,
                (unsigned) pScreen->GetScreenPixmap(pScreen)->drawable.id);
@@ -494,7 +507,9 @@ SetWindowToDefaults(WindowPtr pWin)
     pWin->forcedBG = FALSE;
     pWin->unhittable = FALSE;
 
+#ifdef COMPOSITE
     pWin->damagedDescendants = FALSE;
+#endif
 }
 
 static void
@@ -505,6 +520,7 @@ MakeRootTile(WindowPtr pWin)
     unsigned char back[128];
     int len = BitmapBytePad(sizeof(long));
     unsigned char *from, *to;
+    int i, j;
 
     pWin->background.pixmap = (*pScreen->CreatePixmap) (pScreen, 4, 4,
                                                         pScreen->rootDepth, 0);
@@ -520,7 +536,7 @@ MakeRootTile(WindowPtr pWin)
         attributes[0].val = pScreen->whitePixel;
         attributes[1].val = pScreen->blackPixel;
 
-        (void) ChangeGC(NULL, pGC, GCForeground | GCBackground,
+        (void) ChangeGC(NullClient, pGC, GCForeground | GCBackground,
                         attributes);
     }
 
@@ -529,8 +545,8 @@ MakeRootTile(WindowPtr pWin)
     from = (screenInfo.bitmapBitOrder == LSBFirst) ? _back_lsb : _back_msb;
     to = back;
 
-    for (int i = 4; i > 0; i--, from++)
-        for (int j = len; j > 0; j--)
+    for (i = 4; i > 0; i--, from++)
+        for (j = len; j > 0; j--)
             *to++ = *from;
 
     (*pGC->ops->PutImage) ((DrawablePtr) pWin->background.pixmap, pGC, 1,
@@ -557,7 +573,7 @@ CreateRootWindow(ScreenPtr pScreen)
         return FALSE;
 
     pScreen->screensaver.pWindow = NULL;
-    pScreen->screensaver.wid = dixAllocServerXID();
+    pScreen->screensaver.wid = FakeClientID(0);
     pScreen->screensaver.ExternalScreenSaver = NULL;
     screenIsSaved = SCREEN_SAVER_OFF;
 
@@ -576,7 +592,7 @@ CreateRootWindow(ScreenPtr pScreen)
     pWin->parent = NullWindow;
     SetWindowToDefaults(pWin);
 
-    pWin->optional = calloc(1, sizeof(WindowOptRec));
+    pWin->optional = malloc(sizeof(WindowOptRec));
     if (!pWin->optional)
         return FALSE;
 
@@ -584,6 +600,7 @@ CreateRootWindow(ScreenPtr pScreen)
     pWin->optional->otherEventMasks = 0;
     pWin->optional->otherClients = NULL;
     pWin->optional->passiveGrabs = NULL;
+    pWin->optional->userProps = NULL;
     pWin->optional->backingBitPlanes = ~0L;
     pWin->optional->backingPixel = 0;
     pWin->optional->boundingShape = NULL;
@@ -596,7 +613,7 @@ CreateRootWindow(ScreenPtr pScreen)
 
     pWin->nextSib = NullWindow;
 
-    pWin->drawable.id = dixAllocServerXID();
+    pWin->drawable.id = FakeClientID(0);
 
     pWin->origin.x = pWin->origin.y = 0;
     pWin->drawable.height = pScreen->height;
@@ -635,8 +652,10 @@ CreateRootWindow(ScreenPtr pScreen)
         pScreen->backingStoreSupport = NotUseful;
     if (enableBackingStore)
         pScreen->backingStoreSupport = WhenMapped;
+#ifdef COMPOSITE
     if (noCompositeExtension)
         pScreen->backingStoreSupport = NotUseful;
+#endif
 
     pScreen->saveUnderSupport = NotUseful;
 
@@ -651,8 +670,7 @@ InitRootWindow(WindowPtr pWin)
 
     if (!(*pScreen->CreateWindow) (pWin))
         return;                 /* XXX */
-
-    dixScreenRaiseWindowPosition(pWin, 0, 0);
+    (*pScreen->PositionWindow) (pWin, 0, 0);
 
     pWin->cursorIsNone = FALSE;
     pWin->optional->cursor = RefCursor(rootCursor);
@@ -734,14 +752,20 @@ RealChildHead(WindowPtr pWin)
         return NullWindow;
 }
 
+/*****
+ * CreateWindow
+ *    Makes a window in response to client request
+ *****/
+
 WindowPtr
-dixCreateWindow(Window wid, WindowPtr pParent, int x, int y, unsigned w,
+CreateWindow(Window wid, WindowPtr pParent, int x, int y, unsigned w,
              unsigned h, unsigned bw, unsigned class, Mask vmask, XID *vlist,
              int depth, ClientPtr client, VisualID visual, int *error)
 {
     WindowPtr pWin;
     WindowPtr pHead;
     ScreenPtr pScreen;
+    int idepth, ivisual;
     Bool fOK;
     DepthPtr pDepth;
     PixmapFormatRec *format;
@@ -779,10 +803,10 @@ dixCreateWindow(Window wid, WindowPtr pParent, int x, int y, unsigned w,
     /* Find out if the depth and visual are acceptable for this Screen */
     if ((visual != ancwopt->visual) || (depth != pParent->drawable.depth)) {
         fOK = FALSE;
-        for (int idepth = 0; idepth < pScreen->numDepths; idepth++) {
+        for (idepth = 0; idepth < pScreen->numDepths; idepth++) {
             pDepth = (DepthPtr) &pScreen->allowedDepths[idepth];
             if ((depth == pDepth->depth) || (depth == 0)) {
-                for (int ivisual = 0; ivisual < pDepth->numVids; ivisual++) {
+                for (ivisual = 0; ivisual < pDepth->numVids; ivisual++) {
                     if (visual == pDepth->vids[ivisual]) {
                         fOK = TRUE;
                         break;
@@ -794,6 +818,12 @@ dixCreateWindow(Window wid, WindowPtr pParent, int x, int y, unsigned w,
             *error = BadMatch;
             return NullWindow;
         }
+    }
+
+    if (((vmask & (CWBorderPixmap | CWBorderPixel)) == 0) &&
+        (class != InputOnly) && (depth != pParent->drawable.depth)) {
+        *error = BadMatch;
+        return NullWindow;
     }
 
     if (((vmask & CWColormap) == 0) &&
@@ -898,13 +928,13 @@ dixCreateWindow(Window wid, WindowPtr pParent, int x, int y, unsigned w,
         return NullWindow;
     }
     /* We SHOULD check for an error value here XXX */
-    dixScreenRaiseWindowPosition(pWin, pWin->drawable.x, pWin->drawable.y);
+    (*pScreen->PositionWindow) (pWin, pWin->drawable.x, pWin->drawable.y);
 
     if (!(vmask & CWEventMask))
         RecalculateDeliverableEvents(pWin);
 
     if (vmask)
-        *error = ChangeWindowAttributes(pWin, vmask, vlist, dixClientForWindow(pWin));
+        *error = ChangeWindowAttributes(pWin, vmask, vlist, wClient(pWin));
     else
         *error = Success;
 
@@ -968,6 +998,8 @@ DisposeWindowOptional(WindowPtr pWin)
 static void
 FreeWindowResources(WindowPtr pWin)
 {
+    ScreenPtr pScreen = pWin->drawable.pScreen;
+
     DeleteWindowFromAnySaveSet(pWin);
     DeleteWindowFromAnySelections(pWin);
     DeleteWindowFromAnyEvents(pWin, TRUE);
@@ -987,9 +1019,8 @@ FreeWindowResources(WindowPtr pWin)
         dixDestroyPixmap(pWin->background.pixmap, 0);
 
     DeleteAllWindowProperties(pWin);
-
     /* We SHOULD check for an error value here XXX */
-    dixScreenRaiseWindowDestroy(pWin);
+    (*pScreen->DestroyWindow) (pWin);
     DisposeWindowOptional(pWin);
 }
 
@@ -1135,6 +1166,7 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
     Pixmap pixID;
     CursorPtr pCursor, pOldCursor;
     Cursor cursorID;
+    WindowPtr pChild;
     Colormap cmap;
     ColormapPtr pCmap;
     xEvent xE;
@@ -1310,7 +1342,7 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
             break;
         case CWBackingPlanes:
             if (pWin->optional || ((CARD32) *pVlist != (CARD32) ~0L)) {
-                if (!MakeWindowOptional(pWin)) {
+                if (!pWin->optional && !MakeWindowOptional(pWin)) {
                     error = BadAlloc;
                     goto PatchUp;
                 }
@@ -1322,7 +1354,7 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
             break;
         case CWBackingPixel:
             if (pWin->optional || (CARD32) *pVlist) {
-                if (!MakeWindowOptional(pWin)) {
+                if (!pWin->optional && !MakeWindowOptional(pWin)) {
                     error = BadAlloc;
                     goto PatchUp;
                 }
@@ -1421,9 +1453,9 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
                  * inheriting it
                  */
 
-                for (WindowPtr pChild = pWin->firstChild; pChild;
+                for (pChild = pWin->firstChild; pChild;
                      pChild = pChild->nextSib) {
-                    if (!MakeWindowOptional(pChild)) {
+                    if (!pChild->optional && !MakeWindowOptional(pChild)) {
                         error = BadAlloc;
                         goto PatchUp;
                     }
@@ -1435,7 +1467,7 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
                  * check on any children now matching the new colormap
                  */
 
-                for (WindowPtr pChild = pWin->firstChild; pChild;
+                for (pChild = pWin->firstChild; pChild;
                      pChild = pChild->nextSib) {
                     if (pChild->optional->colormap == cmap)
                         CheckWindowOptionalNeed(pChild);
@@ -1478,7 +1510,7 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
                  * patch up child windows so they don't lose cursors.
                  */
 
-                for (WindowPtr pChild = pWin->firstChild; pChild;
+                for (pChild = pWin->firstChild; pChild;
                      pChild = pChild->nextSib) {
                     if (!pChild->optional && !pChild->cursorIsNone &&
                         !MakeWindowOptional(pChild)) {
@@ -1512,7 +1544,7 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
                      * check on any children now matching the new cursor
                      */
 
-                    for (WindowPtr pChild = pWin->firstChild; pChild;
+                    for (pChild = pWin->firstChild; pChild;
                          pChild = pChild->nextSib) {
                         if (pChild->optional &&
                             (pChild->optional->cursor == pCursor))
@@ -1563,55 +1595,42 @@ ChangeWindowAttributes(WindowPtr pWin, Mask vmask, XID *vlist, ClientPtr client)
     return error;
 }
 
-int
-ProcGetWindowAttributes(ClientPtr client)
+/*****
+ * GetWindowAttributes
+ *    Notice that this is different than ChangeWindowAttributes
+ *****/
+
+void
+GetWindowAttributes(WindowPtr pWin, ClientPtr client,
+                    xGetWindowAttributesReply * wa)
 {
-    REQUEST(xResourceReq);
-    REQUEST_SIZE_MATCH(xResourceReq);
+    wa->type = X_Reply;
+    wa->bitGravity = pWin->bitGravity;
+    wa->winGravity = pWin->winGravity;
+    wa->backingStore = pWin->backingStore;
+    wa->length = bytes_to_int32(sizeof(xGetWindowAttributesReply) -
+                                sizeof(xGenericReply));
+    wa->sequenceNumber = client->sequence;
+    wa->backingBitPlanes = wBackingBitPlanes(pWin);
+    wa->backingPixel = wBackingPixel(pWin);
+    wa->saveUnder = (BOOL) pWin->saveUnder;
+    wa->override = pWin->overrideRedirect;
+    if (!pWin->mapped)
+        wa->mapState = IsUnmapped;
+    else if (pWin->realized)
+        wa->mapState = IsViewable;
+    else
+        wa->mapState = IsUnviewable;
 
-    WindowPtr pWin;
-    int rc = dixLookupWindow(&pWin, stuff->id, client, DixGetAttrAccess);
-    if (rc != Success)
-        return rc;
+    wa->colormap = wColormap(pWin);
+    wa->mapInstalled = (wa->colormap == None) ? xFalse
+        : IsMapInstalled(wa->colormap, pWin);
 
-    xGetWindowAttributesReply rep = {
-        .type = X_Reply,
-        .bitGravity = pWin->bitGravity,
-        .winGravity = pWin->winGravity,
-        .backingStore = pWin->backingStore,
-        .length = bytes_to_int32(sizeof(xGetWindowAttributesReply) -
-                                 sizeof(xGenericReply)),
-        .sequenceNumber = client->sequence,
-        .backingBitPlanes = wBackingBitPlanes(pWin),
-        .backingPixel = wBackingPixel(pWin),
-        .saveUnder = (BOOL) pWin->saveUnder,
-        .override = pWin->overrideRedirect,
-        .mapState = (!pWin->mapped ? IsUnmapped :
-                     (pWin->realized ? IsViewable : IsUnviewable)),
-        .colormap = wColormap(pWin),
-        .mapInstalled = (wColormap(pWin) == None) ? xFalse
-            : IsMapInstalled(wColormap(pWin), pWin),
-        .yourEventMask = EventMaskForClient(pWin, client),
-        .allEventMasks = pWin->eventMask | wOtherEventMasks(pWin),
-        .doNotPropagateMask = wDontPropagateMask(pWin),
-        .class = pWin->drawable.class,
-        .visualID = wVisual(pWin),
-    };
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swapl(&rep.visualID);
-        swaps(&rep.class);
-        swapl(&rep.backingBitPlanes);
-        swapl(&rep.backingPixel);
-        swapl(&rep.colormap);
-        swapl(&rep.allEventMasks);
-        swapl(&rep.yourEventMask);
-        swaps(&rep.doNotPropagateMask);
-    }
-    WriteToClient(client, sizeof(rep), &rep);
-    return Success;
+    wa->yourEventMask = EventMaskForClient(pWin, client);
+    wa->allEventMasks = pWin->eventMask | wOtherEventMasks(pWin);
+    wa->doNotPropagateMask = wDontPropagateMask(pWin);
+    wa->class = pWin->drawable.class;
+    wa->visualID = wVisual(pWin);
 }
 
 WindowPtr
@@ -1698,6 +1717,7 @@ MoveWindowInStack(WindowPtr pWin, WindowPtr pNextSib)
 void
 SetWinSize(WindowPtr pWin)
 {
+#ifdef COMPOSITE
     if (pWin->redirectDraw != RedirectDrawNone) {
         BoxRec box;
 
@@ -1712,6 +1732,7 @@ SetWinSize(WindowPtr pWin)
         RegionReset(&pWin->winSize, &box);
     }
     else
+#endif
         ClippedRegionFromBox(pWin->parent, &pWin->winSize,
                              pWin->drawable.x, pWin->drawable.y,
                              (int) pWin->drawable.width,
@@ -1734,6 +1755,7 @@ SetBorderSize(WindowPtr pWin)
 
     if (HasBorder(pWin)) {
         bw = wBorderWidth(pWin);
+#ifdef COMPOSITE
         if (pWin->redirectDraw != RedirectDrawNone) {
             BoxRec box;
 
@@ -1748,6 +1770,7 @@ SetBorderSize(WindowPtr pWin)
             RegionReset(&pWin->borderSize, &box);
         }
         else
+#endif
             ClippedRegionFromBox(pWin->parent, &pWin->borderSize,
                                  pWin->drawable.x - bw, pWin->drawable.y - bw,
                                  (int) (pWin->drawable.width + (bw << 1)),
@@ -1826,10 +1849,13 @@ GravityTranslate(int x, int y, int oldx, int oldy,
 void
 ResizeChildrenWinSize(WindowPtr pWin, int dx, int dy, int dw, int dh)
 {
-    WindowPtr pChild;
+    ScreenPtr pScreen;
+    WindowPtr pSib, pChild;
     Bool resized = (dw || dh);
 
-    for (WindowPtr pSib = pWin->firstChild; pSib; pSib = pSib->nextSib) {
+    pScreen = pWin->drawable.pScreen;
+
+    for (pSib = pWin->firstChild; pSib; pSib = pSib->nextSib) {
         if (resized && (pSib->winGravity > NorthWestGravity)) {
             int cwsx, cwsy;
 
@@ -1853,8 +1879,7 @@ ResizeChildrenWinSize(WindowPtr pWin, int dx, int dy, int dw, int dh)
         pSib->drawable.y = pWin->drawable.y + pSib->origin.y;
         SetWinSize(pSib);
         SetBorderSize(pSib);
-
-        dixScreenRaiseWindowPosition(pSib, pSib->drawable.x, pSib->drawable.y);
+        (*pScreen->PositionWindow) (pSib, pSib->drawable.x, pSib->drawable.y);
 
         if ((pChild = pSib->firstChild)) {
             while (1) {
@@ -1864,9 +1889,9 @@ ResizeChildrenWinSize(WindowPtr pWin, int dx, int dy, int dw, int dh)
                     pChild->origin.y;
                 SetWinSize(pChild);
                 SetBorderSize(pChild);
-                dixScreenRaiseWindowPosition(pChild,
-                                             pChild->drawable.x,
-                                             pChild->drawable.y);
+                (*pScreen->PositionWindow) (pChild,
+                                            pChild->drawable.x,
+                                            pChild->drawable.y);
                 if (pChild->firstChild) {
                     pChild = pChild->firstChild;
                     continue;
@@ -1971,10 +1996,11 @@ ShapeOverlap(WindowPtr pWin, BoxPtr pWinBox, WindowPtr pSib, BoxPtr pSibBox)
 static Bool
 AnyWindowOverlapsMe(WindowPtr pWin, WindowPtr pHead, BoxPtr box)
 {
+    WindowPtr pSib;
     BoxRec sboxrec;
     BoxPtr sbox;
 
-    for (WindowPtr pSib = pWin->prevSib; pSib != pHead; pSib = pSib->prevSib) {
+    for (pSib = pWin->prevSib; pSib != pHead; pSib = pSib->prevSib) {
         if (pSib->mapped) {
             sbox = WindowExtents(pSib, &sboxrec);
             if (BOXES_OVERLAP(sbox, box)
@@ -1988,10 +2014,11 @@ AnyWindowOverlapsMe(WindowPtr pWin, WindowPtr pHead, BoxPtr box)
 static Bool
 IOverlapAnyWindow(WindowPtr pWin, BoxPtr box)
 {
+    WindowPtr pSib;
     BoxRec sboxrec;
     BoxPtr sbox;
 
-    for (WindowPtr pSib = pWin->nextSib; pSib; pSib = pSib->nextSib) {
+    for (pSib = pWin->nextSib; pSib; pSib = pSib->nextSib) {
         if (pSib->mapped) {
             sbox = WindowExtents(pSib, &sboxrec);
             if (BOXES_OVERLAP(sbox, box)
@@ -2282,8 +2309,8 @@ ConfigureWindow(WindowPtr pWin, Mask mask, XID *vlist, ClientPtr client)
             event.u.configureRequest.y += screenInfo.screens[0]->y;
         }
 #endif /* XINERAMA */
-        if (MaybeDeliverEventToClient(pParent, &event,
-                                      SubstructureRedirectMask, client))
+        if (MaybeDeliverEventsToClient(pParent, &event, 1,
+                                       SubstructureRedirectMask, client) == 1)
             return Success;
     }
     if (action == RESIZE_WIN) {
@@ -2298,8 +2325,8 @@ ConfigureWindow(WindowPtr pWin, Mask mask, XID *vlist, ClientPtr client)
                 .u.resizeRequest.height = h
             };
             eventT.u.u.type = ResizeRequest;
-            if (MaybeDeliverEventToClient(pWin, &eventT,
-                                          ResizeRedirectMask, client)) {
+            if (MaybeDeliverEventsToClient(pWin, &eventT, 1,
+                                           ResizeRedirectMask, client) == 1) {
                 /* if event is delivered, leave the actual size alone. */
                 w = pWin->drawable.width;
                 h = pWin->drawable.height;
@@ -2447,8 +2474,8 @@ CirculateWindow(WindowPtr pParent, int direction, ClientPtr client)
 
     if (RedirectSend(pParent)) {
         event.u.u.type = CirculateRequest;
-        if (MaybeDeliverEventToClient(pParent, &event,
-                                      SubstructureRedirectMask, client))
+        if (MaybeDeliverEventsToClient(pParent, &event, 1,
+                                       SubstructureRedirectMask, client) == 1)
             return Success;
     }
 
@@ -2558,8 +2585,7 @@ ReparentWindow(WindowPtr pWin, WindowPtr pParent,
 
     if (pScreen->ReparentWindow)
         (*pScreen->ReparentWindow) (pWin, pPriorParent);
-
-    dixScreenRaiseWindowPosition(pWin, pWin->drawable.x, pWin->drawable.y);
+    (*pScreen->PositionWindow) (pWin, pWin->drawable.x, pWin->drawable.y);
     ResizeChildrenWinSize(pWin, 0, 0, 0, 0);
 
     CheckWindowOptionalNeed(pWin);
@@ -2605,9 +2631,9 @@ MaybeDeliverMapRequest(WindowPtr pWin, WindowPtr pParent, ClientPtr client)
     };
     event.u.u.type = MapRequest;
 
-    return MaybeDeliverEventToClient(pParent, &event,
-                                     SubstructureRedirectMask,
-                                     client);
+    return MaybeDeliverEventsToClient(pParent, &event, 1,
+                                      SubstructureRedirectMask,
+                                      client) == 1;
 }
 
 static void
@@ -2703,6 +2729,7 @@ MapWindow(WindowPtr pWin, ClientPtr client)
 void
 MapSubwindows(WindowPtr pParent, ClientPtr client)
 {
+    WindowPtr pWin;
     WindowPtr pFirstMapped = NullWindow;
     ScreenPtr pScreen;
     Mask parentRedirect;
@@ -2714,7 +2741,7 @@ MapSubwindows(WindowPtr pParent, ClientPtr client)
     parentRedirect = RedirectSend(pParent);
     parentNotify = SubSend(pParent);
     anyMarked = FALSE;
-    for (WindowPtr pWin = pParent->firstChild; pWin; pWin = pWin->nextSib) {
+    for (pWin = pParent->firstChild; pWin; pWin = pWin->nextSib) {
         if (!pWin->mapped) {
             if (parentRedirect && !pWin->overrideRedirect)
                 if (MaybeDeliverMapRequest(pWin, pParent, client))
@@ -2861,7 +2888,7 @@ UnmapWindow(WindowPtr pWin, Bool fromConfigure)
 void
 UnmapSubwindows(WindowPtr pWin)
 {
-    WindowPtr pHead;
+    WindowPtr pChild, pHead;
     Bool wasRealized = (Bool) pWin->realized;
     Bool wasViewable = (Bool) pWin->viewable;
     Bool anyMarked = FALSE;
@@ -2877,7 +2904,7 @@ UnmapSubwindows(WindowPtr pWin)
     if (wasViewable)
         pLayerWin = (*pScreen->GetLayerWindow) (pWin);
 
-    for (WindowPtr pChild = pWin->lastChild; pChild != pHead; pChild = pChild->prevSib) {
+    for (pChild = pWin->lastChild; pChild != pHead; pChild = pChild->prevSib) {
         if (pChild->mapped) {
             if (parentNotify || StrSend(pChild))
                 DeliverUnmapNotify(pChild, xFalse);
@@ -2890,7 +2917,7 @@ UnmapSubwindows(WindowPtr pWin)
                 UnrealizeTree(pChild, FALSE);
         }
     }
-    if (wasViewable && anyMarked && pLayerWin) {
+    if (wasViewable && anyMarked) {
         if (pLayerWin->parent == pWin)
             (*pScreen->MarkWindow) (pWin);
         else {
@@ -2923,15 +2950,16 @@ void
 HandleSaveSet(ClientPtr client)
 {
     WindowPtr pParent, pWin;
+    int j;
 
-    for (int j = 0; j < client->numSaved; j++) {
+    for (j = 0; j < client->numSaved; j++) {
         pWin = SaveSetWindow(client->saveSet[j]);
         if (SaveSetToRoot(client->saveSet[j]))
             pParent = pWin->drawable.pScreen->root;
         else
         {
             pParent = pWin->parent;
-            while (pParent && (dixClientForWindow(pParent) == client))
+            while (pParent && (wClient(pParent) == client))
                 pParent = pParent->parent;
         }
         if (pParent) {
@@ -3011,7 +3039,7 @@ SendVisibilityNotify(WindowPtr pWin)
 
         switch (visibility) {
         case VisibilityUnobscured:
-        FOR_NSCREENS_BACKWARD(i) {
+        FOR_NSCREENS(i) {
             if (i == Scrnum)
                 continue;
 
@@ -3036,7 +3064,7 @@ SendVisibilityNotify(WindowPtr pWin)
             }
             break;
         case VisibilityFullyObscured:
-        FOR_NSCREENS_BACKWARD(i) {
+        FOR_NSCREENS(i) {
             if (i == Scrnum)
                 continue;
 
@@ -3070,7 +3098,7 @@ SendVisibilityNotify(WindowPtr pWin)
 int
 dixSaveScreens(ClientPtr client, int on, int mode)
 {
-    int rc, what, type;
+    int rc, i, what, type;
     XID vlist[2];
 
     if (on == SCREEN_SAVER_FORCER) {
@@ -3087,13 +3115,13 @@ dixSaveScreens(ClientPtr client, int on, int mode)
             type = SCREEN_SAVER_CYCLE;
     }
 
-    for (int i = 0; i < screenInfo.numScreens; i++) {
+    for (i = 0; i < screenInfo.numScreens; i++) {
         rc = XaceHookScreensaverAccess(client, screenInfo.screens[i],
                       DixShowAccess | DixHideAccess);
         if (rc != Success)
             return rc;
     }
-    for (int i = 0; i < screenInfo.numScreens; i++) {
+    for (i = 0; i < screenInfo.numScreens; i++) {
         ScreenPtr pScreen = screenInfo.screens[i];
 
         if (on == SCREEN_SAVER_FORCER)
@@ -3182,11 +3210,13 @@ SaveScreens(int on, int mode)
 static Bool
 TileScreenSaver(ScreenPtr pScreen, int kind)
 {
+    int j;
     int result;
     XID attributes[3];
     Mask mask;
     WindowPtr pWin;
     CursorMetricRec cm;
+    unsigned char *srcbits, *mskbits;
     CursorPtr cursor;
     XID cursorID = 0;
     int attri;
@@ -3224,20 +3254,20 @@ TileScreenSaver(ScreenPtr pScreen, int kind)
     cm.height = 16;
     cm.xhot = 8;
     cm.yhot = 8;
-    unsigned char *srcbits = calloc(16, BitmapBytePad(32));
-    unsigned char *mskbits = calloc(16, BitmapBytePad(32));
+    srcbits = malloc(BitmapBytePad(32) * 16);
+    mskbits = malloc(BitmapBytePad(32) * 16);
     if (!srcbits || !mskbits) {
         free(srcbits);
         free(mskbits);
         cursor = 0;
     }
     else {
-        for (int j = 0; j < BitmapBytePad(32) * 16; j++)
+        for (j = 0; j < BitmapBytePad(32) * 16; j++)
             srcbits[j] = mskbits[j] = 0x0;
         result = AllocARGBCursor(srcbits, mskbits, NULL, &cm, 0, 0, 0, 0, 0, 0,
                                  &cursor, serverClient, (XID) 0);
         if (cursor) {
-            cursorID = dixAllocServerXID();
+            cursorID = FakeClientID(0);
             if (AddResource(cursorID, X11_RESTYPE_CURSOR, (void *) cursor)) {
                 attributes[attri] = cursorID;
                 mask |= CWCursor;
@@ -3252,7 +3282,7 @@ TileScreenSaver(ScreenPtr pScreen, int kind)
     }
 
     pWin = pScreen->screensaver.pWindow =
-        dixCreateWindow(pScreen->screensaver.wid,
+        CreateWindow(pScreen->screensaver.wid,
                      pScreen->root,
                      -RANDOM_WIDTH, -RANDOM_WIDTH,
                      (unsigned short) pScreen->width + RANDOM_WIDTH,
@@ -3320,6 +3350,8 @@ CheckWindowOptionalNeed(WindowPtr w)
         return;
     if (optional->passiveGrabs != NULL)
         return;
+    if (optional->userProps != NULL)
+        return;
     if (optional->backingBitPlanes != (CARD32)~0L)
         return;
     if (optional->backingPixel != 0)
@@ -3363,18 +3395,19 @@ CheckWindowOptionalNeed(WindowPtr w)
 Bool
 MakeWindowOptional(WindowPtr pWin)
 {
+    WindowOptPtr optional;
     WindowOptPtr parentOptional;
 
     if (pWin->optional)
         return TRUE;
-
-    WindowOptPtr optional = calloc(1, sizeof(WindowOptRec));
+    optional = malloc(sizeof(WindowOptRec));
     if (!optional)
         return FALSE;
     optional->dontPropagateMask = DontPropagateMasks[pWin->dontPropagate];
     optional->otherEventMasks = 0;
     optional->otherClients = NULL;
     optional->passiveGrabs = NULL;
+    optional->userProps = NULL;
     optional->backingBitPlanes = ~0L;
     optional->backingPixel = 0;
     optional->boundingShape = NULL;
@@ -3416,8 +3449,9 @@ ChangeWindowDeviceCursor(WindowPtr pWin, DeviceIntPtr pDev, CursorPtr pCursor)
     DevCursNodePtr pNode, pPrev;
     CursorPtr pOldCursor = NULL;
     ScreenPtr pScreen;
+    WindowPtr pChild;
 
-    if (!MakeWindowOptional(pWin))
+    if (!pWin->optional && !MakeWindowOptional(pWin))
         return BadAlloc;
 
     /* 1) Check if window has device cursor set
@@ -3457,17 +3491,17 @@ ChangeWindowDeviceCursor(WindowPtr pWin, DeviceIntPtr pDev, CursorPtr pCursor)
     }
     else {
         /* no device cursor yet */
+        DevCursNodePtr pNewNode;
+
         if (!pCursor)
             return Success;
 
-        DevCursNodePtr pNewNode = calloc(1, sizeof(DevCursNodeRec));
-        if (!pNewNode)
-            return BadAlloc;
-
+        pNewNode = malloc(sizeof(DevCursNodeRec));
         pNewNode->dev = pDev;
         pNewNode->next = pWin->optional->deviceCursors;
         pWin->optional->deviceCursors = pNewNode;
         pNode = pNewNode;
+
     }
 
     if (pCursor && WindowParentHasDeviceCursor(pWin, pDev, pCursor))
@@ -3478,7 +3512,7 @@ ChangeWindowDeviceCursor(WindowPtr pWin, DeviceIntPtr pDev, CursorPtr pCursor)
 
     pNode = pPrev = NULL;
     /* fix up children */
-    for (WindowPtr pChild = pWin->firstChild; pChild; pChild = pChild->nextSib) {
+    for (pChild = pWin->firstChild; pChild; pChild = pChild->nextSib) {
         if (WindowSeekDeviceCursor(pChild, pDev, &pNode, &pPrev)) {
             if (pNode->cursor == None) {        /* inherited from parent */
                 pNode->cursor = RefCursor(pOldCursor);
@@ -3603,6 +3637,7 @@ void
 SetRootClip(ScreenPtr pScreen, int enable)
 {
     WindowPtr pWin = pScreen->root;
+    WindowPtr pChild;
     Bool WasViewable;
     Bool anyMarked = FALSE;
     WindowPtr pLayerWin;
@@ -3613,7 +3648,7 @@ SetRootClip(ScreenPtr pScreen, int enable)
         return;
     WasViewable = (Bool) (pWin->viewable);
     if (WasViewable && mode != ROOT_CLIP_INPUT_ONLY) {
-        for (WindowPtr pChild = pWin->firstChild; pChild; pChild = pChild->nextSib) {
+        for (pChild = pWin->firstChild; pChild; pChild = pChild->nextSib) {
             (void) (*pScreen->MarkOverlappedWindows) (pChild,
                                                       pChild, &pLayerWin);
         }
@@ -3694,28 +3729,10 @@ WindowGetVisual(WindowPtr pWin)
 {
     ScreenPtr pScreen = pWin->drawable.pScreen;
     VisualID vid = wVisual(pWin);
+    int i;
 
-    for (int i = 0; i < pScreen->numVisuals; i++)
+    for (i = 0; i < pScreen->numVisuals; i++)
         if (pScreen->visuals[i].vid == vid)
             return &pScreen->visuals[i];
     return 0;
-}
-
-/*
- * @brief check whether a window (ID) is a screen root window
- *
- * The underlying resource query is explicitly done on behalf of serverClient,
- * so XACE resource hooks don't recognize this as a client action.
- * It's explicitly designed for use in hooks that don't wanna cause unncessary
- * traffic in other XACE resource hooks: things done by the serverClient usually
- * considered safe enough for not needing any additional security checks.
- * (we don't have any way for completely skipping the XACE hook yet)
- */
-Bool dixWindowIsRoot(Window window)
-{
-    WindowPtr pWin;
-    int rc = dixLookupWindow(&pWin, window, serverClient, DixGetAttrAccess);
-    if (rc != Success)
-        return FALSE;
-    return (pWin == pWin->drawable.pScreen->root);
 }

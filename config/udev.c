@@ -30,15 +30,13 @@
 #include <unistd.h>
 
 #include "config/hotplug_priv.h"
-#include "os/fmt.h"
 
 #include "input.h"
 #include "inputstr.h"
 #include "config-backends.h"
 #include "os.h"
 #include "globals.h"
-
-#include "../hw/xfree86/os-support/linux/systemd-logind.h"
+#include "systemd-logind.h"
 
 #ifdef HAVE_SYS_SYSMACROS_H
 #include <sys/sysmacros.h>

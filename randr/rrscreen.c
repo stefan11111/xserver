@@ -23,7 +23,6 @@
 
 #include "dix/dix_priv.h"
 #include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
 
 static CARD16
  RR10CurrentSizeID(ScreenPtr pScreen);
@@ -422,7 +421,7 @@ rrGetMultiScreenResources(ClientPtr client, Bool query, ScreenPtr pScreen)
 
     extraLen = rep.length << 2;
     if (extraLen) {
-        extra = calloc(1, extraLen);
+        extra = malloc(extraLen);
         if (!extra) {
             return BadAlloc;
         }
@@ -489,6 +488,10 @@ rrGetScreenResources(ClientPtr client, Bool query)
     CARD8 *extra = NULL;
     unsigned long extraLen = 0;
     int i, rc, has_primary = 0;
+    RRCrtc *crtcs;
+    RROutput *outputs;
+    xRRModeInfo *modeinfos;
+    CARD8 *names;
 
     REQUEST_SIZE_MATCH(xRRGetScreenResourcesReq);
     rc = dixLookupWindow(&pWin, stuff->window, client, DixGetAttrAccess);
@@ -540,19 +543,20 @@ rrGetScreenResources(ClientPtr client, Bool query)
                       bytes_to_int32(rep.nbytesNames));
 
         extraLen = rep.length << 2;
-        if (!extraLen)
-            goto finish;
-
-        extra = calloc(1, extraLen);
-        if (!extra) {
-            free(modes);
-            return BadAlloc;
+        if (extraLen) {
+            extra = calloc(1, extraLen);
+            if (!extra) {
+                free(modes);
+                return BadAlloc;
+            }
         }
+        else
+            extra = NULL;
 
-        RRCrtc *crtcs = (RRCrtc *) extra;
-        RROutput *outputs = (RROutput *) (crtcs + pScrPriv->numCrtcs);
-        xRRModeInfo *modeinfos = (xRRModeInfo *) (outputs + pScrPriv->numOutputs);
-        CARD8* names = (CARD8 *) (modeinfos + num_modes);
+        crtcs = (RRCrtc *) extra;
+        outputs = (RROutput *) (crtcs + pScrPriv->numCrtcs);
+        modeinfos = (xRRModeInfo *) (outputs + pScrPriv->numOutputs);
+        names = (CARD8 *) (modeinfos + num_modes);
 
         if (pScrPriv->primaryOutput && pScrPriv->primaryOutput->crtc) {
             has_primary = 1;
@@ -600,9 +604,8 @@ rrGetScreenResources(ClientPtr client, Bool query)
             memcpy(names, mode->name, mode->mode.nameLength);
             names += mode->mode.nameLength;
         }
-        assert(bytes_to_int32((char *) names - (char *) extra) == rep.length);
-finish:
         free(modes);
+        assert(bytes_to_int32((char *) names - (char *) extra) == rep.length);
     }
 
     if (client->swapped) {
@@ -649,6 +652,7 @@ typedef struct _RR10Data {
 static RR10DataPtr
 RR10GetData(ScreenPtr pScreen, RROutputPtr output)
 {
+    RR10DataPtr data;
     RRScreenSizePtr size;
     int nmode = output->numModes + output->numUserModes;
     int o, os, l, r;
@@ -658,7 +662,7 @@ RR10GetData(ScreenPtr pScreen, RROutputPtr output)
     Bool *used;
 
     /* Make sure there is plenty of space for any combination */
-    RR10DataPtr data = calloc(1, sizeof(RR10DataRec) +
+    data = malloc(sizeof(RR10DataRec) +
                   sizeof(RRScreenSize) * nmode +
                   sizeof(RRScreenRate) * nmode + sizeof(Bool) * nmode);
     if (!data)
@@ -773,6 +777,8 @@ ProcRRGetScreenInfo(ClientPtr client)
     }
     else {
         int i, j;
+        xScreenSizes *size;
+        CARD16 *rates;
         CARD8 *data8;
         Bool has_rate = RRClientKnowsRates(client);
         RR10DataPtr pData;
@@ -800,20 +806,21 @@ ProcRRGetScreenInfo(ClientPtr client)
         if (has_rate)
             extraLen += rep.nrateEnts * sizeof(CARD16);
 
-        if (!extraLen)
-            goto finish; // no extra payload
-
-        extra = calloc(1, extraLen);
-        if (!extra) {
-            free(pData);
-            return BadAlloc;
+        if (extraLen) {
+            extra = (CARD8 *) malloc(extraLen);
+            if (!extra) {
+                free(pData);
+                return BadAlloc;
+            }
         }
+        else
+            extra = NULL;
 
         /*
          * First comes the size information
          */
-        xScreenSizes *size = (xScreenSizes *) extra;
-        CARD16 *rates = (CARD16 *) (size + rep.nSizes);
+        size = (xScreenSizes *) extra;
+        rates = (CARD16 *) (size + rep.nSizes);
         for (i = 0; i < pData->nsize; i++) {
             pSize = &pData->sizes[i];
             size->widthInPixels = pSize->width;
@@ -842,6 +849,7 @@ ProcRRGetScreenInfo(ClientPtr client)
                 }
             }
         }
+        free(pData);
 
         data8 = (CARD8 *) rates;
 
@@ -849,9 +857,6 @@ ProcRRGetScreenInfo(ClientPtr client)
             FatalError("RRGetScreenInfo bad extra len %ld != %ld\n",
                        (unsigned long) (data8 - (CARD8 *) extra), extraLen);
         rep.length = bytes_to_int32(extraLen);
-
-finish:
-        free(pData);
     }
     if (client->swapped) {
         swaps(&rep.sequenceNumber);

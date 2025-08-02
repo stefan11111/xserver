@@ -48,11 +48,29 @@
 #define WRITE(ptr, val) ((*wfbWriteMemory)((ptr), (val), sizeof(*(ptr))))
 #define READ(ptr) ((*wfbReadMemory)((ptr), sizeof(*(ptr))))
 
+#define MEMCPY_WRAPPED(dst, src, size) do {                       \
+    size_t _i;                                                    \
+    CARD8 *_dst = (CARD8*)(dst), *_src = (CARD8*)(src);           \
+    for(_i = 0; _i < size; _i++) {                                \
+        WRITE(_dst +_i, READ(_src + _i));                         \
+    }                                                             \
+} while(0)
+
+#define MEMSET_WRAPPED(dst, val, size) do {                       \
+    size_t _i;                                                    \
+    CARD8 *_dst = (CARD8*)(dst);                                  \
+    for(_i = 0; _i < size; _i++) {                                \
+        WRITE(_dst +_i, (val));                                   \
+    }                                                             \
+} while(0)
+
 #else
 
 #define FBPREFIX(x) fb##x
 #define WRITE(ptr, val) (*(ptr) = (val))
 #define READ(ptr) (*(ptr))
+#define MEMCPY_WRAPPED(dst, src, size) memcpy((dst), (src), (size))
+#define MEMSET_WRAPPED(dst, val, size) memset((dst), (val), (size))
 
 #endif
 
@@ -75,6 +93,10 @@
 #define FB_STIP_UNIT	(1 << FB_STIP_SHIFT)
 #define FB_STIP_MASK	(FB_STIP_UNIT - 1)
 #define FB_STIP_ALLONES	((FbStip) -1)
+#define FB_STIP_ODDSTRIDE(s)	(((s) & (FB_MASK >> FB_STIP_SHIFT)) != 0)
+#define FB_STIP_ODDPTR(p)	((((long) (p)) & (FB_MASK >> 3)) != 0)
+#define FbStipStrideToBitsStride(s) (((s) >> (FB_SHIFT - FB_STIP_SHIFT)))
+#define FbBitsStrideToStipStride(s) (((s) << (FB_SHIFT - FB_STIP_SHIFT)))
 #define FbFullMask(n)   ((n) == FB_UNIT ? FB_ALLONES : ((((FbBits) 1) << n) - 1))
 
 #if FB_SHIFT == 5
@@ -89,17 +111,31 @@ typedef FbBits FbStip;
 
 typedef int FbStride;
 
+#ifdef FB_DEBUG
+extern _X_EXPORT void fbValidateDrawable(DrawablePtr d);
+extern _X_EXPORT void fbInitializeDrawable(DrawablePtr d);
+extern _X_EXPORT void fbSetBits(FbStip * bits, int stride, FbStip data);
+
+#define FB_HEAD_BITS   (FbStip) (0xbaadf00d)
+#define FB_TAIL_BITS   (FbStip) (0xbaddf0ad)
+#else
+#define fbValidateDrawable(d)
+#define fdInitializeDrawable(d)
+#endif
+
 #include "fbrop.h"
 
 #if BITMAP_BIT_ORDER == LSBFirst
 #define FbScrLeft(x,n)	((x) >> (n))
 #define FbScrRight(x,n)	((x) << (n))
+/* #define FbLeftBits(x,n)	((x) & ((((FbBits) 1) << (n)) - 1)) */
 #define FbLeftStipBits(x,n) ((x) & ((((FbStip) 1) << (n)) - 1))
 #define FbStipMoveLsb(x,s,n)	(FbStipRight (x,(s)-(n)))
 #define FbPatternOffsetBits	0
 #else
 #define FbScrLeft(x,n)	((x) << (n))
 #define FbScrRight(x,n)	((x) >> (n))
+/* #define FbLeftBits(x,n)	((x) >> (FB_UNIT - (n))) */
 #define FbLeftStipBits(x,n) ((x) >> (FB_STIP_UNIT - (n)))
 #define FbStipMoveLsb(x,s,n)	(x)
 #define FbPatternOffsetBits	(sizeof (FbBits) - 1)
@@ -111,6 +147,10 @@ typedef int FbStride;
 #define FbStipRight(x,n) FbScrRight(x,n)
 
 #define FbRotLeft(x,n)	FbScrLeft(x,n) | (n ? FbScrRight(x,FB_UNIT-n) : 0)
+#define FbRotRight(x,n)	FbScrRight(x,n) | (n ? FbScrLeft(x,FB_UNIT-n) : 0)
+
+#define FbRotStipLeft(x,n)  FbStipLeft(x,n) | (n ? FbStipRight(x,FB_STIP_UNIT-n) : 0)
+#define FbRotStipRight(x,n)  FbStipRight(x,n) | (n ? FbStipLeft(x,FB_STIP_UNIT-n) : 0)
 
 #define FbLeftMask(x)	    ( ((x) & FB_MASK) ? \
 			     FbScrRight(FB_ALLONES,(x) & FB_MASK) : 0)
@@ -127,6 +167,21 @@ typedef int FbStride;
 
 #define FbStipMask(x,w)	(FbStipRight(FB_STIP_ALLONES,(x) & FB_STIP_MASK) & \
 			 FbStipLeft(FB_STIP_ALLONES,(FB_STIP_UNIT - ((x)+(w))) & FB_STIP_MASK))
+
+#define FbMaskBits(x,w,l,n,r) { \
+    n = (w); \
+    r = FbRightMask((x)+n); \
+    l = FbLeftMask(x); \
+    if (l) { \
+	n -= FB_UNIT - ((x) & FB_MASK); \
+	if (n < 0) { \
+	    n = 0; \
+	    l &= r; \
+	    r = 0; \
+	} \
+    } \
+    n >>= FB_SHIFT; \
+}
 
 #define FbByteMaskInvalid   0x10
 
@@ -223,6 +278,102 @@ typedef int FbStride;
     } \
 }
 
+#define FbMaskStip(x,w,l,n,r) { \
+    n = (w); \
+    r = FbRightStipMask((x)+n); \
+    l = FbLeftStipMask(x); \
+    if (l) { \
+	n -= FB_STIP_UNIT - ((x) & FB_STIP_MASK); \
+	if (n < 0) { \
+	    n = 0; \
+	    l &= r; \
+	    r = 0; \
+	} \
+    } \
+    n >>= FB_STIP_SHIFT; \
+}
+
+/*
+ * These macros are used to transparently stipple
+ * in copy mode; the expected usage is with 'n' constant
+ * so all of the conditional parts collapse into a minimal
+ * sequence of partial word writes
+ *
+ * 'n' is the bytemask of which bytes to store, 'a' is the address
+ * of the FbBits base unit, 'o' is the offset within that unit
+ *
+ * The term "lane" comes from the hardware term "byte-lane" which
+ */
+
+#define FbLaneCase1(n,a,o)						\
+    if ((n) == 0x01) {							\
+	WRITE((CARD8 *) ((a)+FbPatternOffset(o,CARD8)), fgxor);		\
+    }
+
+#define FbLaneCase2(n,a,o)						\
+    if ((n) == 0x03) {							\
+	WRITE((CARD16 *) ((a)+FbPatternOffset(o,CARD16)), fgxor);	\
+    } else {								\
+	FbLaneCase1((n)&1,a,o)						\
+	FbLaneCase1((n)>>1,a,(o)+1)					\
+    }
+
+#define FbLaneCase4(n,a,o)						\
+    if ((n) == 0x0f) {							\
+	WRITE((CARD32 *) ((a)+FbPatternOffset(o,CARD32)), fgxor);	\
+    } else {								\
+	FbLaneCase2((n)&3,a,o)						\
+	FbLaneCase2((n)>>2,a,(o)+2)					\
+    }
+
+#define FbLaneCase(n,a)   FbLaneCase4(n,(CARD8 *) (a),0)
+
+/* Macros for dealing with dashing */
+
+#define FbDashDeclare	\
+    unsigned char	*__dash, *__firstDash, *__lastDash
+
+#define FbDashInit(pGC,pPriv,dashOffset,dashlen,even) {	    \
+    (even) = TRUE;					    \
+    __firstDash = (pGC)->dash;				    \
+    __lastDash = __firstDash + (pGC)->numInDashList;	    \
+    (dashOffset) %= (pPriv)->dashLength;		    \
+							    \
+    __dash = __firstDash;				    \
+    while ((dashOffset) >= ((dashlen) = *__dash))	    \
+    {							    \
+	(dashOffset) -= (dashlen);			    \
+	(even) = 1-(even);				    \
+	if (++__dash == __lastDash)			    \
+	    __dash = __firstDash;			    \
+    }							    \
+    (dashlen) -= (dashOffset);				    \
+}
+
+#define FbDashNext(dashlen) {				    \
+    if (++__dash == __lastDash)				    \
+	__dash = __firstDash;				    \
+    (dashlen) = *__dash;				    \
+}
+
+/* as numInDashList is always even, this case can skip a test */
+
+#define FbDashNextEven(dashlen) {			    \
+    (dashlen) = *++__dash;				    \
+}
+
+#define FbDashNextOdd(dashlen)	FbDashNext(dashlen)
+
+#define FbDashStep(dashlen,even) {			    \
+    if (!--(dashlen)) {					    \
+	FbDashNext(dashlen);				    \
+	(even) = 1-(even);				    \
+    }							    \
+}
+
+extern _X_EXPORT const GCOps fbGCOps;
+extern _X_EXPORT const GCFuncs fbGCFuncs;
+
 /* Framebuffer access wrapper */
 typedef FbBits(*ReadMemoryProcPtr) (const void *src, int size);
 typedef void (*WriteMemoryProcPtr) (void *dst, FbBits value, int size);
@@ -272,7 +423,15 @@ typedef struct {
     unsigned int dashLength;    /* total of all dash elements */
 } FbGCPrivRec, *FbGCPrivPtr;
 
+#define fbGetGCPrivateKey(pGC)  (&fbGetScreenPrivate((pGC)->pScreen)->gcPrivateKeyRec)
+
+#define fbGetGCPrivate(pGC)	((FbGCPrivPtr)\
+				 dixLookupPrivate(&(pGC)->devPrivates, fbGetGCPrivateKey(pGC)))
+
 #define fbGetCompositeClip(pGC) ((pGC)->pCompositeClip)
+#define fbGetExpose(pGC)	((pGC)->fExpose)
+
+#define fbGetScreenPixmap(s)	((PixmapPtr) (s)->devPrivate)
 
 #define fbGetWinPrivateKey(pWin)        (&fbGetScreenPrivate(((DrawablePtr) (pWin))->pScreen)->winPrivateKeyRec)
 
@@ -282,8 +441,13 @@ typedef struct {
 #define __fbPixDrawableX(pPix)	((pPix)->drawable.x)
 #define __fbPixDrawableY(pPix)	((pPix)->drawable.y)
 
+#if defined(COMPOSITE) || defined(ROOTLESS)
 #define __fbPixOffXWin(pPix)	(__fbPixDrawableX(pPix) - (pPix)->screen_x)
 #define __fbPixOffYWin(pPix)	(__fbPixDrawableY(pPix) - (pPix)->screen_y)
+#else
+#define __fbPixOffXWin(pPix)	(__fbPixDrawableX(pPix))
+#define __fbPixOffYWin(pPix)	(__fbPixDrawableY(pPix))
+#endif
 #define __fbPixOffXPix(pPix)	(__fbPixDrawableX(pPix))
 #define __fbPixOffYPix(pPix)	(__fbPixDrawableY(pPix))
 
@@ -341,6 +505,12 @@ typedef struct {
  * Accelerated tiles are power of 2 width <= FB_UNIT
  */
 #define FbEvenTile(w)	    ((w) <= FB_UNIT && FbPowerOfTwo(w))
+
+/*
+ * fballpriv.c
+ */
+extern _X_EXPORT Bool
+fbAllocatePrivates(ScreenPtr pScreen);
 
 /*
  * fbarc.c
@@ -546,6 +716,9 @@ fbBltPlane(FbBits * src,
 /*
  * fbcmap_mi.c
  */
+extern _X_EXPORT int
+ fbListInstalledColormaps(ScreenPtr pScreen, Colormap * pmaps);
+
 extern _X_EXPORT void
  fbInstallColormap(ColormapPtr pmap);
 
@@ -665,6 +838,10 @@ extern _X_EXPORT void
 fbPolyFillRect(DrawablePtr pDrawable,
                GCPtr pGC, int nrectInit, xRectangle *prectInit);
 
+#define fbPolyFillArc miPolyFillArc
+
+#define fbFillPolygon miFillPolygon
+
 /*
  * fbfillsp.c
  */
@@ -768,6 +945,8 @@ extern _X_EXPORT void
 
 extern _X_EXPORT void
  fbPolySegment(DrawablePtr pDrawable, GCPtr pGC, int nseg, xSegment * pseg);
+
+#define fbPolyRectangle	miPolyRectangle
 
 /*
  * fbpict.c

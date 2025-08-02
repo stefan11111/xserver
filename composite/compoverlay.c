@@ -42,14 +42,13 @@
  */
 
 #include <dix-config.h>
-#include <X11/Xmd.h>
-
-#include "Xext/panoramiXsrv.h"
-
-#include "dix/window_priv.h"
 
 #include "compint.h"
 #include "xace.h"
+
+#ifdef XINERAMA
+#include "panoramiXsrv.h"
+#endif /* XINERAMA */
 
 /*
  * Delete the given overlay client list element from its screen list.
@@ -97,7 +96,9 @@ CompOverlayClientPtr
 compCreateOverlayClient(ScreenPtr pScreen, ClientPtr pClient)
 {
     CompScreenPtr cs = GetCompScreen(pScreen);
-    CompOverlayClientPtr pOc = calloc(1, sizeof(CompOverlayClientRec));
+    CompOverlayClientPtr pOc;
+
+    pOc = (CompOverlayClientPtr) malloc(sizeof(CompOverlayClientRec));
     if (pOc == NULL)
         return NULL;
 
@@ -142,7 +143,7 @@ compCreateOverlayWindow(ScreenPtr pScreen)
 #endif /* XINERAMA */
 
     pWin = cs->pOverlayWin =
-        dixCreateWindow(cs->overlayWid, pRoot, x, y, w, h, 0,
+        CreateWindow(cs->overlayWid, pRoot, x, y, w, h, 0,
                      InputOutput, CWBackPixmap | CWOverrideRedirect, &attrs[0],
                      pRoot->drawable.depth,
                      serverClient, pScreen->rootVisual, &result);

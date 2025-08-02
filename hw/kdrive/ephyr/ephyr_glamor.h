@@ -21,9 +21,6 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef XSERVER_KDRIVE_EPHYR_GLAMOR_H
-#define XSERVER_KDRIVE_EPHYR_GLAMOR_H
-
 #include <xcb/xcb.h>
 #include "dix-config.h"
 
@@ -66,5 +63,3 @@ ephyr_glamor_damage_redisplay(struct ephyr_glamor *glamor,
 }
 
 #endif /* !GLAMOR */
-
-#endif /* XSERVER_KDRIVE_EPHYR_GLAMOR_H */

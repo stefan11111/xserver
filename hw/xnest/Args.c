@@ -17,7 +17,7 @@ is" without express or implied warranty.
 #include <X11/Xdefs.h>
 #include <X11/Xproto.h>
 
-#include "miext/extinit_priv.h"
+#include "include/extinit_priv.h"
 #include "os/ddx_priv.h"
 
 #include "screenint.h"
@@ -27,26 +27,30 @@ is" without express or implied warranty.
 #include "servermd.h"
 #include "extinit.h"
 
-#include "xnest-xcb.h"
+#include "Xnest.h"
 
 #include "Display.h"
 #include "Args.h"
 
 char *xnestDisplayName = NULL;
+Bool xnestSynchronize = FALSE;
 Bool xnestFullGeneration = FALSE;
 int xnestDefaultClass;
 Bool xnestUserDefaultClass = FALSE;
 int xnestDefaultDepth;
 Bool xnestUserDefaultDepth = FALSE;
 Bool xnestSoftwareScreenSaver = FALSE;
-xRectangle xnestGeometry = { 0 };
+int xnestX;
+int xnestY;
+unsigned int xnestWidth;
+unsigned int xnestHeight;
 int xnestUserGeometry = 0;
 int xnestBorderWidth;
 Bool xnestUserBorderWidth = FALSE;
 char *xnestWindowName = NULL;
 int xnestNumScreens = 0;
 Bool xnestDoDirectColormaps = FALSE;
-xcb_window_t xnestParentWindow = 0;
+Window xnestParentWindow = 0;
 
 int
 ddxProcessArgument(int argc, char *argv[], int i)
@@ -56,7 +60,9 @@ ddxProcessArgument(int argc, char *argv[], int i)
     noMITShmExtension = TRUE;
 #endif
 
+#ifdef COMPOSITE
     noCompositeExtension = TRUE;
+#endif
 
 #ifdef DPMSExtension
     noDPMSExtension = TRUE;
@@ -68,6 +74,10 @@ ddxProcessArgument(int argc, char *argv[], int i)
             return 2;
         }
         return 0;
+    }
+    if (!strcmp(argv[i], "-sync")) {
+        xnestSynchronize = TRUE;
+        return 1;
     }
     if (!strcmp(argv[i], "-full")) {
         xnestFullGeneration = TRUE;
@@ -132,7 +142,10 @@ ddxProcessArgument(int argc, char *argv[], int i)
     }
     if (!strcmp(argv[i], "-geometry")) {
         if (++i < argc) {
-            if (xnest_parse_geometry(argv[i], &xnestGeometry))
+            xnestUserGeometry = XParseGeometry(argv[i],
+                                               &xnestX, &xnestY,
+                                               &xnestWidth, &xnestHeight);
+            if (xnestUserGeometry)
                 return 2;
         }
         return 0;
@@ -182,6 +195,7 @@ void
 ddxUseMsg(void)
 {
     ErrorF("-display string        display name of the real server\n");
+    ErrorF("-sync                  sinchronize with the real server\n");
     ErrorF("-full                  utilize full regeneration\n");
     ErrorF("-class string          default visual class\n");
     ErrorF("-depth int             default depth\n");

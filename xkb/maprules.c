@@ -41,7 +41,6 @@
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
 
-#include "os/log_priv.h"
 #include "xkb/xkbrules_priv.h"
 
 #include "misc.h"
@@ -94,9 +93,7 @@ InputLineAddChar(InputLine * line, int ch)
 {
     if (line->num_line >= line->sz_line) {
         if (line->line == line->buf) {
-            line->line = calloc(line->sz_line, 2);
-            if (line->line == NULL)
-                return -1;
+            line->line = xallocarray(line->sz_line, 2);
             memcpy(line->line, line->buf, line->sz_line);
         }
         else {
@@ -382,7 +379,7 @@ CheckLine(InputLine * line,
     _Xstrtokparams strtok_buf;
     Bool append = FALSE;
 
-    if (line && line->line && line->line[0] == '!') {
+    if (line->line[0] == '!') {
         if (line->line[1] == '$' ||
             (line->line[1] == ' ' && line->line[2] == '$')) {
             char *gname = strchr(line->line, '$');
@@ -794,7 +791,7 @@ XkbRF_SubstituteVars(char *name, XkbRF_MultiDefsPtr mdefs)
         }
         str = index(&str[0], '%');
     }
-    name = calloc(1, len + 1);
+    name = malloc(len + 1);
     str = orig;
     outstr = name;
     while (*str != '\0') {
@@ -898,14 +895,12 @@ XkbRF_AddRule(XkbRF_RulesPtr rules)
     if (rules->sz_rules < 1) {
         rules->sz_rules = 16;
         rules->num_rules = 0;
-        if (!(rules->rules = calloc(rules->sz_rules, sizeof(XkbRF_RuleRec))))
-            return NULL;
+        rules->rules = calloc(rules->sz_rules, sizeof(XkbRF_RuleRec));
     }
     else if (rules->num_rules >= rules->sz_rules) {
         rules->sz_rules *= 2;
-        if (!(rules->rules = reallocarray(rules->rules,
-                                    rules->sz_rules, sizeof(XkbRF_RuleRec))))
-            return NULL;
+        rules->rules = reallocarray(rules->rules,
+                                    rules->sz_rules, sizeof(XkbRF_RuleRec));
     }
     if (!rules->rules) {
         rules->sz_rules = rules->num_rules = 0;
@@ -922,14 +917,12 @@ XkbRF_AddGroup(XkbRF_RulesPtr rules)
     if (rules->sz_groups < 1) {
         rules->sz_groups = 16;
         rules->num_groups = 0;
-        if (!(rules->groups = calloc(rules->sz_groups, sizeof(XkbRF_GroupRec))))
-            return NULL;
+        rules->groups = calloc(rules->sz_groups, sizeof(XkbRF_GroupRec));
     }
     else if (rules->num_groups >= rules->sz_groups) {
         rules->sz_groups *= 2;
-        if (!(rules->groups = reallocarray(rules->groups,
-                                     rules->sz_groups, sizeof(XkbRF_GroupRec))))
-            return NULL;
+        rules->groups = reallocarray(rules->groups,
+                                     rules->sz_groups, sizeof(XkbRF_GroupRec));
     }
     if (!rules->groups) {
         rules->sz_groups = rules->num_groups = 0;

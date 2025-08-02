@@ -26,7 +26,6 @@
  * 	original author is Chris Wilson at sna.
  *
  */
-#include <dix-config.h>
 
 #include "glamor_priv.h"
 #include "mipict.h"
@@ -58,7 +57,7 @@ _pixman_region_init_clipped_rectangles(pixman_region16_t * region,
     unsigned int i, j;
 
     if (num_rects > ARRAY_SIZE(stack_boxes)) {
-        boxes = calloc(num_rects, sizeof(pixman_box16_t));
+        boxes = xallocarray(num_rects, sizeof(pixman_box16_t));
         if (boxes == NULL)
             return FALSE;
     }

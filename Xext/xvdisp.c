@@ -32,8 +32,6 @@ SOFTWARE.
 
 #include "dix/dix_priv.h"
 #include "Xext/xvdix_priv.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
 
 #include "misc.h"
 #include "scrnintstr.h"
@@ -51,15 +49,257 @@ SOFTWARE.
 #include "xvdisp.h"
 
 #ifdef XINERAMA
+#include "panoramiX.h"
+#include "panoramiXsrv.h"
+
 unsigned long XvXRTPort;
 #endif /* XINERAMA */
 
 static int
+SWriteQueryExtensionReply(ClientPtr client, xvQueryExtensionReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->version);
+    swaps(&rep->revision);
+
+    WriteToClient(client, sz_xvQueryExtensionReply, rep);
+
+    return Success;
+}
+
+static int
+SWriteQueryAdaptorsReply(ClientPtr client, xvQueryAdaptorsReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->num_adaptors);
+
+    WriteToClient(client, sz_xvQueryAdaptorsReply, rep);
+
+    return Success;
+}
+
+static int
+SWriteQueryEncodingsReply(ClientPtr client, xvQueryEncodingsReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->num_encodings);
+
+    WriteToClient(client, sz_xvQueryEncodingsReply, rep);
+
+    return Success;
+}
+
+static int
+SWriteAdaptorInfo(ClientPtr client, xvAdaptorInfo * pAdaptor)
+{
+    swapl(&pAdaptor->base_id);
+    swaps(&pAdaptor->name_size);
+    swaps(&pAdaptor->num_ports);
+    swaps(&pAdaptor->num_formats);
+
+    WriteToClient(client, sz_xvAdaptorInfo, pAdaptor);
+
+    return Success;
+}
+
+static int
+SWriteEncodingInfo(ClientPtr client, xvEncodingInfo * pEncoding)
+{
+
+    swapl(&pEncoding->encoding);
+    swaps(&pEncoding->name_size);
+    swaps(&pEncoding->width);
+    swaps(&pEncoding->height);
+    swapl(&pEncoding->rate.numerator);
+    swapl(&pEncoding->rate.denominator);
+    WriteToClient(client, sz_xvEncodingInfo, pEncoding);
+
+    return Success;
+}
+
+static int
+SWriteFormat(ClientPtr client, xvFormat * pFormat)
+{
+    swapl(&pFormat->visual);
+    WriteToClient(client, sz_xvFormat, pFormat);
+
+    return Success;
+}
+
+static int
+SWriteAttributeInfo(ClientPtr client, xvAttributeInfo * pAtt)
+{
+    swapl(&pAtt->flags);
+    swapl(&pAtt->size);
+    swapl(&pAtt->min);
+    swapl(&pAtt->max);
+    WriteToClient(client, sz_xvAttributeInfo, pAtt);
+
+    return Success;
+}
+
+static int
+SWriteImageFormatInfo(ClientPtr client, xvImageFormatInfo * pImage)
+{
+    swapl(&pImage->id);
+    swapl(&pImage->red_mask);
+    swapl(&pImage->green_mask);
+    swapl(&pImage->blue_mask);
+    swapl(&pImage->y_sample_bits);
+    swapl(&pImage->u_sample_bits);
+    swapl(&pImage->v_sample_bits);
+    swapl(&pImage->horz_y_period);
+    swapl(&pImage->horz_u_period);
+    swapl(&pImage->horz_v_period);
+    swapl(&pImage->vert_y_period);
+    swapl(&pImage->vert_u_period);
+    swapl(&pImage->vert_v_period);
+
+    WriteToClient(client, sz_xvImageFormatInfo, pImage);
+
+    return Success;
+}
+
+static int
+SWriteGrabPortReply(ClientPtr client, xvGrabPortReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+
+    WriteToClient(client, sz_xvGrabPortReply, rep);
+
+    return Success;
+}
+
+static int
+SWriteGetPortAttributeReply(ClientPtr client, xvGetPortAttributeReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swapl(&rep->value);
+
+    WriteToClient(client, sz_xvGetPortAttributeReply, rep);
+
+    return Success;
+}
+
+static int
+SWriteQueryBestSizeReply(ClientPtr client, xvQueryBestSizeReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->actual_width);
+    swaps(&rep->actual_height);
+
+    WriteToClient(client, sz_xvQueryBestSizeReply, rep);
+
+    return Success;
+}
+
+static int
+SWriteQueryPortAttributesReply(ClientPtr client,
+                               xvQueryPortAttributesReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swapl(&rep->num_attributes);
+    swapl(&rep->text_size);
+
+    WriteToClient(client, sz_xvQueryPortAttributesReply, rep);
+
+    return Success;
+}
+
+static int
+SWriteQueryImageAttributesReply(ClientPtr client,
+                                xvQueryImageAttributesReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swapl(&rep->num_planes);
+    swapl(&rep->data_size);
+    swaps(&rep->width);
+    swaps(&rep->height);
+
+    WriteToClient(client, sz_xvQueryImageAttributesReply, rep);
+
+    return Success;
+}
+
+static int
+SWriteListImageFormatsReply(ClientPtr client, xvListImageFormatsReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swapl(&rep->num_formats);
+
+    WriteToClient(client, sz_xvListImageFormatsReply, rep);
+
+    return Success;
+}
+
+#define _WriteQueryAdaptorsReply(_c,_d) \
+  if ((_c)->swapped) SWriteQueryAdaptorsReply(_c, _d); \
+  else WriteToClient(_c, sz_xvQueryAdaptorsReply, _d)
+
+#define _WriteQueryExtensionReply(_c,_d) \
+  if ((_c)->swapped) SWriteQueryExtensionReply(_c, _d); \
+  else WriteToClient(_c, sz_xvQueryExtensionReply, _d)
+
+#define _WriteQueryEncodingsReply(_c,_d) \
+  if ((_c)->swapped) SWriteQueryEncodingsReply(_c, _d); \
+  else WriteToClient(_c, sz_xvQueryEncodingsReply, _d)
+
+#define _WriteAdaptorInfo(_c,_d) \
+  if ((_c)->swapped) SWriteAdaptorInfo(_c, _d); \
+  else WriteToClient(_c, sz_xvAdaptorInfo, _d)
+
+#define _WriteAttributeInfo(_c,_d) \
+  if ((_c)->swapped) SWriteAttributeInfo(_c, _d); \
+  else WriteToClient(_c, sz_xvAttributeInfo, _d)
+
+#define _WriteEncodingInfo(_c,_d) \
+  if ((_c)->swapped) SWriteEncodingInfo(_c, _d); \
+  else WriteToClient(_c, sz_xvEncodingInfo, _d)
+
+#define _WriteFormat(_c,_d) \
+  if ((_c)->swapped) SWriteFormat(_c, _d); \
+  else WriteToClient(_c, sz_xvFormat, _d)
+
+#define _WriteGrabPortReply(_c,_d) \
+  if ((_c)->swapped) SWriteGrabPortReply(_c, _d); \
+  else WriteToClient(_c, sz_xvGrabPortReply, _d)
+
+#define _WriteGetPortAttributeReply(_c,_d) \
+  if ((_c)->swapped) SWriteGetPortAttributeReply(_c, _d); \
+  else WriteToClient(_c, sz_xvGetPortAttributeReply, _d)
+
+#define _WriteQueryBestSizeReply(_c,_d) \
+  if ((_c)->swapped) SWriteQueryBestSizeReply(_c, _d); \
+  else WriteToClient(_c, sz_xvQueryBestSizeReply, _d)
+
+#define _WriteQueryPortAttributesReply(_c,_d) \
+  if ((_c)->swapped) SWriteQueryPortAttributesReply(_c, _d); \
+  else WriteToClient(_c, sz_xvQueryPortAttributesReply, _d)
+
+#define _WriteQueryImageAttributesReply(_c,_d) \
+  if ((_c)->swapped) SWriteQueryImageAttributesReply(_c, _d); \
+  else WriteToClient(_c, sz_xvQueryImageAttributesReply, _d)
+
+#define _WriteListImageFormatsReply(_c,_d) \
+  if ((_c)->swapped) SWriteListImageFormatsReply(_c, _d); \
+  else WriteToClient(_c, sz_xvListImageFormatsReply, _d)
+
+#define _WriteImageFormatInfo(_c,_d) \
+  if ((_c)->swapped) SWriteImageFormatInfo(_c, _d); \
+  else WriteToClient(_c, sz_xvImageFormatInfo, _d)
+
+static int
 ProcXvQueryExtension(ClientPtr client)
 {
-    /* REQUEST(xvQueryExtensionReq); */
-    REQUEST_SIZE_MATCH(xvQueryExtensionReq);
-
     xvQueryExtensionReply rep = {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
@@ -68,20 +308,20 @@ ProcXvQueryExtension(ClientPtr client)
         .revision = XvRevision
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.version);
-        swaps(&rep.revision);
-    }
+    /* REQUEST(xvQueryExtensionReq); */
+    REQUEST_SIZE_MATCH(xvQueryExtensionReq);
 
-    WriteToClient(client, sizeof(rep), &rep);
+    _WriteQueryExtensionReply(client, &rep);
+
     return Success;
 }
 
 static int
 ProcXvQueryAdaptors(ClientPtr client)
 {
+    xvFormat format;
+    xvAdaptorInfo ainfo;
+    xvQueryAdaptorsReply rep;
     int totalSize, na, nf, rc;
     int nameSize;
     XvAdaptorPtr pa;
@@ -97,21 +337,27 @@ ProcXvQueryAdaptors(ClientPtr client)
     if (rc != Success)
         return rc;
 
-    xvQueryAdaptorsReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-    };
-
     pScreen = pWin->drawable.pScreen;
     pxvs = (XvScreenPtr) dixLookupPrivate(&pScreen->devPrivates,
                                           XvGetScreenKey());
     if (!pxvs) {
-        if (client->swapped) swaps(&rep.sequenceNumber);
-        WriteToClient(client, sizeof(rep), &rep);
+        rep = (xvQueryAdaptorsReply) {
+            .type = X_Reply,
+            .sequenceNumber = client->sequence,
+            .length = 0,
+            .num_adaptors = 0
+        };
+
+        _WriteQueryAdaptorsReply(client, &rep);
+
         return Success;
     }
 
-    rep.num_adaptors = pxvs->nAdaptors;
+    rep = (xvQueryAdaptorsReply) {
+        .type = X_Reply,
+        .sequenceNumber = client->sequence,
+        .num_adaptors = pxvs->nAdaptors
+    };
 
     /* CALCULATE THE TOTAL SIZE OF THE REPLY IN BYTES */
 
@@ -129,51 +375,33 @@ ProcXvQueryAdaptors(ClientPtr client)
 
     rep.length = bytes_to_int32(totalSize);
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.num_adaptors);
-    }
-    WriteToClient(client, sizeof(rep), &rep);
+    _WriteQueryAdaptorsReply(client, &rep);
 
     na = pxvs->nAdaptors;
     pa = pxvs->pAdaptors;
     while (na--) {
-        xvAdaptorInfo ainfo = {
-            ainfo.base_id = pa->base_id,
-            ainfo.num_ports = pa->nPorts,
-            ainfo.type = pa->type,
-            ainfo.name_size = nameSize = strlen(pa->name),
-            ainfo.num_formats = pa->nFormats,
-        };
 
-        if (client->swapped) {
-            swapl(&ainfo.base_id);
-            swaps(&ainfo.name_size);
-            swaps(&ainfo.num_ports);
-            swaps(&ainfo.num_formats);
-        }
+        ainfo.base_id = pa->base_id;
+        ainfo.num_ports = pa->nPorts;
+        ainfo.type = pa->type;
+        ainfo.name_size = nameSize = strlen(pa->name);
+        ainfo.num_formats = pa->nFormats;
 
-        WriteToClient(client, sz_xvAdaptorInfo, &ainfo);
+        _WriteAdaptorInfo(client, &ainfo);
+
         WriteToClient(client, nameSize, pa->name);
 
         nf = pa->nFormats;
         pf = pa->pFormats;
         while (nf--) {
-            xvFormat format = {
-                .depth = pf->depth,
-                .visual = pf->visual
-            };
-
-            if (client->swapped)
-                swapl(&format.visual);
-
-            WriteToClient(client, sz_xvFormat, &format);
-
+            format.depth = pf->depth;
+            format.visual = pf->visual;
+            _WriteFormat(client, &format);
             pf++;
         }
 
         pa++;
+
     }
 
     return Success;
@@ -182,6 +410,8 @@ ProcXvQueryAdaptors(ClientPtr client)
 static int
 ProcXvQueryEncodings(ClientPtr client)
 {
+    xvEncodingInfo einfo;
+    xvQueryEncodingsReply rep;
     int totalSize;
     int nameSize;
     XvPortPtr pPort;
@@ -193,6 +423,12 @@ ProcXvQueryEncodings(ClientPtr client)
 
     VALIDATE_XV_PORT(stuff->port, pPort, DixReadAccess);
 
+    rep = (xvQueryEncodingsReply) {
+        .type = X_Reply,
+        .sequenceNumber = client->sequence,
+        .num_encodings = pPort->pAdaptor->nEncodings
+    };
+
     /* FOR EACH ENCODING ADD UP THE BYTES FOR ENCODING NAMES */
 
     ne = pPort->pAdaptor->nEncodings;
@@ -203,41 +439,20 @@ ProcXvQueryEncodings(ClientPtr client)
         pe++;
     }
 
-    xvQueryEncodingsReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .num_encodings = pPort->pAdaptor->nEncodings,
-        .length = bytes_to_int32(totalSize),
-    };
+    rep.length = bytes_to_int32(totalSize);
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.num_encodings);
-    }
-
-    WriteToClient(client, sizeof(rep), &rep);
+    _WriteQueryEncodingsReply(client, &rep);
 
     ne = pPort->pAdaptor->nEncodings;
     pe = pPort->pAdaptor->pEncodings;
     while (ne--) {
-        xvEncodingInfo einfo = { 0 };
         einfo.encoding = pe->id;
         einfo.name_size = nameSize = strlen(pe->name);
         einfo.width = pe->width;
         einfo.height = pe->height;
         einfo.rate.numerator = pe->rate.numerator;
         einfo.rate.denominator = pe->rate.denominator;
-
-        if (client->swapped) {
-            swapl(&einfo.encoding);
-            swaps(&einfo.name_size);
-            swaps(&einfo.width);
-            swaps(&einfo.height);
-            swapl(&einfo.rate.numerator);
-            swapl(&einfo.rate.denominator);
-        }
-        WriteToClient(client, sz_xvEncodingInfo, &einfo);
+        _WriteEncodingInfo(client, &einfo);
         WriteToClient(client, nameSize, pe->name);
         pe++;
     }
@@ -246,7 +461,7 @@ ProcXvQueryEncodings(ClientPtr client)
 }
 
 static int
-SingleXvPutVideo(ClientPtr client)
+ProcXvPutVideo(ClientPtr client)
 {
     DrawablePtr pDraw;
     XvPortPtr pPort;
@@ -275,20 +490,8 @@ SingleXvPutVideo(ClientPtr client)
                         stuff->drw_w, stuff->drw_h);
 }
 
-static int XineramaXvPutVideo(ClientPtr client);
-
 static int
-ProcXvPutVideo(ClientPtr client)
-{
-#ifdef XINERAMA
-    if (xvUseXinerama)
-        return XineramaXvPutVideo(client);
-#endif
-    return SingleXvPutVideo(client);
-}
-
-static int
-SingleXvPutStill(ClientPtr client)
+ProcXvPutStill(ClientPtr client)
 {
     DrawablePtr pDraw;
     XvPortPtr pPort;
@@ -315,18 +518,6 @@ SingleXvPutStill(ClientPtr client)
     return XvdiPutStill(client, pDraw, pPort, pGC, stuff->vid_x, stuff->vid_y,
                         stuff->vid_w, stuff->vid_h, stuff->drw_x, stuff->drw_y,
                         stuff->drw_w, stuff->drw_h);
-}
-
-static int XineramaXvPutStill(ClientPtr client);
-
-static int
-ProcXvPutStill(ClientPtr client)
-{
-#ifdef XINERAMA
-    if (xvUseXinerama)
-        return XineramaXvPutStill(client);
-#endif
-    return SingleXvPutStill(client);
 }
 
 static int
@@ -424,6 +615,7 @@ ProcXvGrabPort(ClientPtr client)
 {
     int result, status;
     XvPortPtr pPort;
+    xvGrabPortReply rep;
 
     REQUEST(xvGrabPortReq);
     REQUEST_SIZE_MATCH(xvGrabPortReq);
@@ -435,18 +627,14 @@ ProcXvGrabPort(ClientPtr client)
     if (status != Success) {
         return status;
     }
-    xvGrabPortReply rep = {
+    rep = (xvGrabPortReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
+        .length = 0,
         .result = result
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-    }
-
-    WriteToClient(client, sz_xvGrabPortReply, &rep);
+    _WriteGrabPortReply(client, &rep);
 
     return Success;
 }
@@ -465,7 +653,7 @@ ProcXvUngrabPort(ClientPtr client)
 }
 
 static int
-SingleXvStopVideo(ClientPtr client)
+ProcXvStopVideo(ClientPtr client)
 {
     int ret;
     DrawablePtr pDraw;
@@ -483,20 +671,8 @@ SingleXvStopVideo(ClientPtr client)
     return XvdiStopVideo(client, pPort, pDraw);
 }
 
-static int XineramaXvStopVideo(ClientPtr client);
-
 static int
-ProcXvStopVideo(ClientPtr client)
-{
-#ifdef XINERAMA
-    if (xvUseXinerama)
-        return XineramaXvStopVideo(client);
-#endif
-    return SingleXvStopVideo(client);
-}
-
-static int
-SingleXvSetPortAttribute(ClientPtr client)
+ProcXvSetPortAttribute(ClientPtr client)
 {
     int status;
     XvPortPtr pPort;
@@ -522,24 +698,13 @@ SingleXvSetPortAttribute(ClientPtr client)
     return status;
 }
 
-static int XineramaXvSetPortAttribute(ClientPtr client);
-
-static int
-ProcXvSetPortAttribute(ClientPtr client)
-{
-#ifdef XINERAMA
-    if (xvUseXinerama)
-        return XineramaXvSetPortAttribute(client);
-#endif
-    return SingleXvSetPortAttribute(client);
-}
-
 static int
 ProcXvGetPortAttribute(ClientPtr client)
 {
     INT32 value;
     int status;
     XvPortPtr pPort;
+    xvGetPortAttributeReply rep;
 
     REQUEST(xvGetPortAttributeReq);
     REQUEST_SIZE_MATCH(xvGetPortAttributeReq);
@@ -557,19 +722,15 @@ ProcXvGetPortAttribute(ClientPtr client)
         return status;
     }
 
-    xvGetPortAttributeReply rep = {
+    rep = (xvGetPortAttributeReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
+        .length = 0,
         .value = value
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swapl(&rep.value);
-    }
+    _WriteGetPortAttributeReply(client, &rep);
 
-    WriteToClient(client, sz_xvGetPortAttributeReply, &rep);
     return Success;
 }
 
@@ -578,6 +739,7 @@ ProcXvQueryBestSize(ClientPtr client)
 {
     unsigned int actual_width, actual_height;
     XvPortPtr pPort;
+    xvQueryBestSizeReply rep;
 
     REQUEST(xvQueryBestSizeReq);
     REQUEST_SIZE_MATCH(xvQueryBestSizeReq);
@@ -589,21 +751,16 @@ ProcXvQueryBestSize(ClientPtr client)
                                          stuff->drw_w, stuff->drw_h,
                                          &actual_width, &actual_height);
 
-    xvQueryBestSizeReply rep = {
+    rep = (xvQueryBestSizeReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
+        .length = 0,
         .actual_width = actual_width,
         .actual_height = actual_height
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.actual_width);
-        swaps(&rep.actual_height);
-    }
+    _WriteQueryBestSizeReply(client, &rep);
 
-    WriteToClient(client, sz_xvQueryBestSizeReply, &rep);
     return Success;
 }
 
@@ -613,16 +770,19 @@ ProcXvQueryPortAttributes(ClientPtr client)
     int size, i;
     XvPortPtr pPort;
     XvAttributePtr pAtt;
+    xvQueryPortAttributesReply rep;
+    xvAttributeInfo Info;
 
     REQUEST(xvQueryPortAttributesReq);
     REQUEST_SIZE_MATCH(xvQueryPortAttributesReq);
 
     VALIDATE_XV_PORT(stuff->port, pPort, DixGetAttrAccess);
 
-    xvQueryPortAttributesReply rep = {
+    rep = (xvQueryPortAttributesReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
         .num_attributes = pPort->pAdaptor->nAttributes,
+        .text_size = 0
     };
 
     for (i = 0, pAtt = pPort->pAdaptor->pAttributes;
@@ -634,33 +794,18 @@ ProcXvQueryPortAttributes(ClientPtr client)
         + rep.text_size;
     rep.length >>= 2;
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swapl(&rep.num_attributes);
-        swapl(&rep.text_size);
-    }
-
-    WriteToClient(client, sz_xvQueryPortAttributesReply, &rep);
+    _WriteQueryPortAttributesReply(client, &rep);
 
     for (i = 0, pAtt = pPort->pAdaptor->pAttributes;
          i < pPort->pAdaptor->nAttributes; i++, pAtt++) {
         size = strlen(pAtt->name) + 1;  /* pass the NULL */
-        xvAttributeInfo Info = {
-            .flags = pAtt->flags,
-            .min = pAtt->min_value,
-            .max = pAtt->max_value,
-            .size = pad_to_int32(size)
-        };
+        Info.flags = pAtt->flags;
+        Info.min = pAtt->min_value;
+        Info.max = pAtt->max_value;
+        Info.size = pad_to_int32(size);
 
-        if (client->swapped) {
-            swapl(&Info.flags);
-            swapl(&Info.size);
-            swapl(&Info.min);
-            swapl(&Info.max);
-        }
+        _WriteAttributeInfo(client, &Info);
 
-        WriteToClient(client, sz_xvAttributeInfo, &Info);
         WriteToClient(client, size, pAtt->name);
     }
 
@@ -668,7 +813,7 @@ ProcXvQueryPortAttributes(ClientPtr client)
 }
 
 static int
-SingleXvPutImage(ClientPtr client)
+ProcXvPutImage(ClientPtr client)
 {
     DrawablePtr pDraw;
     XvPortPtr pPort;
@@ -724,23 +869,10 @@ SingleXvPutImage(ClientPtr client)
                         stuff->width, stuff->height);
 }
 
-static int
-XineramaXvPutImage(ClientPtr client);
-
-static int
-ProcXvPutImage(ClientPtr client)
-{
-#ifdef XINERAMA
-    if (xvUseXinerama)
-        return XineramaXvPutImage(client);
-#endif
-    return SingleXvPutImage(client);
-}
-
 #ifdef MITSHM
 
 static int
-SingleXvShmPutImage(ClientPtr client)
+ProcXvShmPutImage(ClientPtr client)
 {
     ShmDescPtr shmdesc;
     DrawablePtr pDraw;
@@ -813,24 +945,13 @@ SingleXvShmPutImage(ClientPtr client)
 
     return status;
 }
-
-static int XineramaXvShmPutImage(ClientPtr client);
-
-#endif /* MITSHM */
-
+#else                           /* !MITSHM */
 static int
 ProcXvShmPutImage(ClientPtr client)
 {
-#ifdef MITSHM
-#ifdef XINERAMA
-    if (xvUseXinerama)
-        return XineramaXvShmPutImage(client);
-#endif
-    return SingleXvShmPutImage(client);
-#else
     return BadImplementation;
-#endif
 }
+#endif
 
 #ifdef XvMCExtension
 #include "xvmcext.h"
@@ -844,8 +965,9 @@ ProcXvQueryImageAttributes(ClientPtr client)
     CARD16 width, height;
     XvImagePtr pImage = NULL;
     XvPortPtr pPort;
-    int32_t *offsets;
-    int32_t *pitches;
+    int *offsets;
+    int *pitches;
+    int planeLength;
 
     REQUEST(xvQueryImageAttributesReq);
 
@@ -870,9 +992,7 @@ ProcXvQueryImageAttributes(ClientPtr client)
 
     num_planes = pImage->num_planes;
 
-    // allocating for `offsets` as well as `pitches` in one block
-    // both having CARD32 * num_planes (actually int32_t put into CARD32)
-    if (!(offsets = calloc(num_planes*2, sizeof(CARD32))))
+    if (!(offsets = malloc(num_planes << 3)))
         return BadAlloc;
     pitches = offsets + num_planes;
 
@@ -886,26 +1006,20 @@ ProcXvQueryImageAttributes(ClientPtr client)
     rep = (xvQueryImageAttributesReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
-        .length = num_planes * 2, // in 32bit units
+        .length = planeLength = num_planes << 1,
         .num_planes = num_planes,
         .width = width,
         .height = height,
         .data_size = size
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swapl(&rep.num_planes);
-        swapl(&rep.data_size);
-        swaps(&rep.width);
-        swaps(&rep.height);
-        SwapLongs((CARD32 *) offsets, rep.length);
-    }
+    _WriteQueryImageAttributesReply(client, &rep);
+    if (client->swapped)
+        SwapLongs((CARD32 *) offsets, planeLength);
+    WriteToClient(client, planeLength << 2, offsets);
 
-    WriteToClient(client, sz_xvQueryImageAttributesReply, &rep);
-    WriteToClient(client, rep.length * sizeof(CARD32), offsets);
     free(offsets);
+
     return Success;
 }
 
@@ -915,6 +1029,8 @@ ProcXvListImageFormats(ClientPtr client)
     XvPortPtr pPort;
     XvImagePtr pImage;
     int i;
+    xvListImageFormatsReply rep;
+    xvImageFormatInfo info;
 
     REQUEST(xvListImageFormatsReq);
 
@@ -922,7 +1038,7 @@ ProcXvListImageFormats(ClientPtr client)
 
     VALIDATE_XV_PORT(stuff->port, pPort, DixReadAccess);
 
-    xvListImageFormatsReply rep = {
+    rep = (xvListImageFormatsReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
         .num_formats = pPort->pAdaptor->nImages,
@@ -930,18 +1046,11 @@ ProcXvListImageFormats(ClientPtr client)
             bytes_to_int32(pPort->pAdaptor->nImages * sz_xvImageFormatInfo)
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swapl(&rep.num_formats);
-    }
-
-    WriteToClient(client, sz_xvListImageFormatsReply, &rep);
+    _WriteListImageFormatsReply(client, &rep);
 
     pImage = pPort->pAdaptor->pImages;
 
     for (i = 0; i < pPort->pAdaptor->nImages; i++, pImage++) {
-        xvImageFormatInfo info;
         info.id = pImage->id;
         info.type = pImage->type;
         info.byte_order = pImage->byte_order;
@@ -964,28 +1073,31 @@ ProcXvListImageFormats(ClientPtr client)
         info.vert_v_period = pImage->vert_v_period;
         memcpy(&info.comp_order, pImage->component_order, 32);
         info.scanline_order = pImage->scanline_order;
-
-        if (client->swapped) {
-            swapl(&info.id);
-            swapl(&info.red_mask);
-            swapl(&info.green_mask);
-            swapl(&info.blue_mask);
-            swapl(&info.y_sample_bits);
-            swapl(&info.u_sample_bits);
-            swapl(&info.v_sample_bits);
-            swapl(&info.horz_y_period);
-            swapl(&info.horz_u_period);
-            swapl(&info.horz_v_period);
-            swapl(&info.vert_y_period);
-            swapl(&info.vert_u_period);
-            swapl(&info.vert_v_period);
-        }
-
-        WriteToClient(client, sz_xvImageFormatInfo, &info);
+        _WriteImageFormatInfo(client, &info);
     }
 
     return Success;
 }
+
+static int (*XvProcVector[xvNumRequests]) (ClientPtr) = {
+ProcXvQueryExtension,
+        ProcXvQueryAdaptors,
+        ProcXvQueryEncodings,
+        ProcXvGrabPort,
+        ProcXvUngrabPort,
+        ProcXvPutVideo,
+        ProcXvPutStill,
+        ProcXvGetVideo,
+        ProcXvGetStill,
+        ProcXvStopVideo,
+        ProcXvSelectVideoNotify,
+        ProcXvSelectPortNotify,
+        ProcXvQueryBestSize,
+        ProcXvSetPortAttribute,
+        ProcXvGetPortAttribute,
+        ProcXvQueryPortAttributes,
+        ProcXvListImageFormats,
+        ProcXvQueryImageAttributes, ProcXvPutImage, ProcXvShmPutImage,};
 
 int
 ProcXvDispatch(ClientPtr client)
@@ -994,50 +1106,11 @@ ProcXvDispatch(ClientPtr client)
 
     UpdateCurrentTime();
 
-    switch (stuff->data) {
-        case xv_QueryExtension:
-            return ProcXvQueryExtension(client);
-        case xv_QueryAdaptors:
-            return ProcXvQueryAdaptors(client);
-        case xv_QueryEncodings:
-            return ProcXvQueryEncodings(client);
-        case xv_GrabPort:
-            return ProcXvGrabPort(client);
-        case xv_UngrabPort:
-            return ProcXvUngrabPort(client);
-        case xv_PutVideo:
-            return ProcXvPutVideo(client);
-        case xv_PutStill:
-            return ProcXvPutStill(client);
-        case xv_GetVideo:
-            return ProcXvGetVideo(client);
-        case xv_GetStill:
-            return ProcXvGetStill(client);
-        case xv_StopVideo:
-            return ProcXvStopVideo(client);
-        case xv_SelectVideoNotify:
-            return ProcXvSelectVideoNotify(client);
-        case xv_SelectPortNotify:
-            return ProcXvSelectPortNotify(client);
-        case xv_QueryBestSize:
-            return ProcXvQueryBestSize(client);
-        case xv_SetPortAttribute:
-            return ProcXvSetPortAttribute(client);
-        case xv_GetPortAttribute:
-            return ProcXvGetPortAttribute(client);
-        case xv_QueryPortAttributes:
-            return ProcXvQueryPortAttributes(client);
-        case xv_ListImageFormats:
-            return ProcXvListImageFormats(client);
-        case xv_QueryImageAttributes:
-            return ProcXvQueryImageAttributes(client);
-        case xv_PutImage:
-            return ProcXvPutImage(client);
-        case xv_ShmPutImage:
-            return ProcXvShmPutImage(client);
-        default:
-            return BadRequest;
+    if (stuff->data >= xvNumRequests) {
+        return BadRequest;
     }
+
+    return XvProcVector[stuff->data] (client);
 }
 
 /* Swapped Procs */
@@ -1048,7 +1121,7 @@ SProcXvQueryAdaptors(ClientPtr client)
     REQUEST(xvQueryAdaptorsReq);
     REQUEST_SIZE_MATCH(xvQueryAdaptorsReq);
     swapl(&stuff->window);
-    return ProcXvQueryAdaptors(client);
+    return XvProcVector[xv_QueryAdaptors] (client);
 }
 
 static int _X_COLD
@@ -1057,7 +1130,7 @@ SProcXvQueryEncodings(ClientPtr client)
     REQUEST(xvQueryEncodingsReq);
     REQUEST_SIZE_MATCH(xvQueryEncodingsReq);
     swapl(&stuff->port);
-    return ProcXvQueryEncodings(client);
+    return XvProcVector[xv_QueryEncodings] (client);
 }
 
 static int _X_COLD
@@ -1067,7 +1140,7 @@ SProcXvGrabPort(ClientPtr client)
     REQUEST_SIZE_MATCH(xvGrabPortReq);
     swapl(&stuff->port);
     swapl(&stuff->time);
-    return ProcXvGrabPort(client);
+    return XvProcVector[xv_GrabPort] (client);
 }
 
 static int _X_COLD
@@ -1077,7 +1150,7 @@ SProcXvUngrabPort(ClientPtr client)
     REQUEST_SIZE_MATCH(xvUngrabPortReq);
     swapl(&stuff->port);
     swapl(&stuff->time);
-    return ProcXvUngrabPort(client);
+    return XvProcVector[xv_UngrabPort] (client);
 }
 
 static int _X_COLD
@@ -1096,7 +1169,7 @@ SProcXvPutVideo(ClientPtr client)
     swaps(&stuff->drw_y);
     swaps(&stuff->drw_w);
     swaps(&stuff->drw_h);
-    return ProcXvPutVideo(client);
+    return XvProcVector[xv_PutVideo] (client);
 }
 
 static int _X_COLD
@@ -1115,7 +1188,7 @@ SProcXvPutStill(ClientPtr client)
     swaps(&stuff->drw_y);
     swaps(&stuff->drw_w);
     swaps(&stuff->drw_h);
-    return ProcXvPutStill(client);
+    return XvProcVector[xv_PutStill] (client);
 }
 
 static int _X_COLD
@@ -1134,7 +1207,7 @@ SProcXvGetVideo(ClientPtr client)
     swaps(&stuff->drw_y);
     swaps(&stuff->drw_w);
     swaps(&stuff->drw_h);
-    return ProcXvGetVideo(client);
+    return XvProcVector[xv_GetVideo] (client);
 }
 
 static int _X_COLD
@@ -1153,7 +1226,7 @@ SProcXvGetStill(ClientPtr client)
     swaps(&stuff->drw_y);
     swaps(&stuff->drw_w);
     swaps(&stuff->drw_h);
-    return ProcXvGetStill(client);
+    return XvProcVector[xv_GetStill] (client);
 }
 
 static int _X_COLD
@@ -1175,7 +1248,7 @@ SProcXvPutImage(ClientPtr client)
     swaps(&stuff->drw_h);
     swaps(&stuff->width);
     swaps(&stuff->height);
-    return ProcXvPutImage(client);
+    return XvProcVector[xv_PutImage] (client);
 }
 
 #ifdef MITSHM
@@ -1200,7 +1273,7 @@ SProcXvShmPutImage(ClientPtr client)
     swaps(&stuff->drw_h);
     swaps(&stuff->width);
     swaps(&stuff->height);
-    return ProcXvShmPutImage(client);
+    return XvProcVector[xv_ShmPutImage] (client);
 }
 #else                           /* MITSHM */
 #define SProcXvShmPutImage ProcXvShmPutImage
@@ -1212,7 +1285,7 @@ SProcXvSelectVideoNotify(ClientPtr client)
     REQUEST(xvSelectVideoNotifyReq);
     REQUEST_SIZE_MATCH(xvSelectVideoNotifyReq);
     swapl(&stuff->drawable);
-    return ProcXvSelectVideoNotify(client);
+    return XvProcVector[xv_SelectVideoNotify] (client);
 }
 
 static int _X_COLD
@@ -1221,7 +1294,7 @@ SProcXvSelectPortNotify(ClientPtr client)
     REQUEST(xvSelectPortNotifyReq);
     REQUEST_SIZE_MATCH(xvSelectPortNotifyReq);
     swapl(&stuff->port);
-    return ProcXvSelectPortNotify(client);
+    return XvProcVector[xv_SelectPortNotify] (client);
 }
 
 static int _X_COLD
@@ -1231,7 +1304,7 @@ SProcXvStopVideo(ClientPtr client)
     REQUEST_SIZE_MATCH(xvStopVideoReq);
     swapl(&stuff->port);
     swapl(&stuff->drawable);
-    return ProcXvStopVideo(client);
+    return XvProcVector[xv_StopVideo] (client);
 }
 
 static int _X_COLD
@@ -1242,7 +1315,7 @@ SProcXvSetPortAttribute(ClientPtr client)
     swapl(&stuff->port);
     swapl(&stuff->attribute);
     swapl(&stuff->value);
-    return ProcXvSetPortAttribute(client);
+    return XvProcVector[xv_SetPortAttribute] (client);
 }
 
 static int _X_COLD
@@ -1252,7 +1325,7 @@ SProcXvGetPortAttribute(ClientPtr client)
     REQUEST_SIZE_MATCH(xvGetPortAttributeReq);
     swapl(&stuff->port);
     swapl(&stuff->attribute);
-    return ProcXvGetPortAttribute(client);
+    return XvProcVector[xv_GetPortAttribute] (client);
 }
 
 static int _X_COLD
@@ -1265,7 +1338,7 @@ SProcXvQueryBestSize(ClientPtr client)
     swaps(&stuff->vid_h);
     swaps(&stuff->drw_w);
     swaps(&stuff->drw_h);
-    return ProcXvQueryBestSize(client);
+    return XvProcVector[xv_QueryBestSize] (client);
 }
 
 static int _X_COLD
@@ -1274,7 +1347,7 @@ SProcXvQueryPortAttributes(ClientPtr client)
     REQUEST(xvQueryPortAttributesReq);
     REQUEST_SIZE_MATCH(xvQueryPortAttributesReq);
     swapl(&stuff->port);
-    return ProcXvQueryPortAttributes(client);
+    return XvProcVector[xv_QueryPortAttributes] (client);
 }
 
 static int _X_COLD
@@ -1286,7 +1359,7 @@ SProcXvQueryImageAttributes(ClientPtr client)
     swapl(&stuff->id);
     swaps(&stuff->width);
     swaps(&stuff->height);
-    return ProcXvQueryImageAttributes(client);
+    return XvProcVector[xv_QueryImageAttributes] (client);
 }
 
 static int _X_COLD
@@ -1295,8 +1368,28 @@ SProcXvListImageFormats(ClientPtr client)
     REQUEST(xvListImageFormatsReq);
     REQUEST_SIZE_MATCH(xvListImageFormatsReq);
     swapl(&stuff->port);
-    return ProcXvListImageFormats(client);
+    return XvProcVector[xv_ListImageFormats] (client);
 }
+
+static int (*SXvProcVector[xvNumRequests]) (ClientPtr) = {
+        ProcXvQueryExtension,
+        SProcXvQueryAdaptors,
+        SProcXvQueryEncodings,
+        SProcXvGrabPort,
+        SProcXvUngrabPort,
+        SProcXvPutVideo,
+        SProcXvPutStill,
+        SProcXvGetVideo,
+        SProcXvGetStill,
+        SProcXvStopVideo,
+        SProcXvSelectVideoNotify,
+        SProcXvSelectPortNotify,
+        SProcXvQueryBestSize,
+        SProcXvSetPortAttribute,
+        SProcXvGetPortAttribute,
+        SProcXvQueryPortAttributes,
+        SProcXvListImageFormats,
+        SProcXvQueryImageAttributes, SProcXvPutImage, SProcXvShmPutImage,};
 
 int _X_COLD
 SProcXvDispatch(ClientPtr client)
@@ -1305,50 +1398,11 @@ SProcXvDispatch(ClientPtr client)
 
     UpdateCurrentTime();
 
-    switch (stuff->data) {
-        case xv_QueryExtension:
-            return ProcXvQueryExtension(client);
-        case xv_QueryAdaptors:
-            return SProcXvQueryAdaptors(client);
-        case xv_QueryEncodings:
-            return SProcXvQueryEncodings(client);
-        case xv_GrabPort:
-            return SProcXvGrabPort(client);
-        case xv_UngrabPort:
-            return SProcXvUngrabPort(client);
-        case xv_PutVideo:
-            return SProcXvPutVideo(client);
-        case xv_PutStill:
-            return SProcXvPutStill(client);
-        case xv_GetVideo:
-            return SProcXvGetVideo(client);
-        case xv_GetStill:
-            return SProcXvGetStill(client);
-        case xv_StopVideo:
-            return SProcXvStopVideo(client);
-        case xv_SelectVideoNotify:
-            return SProcXvSelectVideoNotify(client);
-        case xv_SelectPortNotify:
-            return SProcXvSelectPortNotify(client);
-        case xv_QueryBestSize:
-            return SProcXvQueryBestSize(client);
-        case xv_SetPortAttribute:
-            return SProcXvSetPortAttribute(client);
-        case xv_GetPortAttribute:
-            return SProcXvGetPortAttribute(client);
-        case xv_QueryPortAttributes:
-            return SProcXvQueryPortAttributes(client);
-        case xv_ListImageFormats:
-            return SProcXvListImageFormats(client);
-        case xv_QueryImageAttributes:
-            return SProcXvQueryImageAttributes(client);
-        case xv_PutImage:
-            return SProcXvPutImage(client);
-        case xv_ShmPutImage:
-            return SProcXvShmPutImage(client);
-        default:
-            return BadRequest;
+    if (stuff->data >= xvNumRequests) {
+        return BadRequest;
     }
+
+    return SXvProcVector[stuff->data] (client);
 }
 
 #ifdef XINERAMA
@@ -1375,7 +1429,7 @@ XineramaXvStopVideo(ClientPtr client)
         if (port->info[i].id) {
             stuff->drawable = draw->info[i].id;
             stuff->port = port->info[i].id;
-            result = SingleXvStopVideo(client);
+            result = ProcXvStopVideo(client);
         }
     }
 
@@ -1399,7 +1453,7 @@ XineramaXvSetPortAttribute(ClientPtr client)
     FOR_NSCREENS_BACKWARD(i) {
         if (port->info[i].id) {
             stuff->port = port->info[i].id;
-            result = SingleXvSetPortAttribute(client);
+            result = ProcXvSetPortAttribute(client);
         }
     }
     return result;
@@ -1452,7 +1506,7 @@ XineramaXvShmPutImage(ClientPtr client)
             }
             stuff->send_event = (send_event && !i) ? 1 : 0;
 
-            result = SingleXvShmPutImage(client);
+            result = ProcXvShmPutImage(client);
         }
     }
     return result;
@@ -1503,7 +1557,7 @@ XineramaXvPutImage(ClientPtr client)
                 stuff->drw_y -= screenInfo.screens[i]->y;
             }
 
-            result = SingleXvPutImage(client);
+            result = ProcXvPutImage(client);
         }
     }
     return result;
@@ -1551,7 +1605,7 @@ XineramaXvPutVideo(ClientPtr client)
                 stuff->drw_y -= screenInfo.screens[i]->y;
             }
 
-            result = SingleXvPutVideo(client);
+            result = ProcXvPutVideo(client);
         }
     }
     return result;
@@ -1599,7 +1653,7 @@ XineramaXvPutStill(ClientPtr client)
                 stuff->drw_y -= screenInfo.screens[i]->y;
             }
 
-            result = SingleXvPutStill(client);
+            result = ProcXvPutStill(client);
         }
     }
     return result;
@@ -1691,12 +1745,12 @@ XineramifyXv(void)
 
         /* now create a resource for each port */
         for (j = 0; j < refAdapt->nPorts; j++) {
-            PanoramiXRes *port = calloc(1, sizeof(PanoramiXRes));
+            PanoramiXRes *port = malloc(sizeof(PanoramiXRes));
 
             if (!port)
                 break;
 
-            FOR_NSCREENS_BACKWARD(k) {
+            FOR_NSCREENS(k) {
                 if (MatchingAdaptors[k] && (MatchingAdaptors[k]->nPorts > j))
                     port->info[k].id = MatchingAdaptors[k]->base_id + j;
                 else
@@ -1706,6 +1760,25 @@ XineramifyXv(void)
         }
     }
 
-    xvUseXinerama = 1;
+    /* munge the dispatch vector */
+    XvProcVector[xv_PutVideo] = XineramaXvPutVideo;
+    XvProcVector[xv_PutStill] = XineramaXvPutStill;
+    XvProcVector[xv_StopVideo] = XineramaXvStopVideo;
+    XvProcVector[xv_SetPortAttribute] = XineramaXvSetPortAttribute;
+    XvProcVector[xv_PutImage] = XineramaXvPutImage;
+    XvProcVector[xv_ShmPutImage] = XineramaXvShmPutImage;
 }
 #endif /* XINERAMA */
+
+void
+XvResetProcVector(void)
+{
+#ifdef XINERAMA
+    XvProcVector[xv_PutVideo] = ProcXvPutVideo;
+    XvProcVector[xv_PutStill] = ProcXvPutStill;
+    XvProcVector[xv_StopVideo] = ProcXvStopVideo;
+    XvProcVector[xv_SetPortAttribute] = ProcXvSetPortAttribute;
+    XvProcVector[xv_PutImage] = ProcXvPutImage;
+    XvProcVector[xv_ShmPutImage] = ProcXvShmPutImage;
+#endif /* XINERAMA */
+}

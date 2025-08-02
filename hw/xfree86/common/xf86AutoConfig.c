@@ -44,7 +44,7 @@
 #include "xf86platformBus.h"
 #include "xf86pciBus.h"
 #ifdef __sparc__
-#include "xf86sbusBus_priv.h"
+#include "xf86sbusBus.h"
 #endif
 
 #ifdef __sun
@@ -324,14 +324,16 @@ listPossibleVideoDrivers(XF86MatchedDrivers *md)
 static Bool
 copyScreen(confScreenPtr oscreen, GDevPtr odev, int i, char *driver)
 {
+    confScreenPtr nscreen;
+    GDevPtr cptr = NULL;
     char *identifier;
 
-    confScreenPtr nscreen = calloc(1, sizeof(confScreenRec));
+    nscreen = malloc(sizeof(confScreenRec));
     if (!nscreen)
         return FALSE;
     memcpy(nscreen, oscreen, sizeof(confScreenRec));
 
-    GDevPtr cptr = calloc(1, sizeof(GDevRec));
+    cptr = malloc(sizeof(GDevRec));
     if (!cptr) {
         free(nscreen);
         return FALSE;

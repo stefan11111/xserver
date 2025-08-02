@@ -29,8 +29,6 @@
 
 #include <dix-config.h>
 
-#include "dix/dix_priv.h"
-
 #include "xpr.h"
 #include "rootlessCommon.h"
 #include <Xplugin.h>
@@ -51,7 +49,7 @@
         static Atom atom;                                           \
         if (generation != serverGeneration) {                       \
             generation = serverGeneration;                          \
-            atom = dixAddAtom(atom_name);                           \
+            atom = MakeAtom(atom_name, strlen(atom_name), TRUE);  \
         }                                                           \
         return atom;                                                \
     }

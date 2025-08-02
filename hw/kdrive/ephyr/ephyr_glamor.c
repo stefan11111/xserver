@@ -144,10 +144,11 @@ ephyr_glamor_build_glsl_prog(GLuint vs, GLuint fs)
     glLinkProgram(prog);
     glGetProgramiv(prog, GL_LINK_STATUS, &ok);
     if (!ok) {
+        GLchar *info;
         GLint size;
 
         glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &size);
-        GLchar *info = calloc(1, size);
+        info = malloc(size);
 
         glGetProgramInfoLog(prog, size, NULL, info);
         ErrorF("Failed to link: %s\n", info);
@@ -351,7 +352,7 @@ ephyr_glamor_screen_init(xcb_window_t win, xcb_visualid_t vid)
 
     glamor = calloc(1, sizeof(struct ephyr_glamor));
     if (!glamor) {
-        FatalError("calloc");
+        FatalError("malloc");
         return NULL;
     }
 

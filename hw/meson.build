@@ -18,6 +18,10 @@ if build_xquartz
     subdir('xquartz')
 endif
 
+if build_xwayland
+    subdir('xwayland')
+endif
+
 if build_xwin
     subdir('xwin')
 endif

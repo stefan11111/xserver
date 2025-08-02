@@ -33,8 +33,6 @@
 
 #include <dix-config.h>
 
-#include "dix/dix_priv.h"
-
 #include "quartzRandR.h"
 #include "inputstr.h"
 #include "quartz.h"
@@ -54,6 +52,7 @@
 // X headers
 #include "scrnintstr.h"
 #include "windowstr.h"
+#include "colormapst.h"
 #include "globals.h"
 #include "mi.h"
 

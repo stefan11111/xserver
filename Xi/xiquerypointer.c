@@ -40,9 +40,7 @@
 #include "dix/eventconvert.h"
 #include "dix/exevents_priv.h"
 #include "dix/input_priv.h"
-#include "dix/inpututils_priv.h"
 #include "os/fmt.h"
-#include "Xext/panoramiXsrv.h"
 
 #include "inputstr.h"           /* DeviceIntPtr      */
 #include "windowstr.h"          /* window structure  */
@@ -51,6 +49,11 @@
 #include "scrnintstr.h"
 #include "xkbsrv.h"
 
+#ifdef XINERAMA
+#include "panoramiXsrv.h"
+#endif /* XINERAMA */
+
+#include "inpututils.h"
 #include "xiquerypointer.h"
 
 /***********************************************************************
@@ -74,6 +77,7 @@ int
 ProcXIQueryPointer(ClientPtr client)
 {
     int rc;
+    xXIQueryPointerReply rep;
     DeviceIntPtr pDev, kbd;
     WindowPtr pWin, t;
     SpritePtr pSprite;
@@ -101,8 +105,7 @@ ProcXIQueryPointer(ClientPtr client)
         return rc;
     }
 
-    if (pDev->valuator == NULL || IsKeyboardDevice(pDev) ||
-        (!InputDevIsMaster(pDev) && !InputDevIsFloating(pDev))) {   /* no attached devices */
+    if (pDev->valuator == NULL || IsKeyboardDevice(pDev) || (!IsMaster(pDev) && !IsFloating(pDev))) {   /* no attached devices */
         client->errorValue = stuff->deviceid;
         return BadDevice;
     }
@@ -116,19 +119,19 @@ ProcXIQueryPointer(ClientPtr client)
     if (pDev->valuator->motionHintWindow)
         MaybeStopHint(pDev, client);
 
-    if (InputDevIsMaster(pDev))
+    if (IsMaster(pDev))
         kbd = GetMaster(pDev, MASTER_KEYBOARD);
     else
         kbd = (pDev->key) ? pDev : NULL;
 
     pSprite = pDev->spriteInfo->sprite;
 
-    xXIQueryPointerReply rep = {
+    rep = (xXIQueryPointerReply) {
         .repType = X_Reply,
         .RepType = X_XIQueryPointer,
         .sequenceNumber = client->sequence,
         .length = 6,
-        .root = (InputDevCurrentRootWindow(pDev))->drawable.id,
+        .root = (GetCurrentRootWindow(pDev))->drawable.id,
         .root_x = double_to_fp1616(pSprite->hot.x),
         .root_y = double_to_fp1616(pSprite->hot.y),
         .child = None
@@ -192,21 +195,34 @@ ProcXIQueryPointer(ClientPtr client)
     }
 #endif /* XINERAMA */
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swapl(&rep.root);
-        swapl(&rep.child);
-        swapl(&rep.root_x);
-        swapl(&rep.root_y);
-        swapl(&rep.win_x);
-        swapl(&rep.win_y);
-        swaps(&rep.buttons_len);
-    }
-    WriteToClient(client, sizeof(xXIQueryPointerReply), &rep);
-    WriteToClient(client, buttons_size, buttons);
+    WriteReplyToClient(client, sizeof(xXIQueryPointerReply), &rep);
+    if (buttons)
+        WriteToClient(client, buttons_size, buttons);
 
     free(buttons);
 
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XIQueryPointer function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void
+SRepXIQueryPointer(ClientPtr client, int size, xXIQueryPointerReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swapl(&rep->root);
+    swapl(&rep->child);
+    swapl(&rep->root_x);
+    swapl(&rep->root_y);
+    swapl(&rep->win_x);
+    swapl(&rep->win_y);
+    swaps(&rep->buttons_len);
+
+    WriteToClient(client, size, rep);
 }

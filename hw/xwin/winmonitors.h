@@ -27,9 +27,6 @@ from The Open Group.
 
 */
 
-#ifndef XSERVER_XWIN_WINMONITORS_H
-#define XSERVER_XWIN_WINMONITORS_H
-
 /* data returned for monitor information */
 struct GetMonitorInfoData {
     int requestedMonitor;
@@ -44,5 +41,3 @@ struct GetMonitorInfoData {
 };
 
 Bool QueryMonitor(int i, struct GetMonitorInfoData *data);
-
-#endif /* XSERVER_XWIN_WINMONITORS_H */

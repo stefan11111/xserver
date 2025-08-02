@@ -17,7 +17,10 @@
 
 #ifdef WIN32
 #include <X11/Xwinsock.h>
-#include "os/Xtrans.h"
+#define XSERV_t
+#define TRANS_SERVER
+#define TRANS_REOPEN
+#include <X11/Xtrans/Xtrans.h>
 #endif
 
 #include <X11/Xos.h>
@@ -45,7 +48,10 @@
 #include "input.h"
 #include "dixstruct.h"
 
-#include "os/Xtrans.h"
+#define XSERV_t
+#define TRANS_SERVER
+#define TRANS_REOPEN
+#include <X11/Xtrans/Xtrans.h>
 
 #ifdef XDMCP
 #undef REQUEST
@@ -392,7 +398,7 @@ XdmcpRegisterAuthentication(const char *name,
           XdmcpReallocARRAYofARRAY8(&AuthenticationDatas,
                                     AuthenticationDatas.length + 1) &&
           (newFuncs =
-           calloc(1, (AuthenticationNames.length +
+           malloc((AuthenticationNames.length +
                    1) * sizeof(AuthenticationFuncsRec))))) {
         XdmcpDisposeARRAY8(&AuthenticationName);
         XdmcpDisposeARRAY8(&AuthenticationData);
@@ -496,7 +502,7 @@ XdmcpRegisterConnection(int type, const char *address, int addrlen)
     }
     if (ConnectionAddresses.length + 1 == 256)
         return;
-    newAddress = calloc(addrlen, sizeof(CARD8));
+    newAddress = malloc(addrlen * sizeof(CARD8));
     if (!newAddress)
         return;
     if (!XdmcpReallocARRAY16(&ConnectionTypes, ConnectionTypes.length + 1)) {
@@ -530,13 +536,12 @@ XdmcpRegisterAuthorizations(void)
 }
 
 void
-XdmcpRegisterAuthorization(const char *name)
+XdmcpRegisterAuthorization(const char *name, int namelen)
 {
     ARRAY8 authName;
     int i;
 
-    size_t namelen = strlen(name);
-    authName.data = calloc(namelen, sizeof(CARD8));
+    authName.data = malloc(namelen * sizeof(CARD8));
     if (!authName.data)
         return;
     if (!XdmcpReallocARRAYofARRAY8
@@ -896,14 +901,13 @@ XdmcpCheckAuthentication(ARRAY8Ptr Name, ARRAY8Ptr Data, int packet_type)
 static int
 XdmcpAddAuthorization(ARRAY8Ptr name, ARRAY8Ptr data)
 {
+    AddAuthorFunc AddAuth;
+
     if (AuthenticationFuncs && AuthenticationFuncs->AddAuth)
-        return AuthenticationFuncs->AddAuth(
-                       (unsigned short) name->length,
-                       (char *) name->data,
-                       (unsigned short) data->length, (char *) data->data);
+        AddAuth = AuthenticationFuncs->AddAuth;
     else
-        return AddAuthorization(
-                       (unsigned short) name->length,
+        AddAuth = AddAuthorization;
+    return (*AddAuth) ((unsigned short) name->length,
                        (char *) name->data,
                        (unsigned short) data->length, (char *) data->data);
 }
@@ -1517,10 +1521,8 @@ get_mcast_options(int argc, char **argv, int i)
         else {
             struct multicastinfo *mcastinfo, *mcl;
 
-            mcastinfo = calloc(1, sizeof(struct multicastinfo));
-            if (!mcastinfo)
-                FatalError("Xserver: failed to allocate mcastinfo\n");
-
+            mcastinfo = malloc(sizeof(struct multicastinfo));
+            mcastinfo->next = NULL;
             mcastinfo->ai = firstai;
             mcastinfo->hops = hopcount;
 

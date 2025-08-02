@@ -204,6 +204,7 @@ XaceCensorImage(ClientPtr client,
     if (nRects > 0) {           /* we have something to censor */
         GCPtr pScratchGC = NULL;
         PixmapPtr pPix = NULL;
+        xRectangle *pRects = NULL;
         Bool failed = FALSE;
         int depth = 1;
         int bitsPerPixel = 1;
@@ -212,7 +213,7 @@ XaceCensorImage(ClientPtr client,
 
         /* convert region to list-of-rectangles for PolyFillRect */
 
-        xRectangle *pRects = calloc(1, nRects * sizeof(xRectangle));
+        pRects = malloc(nRects * sizeof(xRectangle));
         if (!pRects) {
             failed = TRUE;
             goto failSafe;
@@ -266,14 +267,17 @@ XaceCensorImage(ClientPtr client,
     RegionUninit(&censorRegion);
 }                               /* XaceCensorImage */
 
-Bool
-XaceRegisterCallback(int hook, CallbackProcPtr callback, void *data)
+/*
+ * Xtrans wrappers for use by modules
+ */
+int
+XaceGetConnectionNumber(ClientPtr client)
 {
-    return AddCallback(XaceHooks+(hook), callback, data);
+    return GetClientFd(client);
 }
 
-Bool
-XaceDeleteCallback(int hook, CallbackProcPtr callback, void *data)
+int
+XaceIsLocal(ClientPtr client)
 {
-    return DeleteCallback(XaceHooks+(hook), callback, data);
+    return ClientIsLocal(client);
 }

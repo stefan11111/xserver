@@ -24,67 +24,12 @@
  * This file defines functions for drawing some primitives using
  * underlying datatypes instead of masks
  */
-#include "fb/fb_priv.h"
 
 #define isClipped(c,ul,lr)  (((c) | ((c) - (ul)) | ((lr) - (c))) & 0x80008000)
 
-#define __FbMaskBits(x,w,l,n,r) { \
-    n = (w); \
-    r = FbRightMask((x)+n); \
-    l = FbLeftMask(x); \
-    if (l) { \
-        n -= FB_UNIT - ((x) & FB_MASK); \
-        if (n < 0) { \
-            n = 0; \
-            l &= r; \
-            r = 0; \
-        } \
-    } \
-    n >>= FB_SHIFT; \
-}
-
-/* Macros for dealing with dashing */
-
-#define FbDashDeclare   \
-    unsigned char       *__dash, *__firstDash, *__lastDash
-
-#define FbDashInit(pGC,pPriv,dashOffset,dashlen,even) {     \
-    (even) = TRUE;                                          \
-    __firstDash = (pGC)->dash;                              \
-    __lastDash = __firstDash + (pGC)->numInDashList;        \
-    (dashOffset) %= (pPriv)->dashLength;                    \
-                                                            \
-    __dash = __firstDash;                                   \
-    while ((dashOffset) >= ((dashlen) = *__dash))           \
-    {                                                       \
-        (dashOffset) -= (dashlen);                          \
-        (even) = 1-(even);                                  \
-        if (++__dash == __lastDash)                         \
-            __dash = __firstDash;                           \
-    }                                                       \
-    (dashlen) -= (dashOffset);                              \
-}
-
-#define FbDashNext(dashlen) {                               \
-    if (++__dash == __lastDash)                             \
-        __dash = __firstDash;                               \
-    (dashlen) = *__dash;                                    \
-}
-
-/* as numInDashList is always even, this case can skip a test */
-
-#define FbDashNextEven(dashlen) {                           \
-    (dashlen) = *++__dash;                                  \
-}
-
-#define FbDashNextOdd(dashlen)  FbDashNext(dashlen)
-
-#define FbDashStep(dashlen,even) {                          \
-    if (!--(dashlen)) {                                     \
-        FbDashNext(dashlen);                                \
-        (even) = 1-(even);                                  \
-    }                                                       \
-}
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
 
 #ifdef BITSSTORE
 #define STORE(b,x)  BITSSTORE(b,x)
@@ -840,7 +785,7 @@ POLYSEGMENT(DrawablePtr pDrawable, GCPtr pGC, int nseg, xSegment * pseg)
                 dstLine = dst + (intToY(pt1) + yoff + dstYoff) * dstStride;
                 dstLine += dstX >> FB_SHIFT;
                 dstX &= FB_MASK;
-                __FbMaskBits(dstX, width, startmask, nmiddle, endmask);
+                FbMaskBits(dstX, width, startmask, nmiddle, endmask);
                 if (startmask) {
                     WRITE(dstLine,
                           FbDoMaskRRop(READ(dstLine), andBits, xorBits,

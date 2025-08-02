@@ -64,7 +64,6 @@ request_XIWarpPointer(ClientPtr client, xXIWarpPointerReq * req, int error)
 {
     int rc;
 
-    client->swapped = FALSE;
     rc = ProcXIWarpPointer(client);
     assert(rc == error);
 
@@ -94,6 +93,8 @@ request_XIWarpPointer(ClientPtr client, xXIWarpPointerReq * req, int error)
     else if (rc == BadWindow)
         assert(client->errorValue == req->dst_win ||
                client->errorValue == req->src_win);
+
+    client->swapped = FALSE;
 }
 
 static void

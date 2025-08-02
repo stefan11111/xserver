@@ -73,10 +73,10 @@
  * changed.  The minor revision mask is 0x0000FFFF and the major revision
  * mask is 0xFFFF0000.
  */
-#define ABI_ANSIC_VERSION	SET_ABI_VERSION(1, 4)
-#define ABI_VIDEODRV_VERSION	SET_ABI_VERSION(28, 0)
-#define ABI_XINPUT_VERSION	SET_ABI_VERSION(26, 0)
-#define ABI_EXTENSION_VERSION	SET_ABI_VERSION(11, 0)
+#define ABI_ANSIC_VERSION	SET_ABI_VERSION(0, 4)
+#define ABI_VIDEODRV_VERSION	SET_ABI_VERSION(27, 0)
+#define ABI_XINPUT_VERSION	SET_ABI_VERSION(25, 0)
+#define ABI_EXTENSION_VERSION	SET_ABI_VERSION(10, 0)
 
 #define MODINFOSTRING1	0xef23fdc5
 #define MODINFOSTRING2	0x10dc023a
@@ -143,6 +143,9 @@ typedef struct {
 
 #define MODULE_VERSION_NUMERIC(maj, min, patch) \
 	((((maj) & 0xFF) << 24) | (((min) & 0xFF) << 16) | (patch & 0xFFFF))
+#define GET_MODULE_MAJOR_VERSION(vers)	(((vers) >> 24) & 0xFF)
+#define GET_MODULE_MINOR_VERSION(vers)	(((vers) >> 16) & 0xFF)
+#define GET_MODULE_PATCHLEVEL(vers)	((vers) & 0xFFFF)
 
 /* Prototypes for Loader functions that are exported to modules */
 extern _X_EXPORT void *LoadSubModule(void *, const char *, const char **,
@@ -160,6 +163,7 @@ typedef void *(*ModuleSetupProc) (void *, void *, int *, int *);
 typedef void (*ModuleTearDownProc) (void *);
 
 #define MODULESETUPPROTO(func) void *func(void *, void *, int*, int*)
+#define MODULETEARDOWNPROTO(func) void func(void *)
 
 typedef struct {
     XF86ModuleVersionInfo *vers;

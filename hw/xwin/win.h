@@ -144,15 +144,13 @@
 #include <X11/Xos.h>
 #include <X11/Xprotostr.h>
 
-#include "dix/colormap_priv.h"
-#include "dix/dix_priv.h"
-
 #include "scrnintstr.h"
 #include "pixmapstr.h"
 #include "pixmap.h"
 #include "region.h"
 #include "gcstruct.h"
 #include "colormap.h"
+#include "colormapst.h"
 #include "miscstruct.h"
 #include "servermd.h"
 #include "windowstr.h"
@@ -243,7 +241,7 @@ static Atom func (void) {					\
     static Atom atom;						\
     if (generation != serverGeneration) {			\
 	generation = serverGeneration;				\
-	atom = dixAddAtom(atom_name);				\
+	atom = MakeAtom (atom_name, strlen (atom_name), TRUE);	\
     }								\
     return atom;						\
 }
@@ -292,6 +290,8 @@ typedef Bool (*winDestroyColormapProcPtr) (ColormapPtr pColormap);
 typedef Bool (*winCreatePrimarySurfaceProcPtr) (ScreenPtr);
 
 typedef Bool (*winReleasePrimarySurfaceProcPtr) (ScreenPtr);
+
+typedef Bool (*winCreateScreenResourcesProc) (ScreenPtr);
 
 /*
  * Pixmap privates
@@ -485,6 +485,7 @@ typedef struct _winPrivScreenRec {
     winInitVisualsProcPtr pwinInitVisuals;
     winAdjustVideoModeProcPtr pwinAdjustVideoMode;
     winCreateBoundingWindowProcPtr pwinCreateBoundingWindow;
+    winFinishScreenInitProcPtr pwinFinishScreenInit;
     winBltExposedRegionsProcPtr pwinBltExposedRegions;
     winBltExposedWindowRegionProcPtr pwinBltExposedWindowRegion;
     winActivateAppProcPtr pwinActivateApp;
@@ -496,12 +497,26 @@ typedef struct _winPrivScreenRec {
     winDestroyColormapProcPtr pwinDestroyColormap;
     winCreatePrimarySurfaceProcPtr pwinCreatePrimarySurface;
     winReleasePrimarySurfaceProcPtr pwinReleasePrimarySurface;
+    winCreateScreenResourcesProc pwinCreateScreenResources;
 
     /* Window Procedures for Rootless mode */
+    CreateWindowProcPtr CreateWindow;
+    DestroyWindowProcPtr DestroyWindow;
+    PositionWindowProcPtr PositionWindow;
+    ChangeWindowAttributesProcPtr ChangeWindowAttributes;
+    RealizeWindowProcPtr RealizeWindow;
+    UnrealizeWindowProcPtr UnrealizeWindow;
     ValidateTreeProcPtr ValidateTree;
     PostValidateTreeProcPtr PostValidateTree;
+    CopyWindowProcPtr CopyWindow;
     ClearToBackgroundProcPtr ClearToBackground;
     ClipNotifyProcPtr ClipNotify;
+    RestackWindowProcPtr RestackWindow;
+    ReparentWindowProcPtr ReparentWindow;
+    ResizeWindowProcPtr ResizeWindow;
+    MoveWindowProcPtr MoveWindow;
+    SetShapeProcPtr SetShape;
+    ModifyPixmapHeaderProcPtr ModifyPixmapHeader;
 
     winCursorRec cursor;
 
@@ -523,6 +538,9 @@ extern winScreenInfo *g_ScreenInfo;
 extern miPointerScreenFuncRec g_winPointerCursorFuncs;
 extern DWORD g_dwEvents;
 
+#ifdef HAS_DEVWINDOWS
+extern int g_fdMessageQueue;
+#endif
 extern DevPrivateKeyRec g_iScreenPrivateKeyRec;
 
 #define g_iScreenPrivateKey  	(&g_iScreenPrivateKeyRec)
@@ -813,6 +831,9 @@ void
 Bool
  winScreenInit(ScreenPtr pScreen, int argc, char **argv);
 
+Bool
+ winFinishScreenInitFB(int i, ScreenPtr pScreen, int argc, char **argv);
+
 /*
  * winshadddnl.c
  */
@@ -904,8 +925,18 @@ void
  winReorderWindowsMultiWindow(void);
 
 void
+
+winResizeWindowMultiWindow(WindowPtr pWin, int x, int y, unsigned int w,
+                           unsigned int h, WindowPtr pSib);
+void
+
 winMoveWindowMultiWindow(WindowPtr pWin, int x, int y,
                          WindowPtr pSib, VTKind kind);
+
+void
+
+winCopyWindowMultiWindow(WindowPtr pWin, DDXPointRec oldpt,
+                         RegionPtr oldRegion);
 
 PixmapPtr
 winCreatePixmapMultiwindow(ScreenPtr pScreen, int width, int height, int depth,

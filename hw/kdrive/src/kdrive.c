@@ -27,16 +27,12 @@
 #include "os/cmdline.h"
 #include "os/ddx_priv.h"
 
-#include "mi/mi_priv.h"
 #include "os/osdep.h"
 
 #include "kdrive.h"
 #include <mivalidate.h>
 #include <dixstruct.h>
 #include "privates.h"
-
-/* workaround for <windows.h> being included somewhere and conflicting with us */
-#undef CreateWindow
 
 #ifdef RANDR
 #include <randrstr.h>
@@ -57,7 +53,7 @@
 
 /* This stub can be safely removed once we can
  * split input and GPU parts in hotplug.h et al. */
-#include "../../xfree86/os-support/linux/systemd-logind.h"
+#include <systemd-logind.h>
 
 typedef struct _kdDepths {
     CARD8 depth;
@@ -93,13 +89,6 @@ const char *kdGlobalXkbModel = NULL;
 const char *kdGlobalXkbLayout = NULL;
 const char *kdGlobalXkbVariant = NULL;
 const char *kdGlobalXkbOptions = NULL;
-
-
-/*
- * Carry arguments from InitOutput through driver initialization
- * to KdScreenInit
- */
-const KdOsFuncs *kdOsFuncs = NULL;
 
 void
 KdDisableScreen(ScreenPtr pScreen)
@@ -157,8 +146,6 @@ static void
 KdDisableScreens(void)
 {
     KdSuspend();
-    if (kdEnabled && (kdOsFuncs->Disable))
-        kdOsFuncs->Disable();
     kdEnabled = FALSE;
 }
 
@@ -529,19 +516,6 @@ KdProcessArgument(int argc, char **argv, int i)
     return 0;
 }
 
-void
-KdOsInit(const KdOsFuncs * pOsFuncs)
-{
-    kdOsFuncs = pOsFuncs;
-    if (pOsFuncs) {
-        if (serverGeneration == 1) {
-            KdDoSwitchCmd("start");
-            if (pOsFuncs->Init)
-                (*pOsFuncs->Init) ();
-        }
-    }
-}
-
 static Bool
 KdAllocatePrivates(ScreenPtr pScreen)
 {
@@ -565,17 +539,22 @@ KdCreateScreenResources(ScreenPtr pScreen)
 {
     KdScreenPriv(pScreen);
     KdCardInfo *card = pScreenPriv->card;
+    Bool ret;
 
-    if (!miCreateScreenResources(pScreen))
-        return FALSE;
-
-    if (card->cfuncs->createRes)
-        return card->cfuncs->createRes(pScreen);
-
-    return TRUE;
+    pScreen->CreateScreenResources = pScreenPriv->CreateScreenResources;
+    if (pScreen->CreateScreenResources)
+        ret = (*pScreen->CreateScreenResources) (pScreen);
+    else
+        ret = -1;
+    pScreenPriv->CreateScreenResources = pScreen->CreateScreenResources;
+    pScreen->CreateScreenResources = KdCreateScreenResources;
+    if (ret && card->cfuncs->createRes)
+        ret = (*card->cfuncs->createRes) (pScreen);
+    return ret;
 }
 
-Bool KdCloseScreen(ScreenPtr pScreen)
+static Bool
+KdCloseScreen(ScreenPtr pScreen)
 {
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
@@ -586,8 +565,12 @@ Bool KdCloseScreen(ScreenPtr pScreen)
         (*card->cfuncs->closeScreen)(pScreen);
 
     pScreenPriv->closed = TRUE;
+    pScreen->CloseScreen = pScreenPriv->CloseScreen;
 
-    ret = fbCloseScreen(pScreen);
+    if (pScreen->CloseScreen)
+        ret = (*pScreen->CloseScreen) (pScreen);
+    else
+        ret = TRUE;
 
     if (screen->mynum == card->selected)
         KdDisableScreen(pScreen);
@@ -609,8 +592,6 @@ Bool KdCloseScreen(ScreenPtr pScreen)
          * Clean up OS when last card is closed
          */
         if (card == kdCardInfo) {
-            if (kdEnabled && (kdOsFuncs->Disable))
-                kdOsFuncs->Disable();
             kdEnabled = FALSE;
         }
     }
@@ -630,6 +611,7 @@ KdSaveScreen(ScreenPtr pScreen, int on)
 static Bool
 KdCreateWindow(WindowPtr pWin)
 {
+#ifndef PHOENIX
     if (!pWin->parent) {
         KdScreenPriv(pWin->drawable.pScreen);
 
@@ -638,6 +620,7 @@ KdCreateWindow(WindowPtr pWin)
             RegionBreak(&pWin->clipList);
         }
     }
+#endif
     return fbCreateWindow(pWin);
 }
 
@@ -806,7 +789,15 @@ KdScreenInit(ScreenPtr pScreen, int argc, char **argv)
         if (!(*card->cfuncs->finishInitScreen) (pScreen))
             return FALSE;
 
+    /*
+     * Wrap CloseScreen, the order now is:
+     *  KdCloseScreen
+     *  fbCloseScreen
+     */
+    pScreenPriv->CloseScreen = pScreen->CloseScreen;
     pScreen->CloseScreen = KdCloseScreen;
+
+    pScreenPriv->CreateScreenResources = pScreen->CreateScreenResources;
     pScreen->CreateScreenResources = KdCreateScreenResources;
 
     if (screen->softCursor ||
@@ -825,8 +816,6 @@ KdScreenInit(ScreenPtr pScreen, int argc, char **argv)
     /*
      * Enable the hardware
      */
-    if ((!kdEnabled) && (kdOsFuncs->Enable))
-        kdOsFuncs->Enable();
     kdEnabled = TRUE;
 
     if (screen->mynum == card->selected) {

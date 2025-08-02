@@ -31,13 +31,9 @@
 #include <X11/extensions/renderproto.h>
 #include <X11/Xfuncproto.h>
 
-#include "dix/colormap_priv.h"
 #include "dix/cursor_priv.h"
 #include "dix/dix_priv.h"
-#include "miext/extinit_priv.h"
 #include "os/osdep.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
 
 #include "misc.h"
 #include "os.h"
@@ -46,13 +42,20 @@
 #include "scrnintstr.h"
 #include "windowstr.h"
 #include "pixmapstr.h"
+#include "colormapst.h"
 #include "extnsionst.h"
+#include "extinit_priv.h"
 #include "servermd.h"
 #include "picturestr_priv.h"
 #include "glyphstr_priv.h"
 #include "cursorstr.h"
 #include "xace.h"
 #include "protocol-versions.h"
+
+#ifdef XINERAMA
+#include "panoramiX.h"
+#include "panoramiXsrv.h"
+#endif /* XINERAMA */
 
 Bool noRenderExtension = FALSE;
 
@@ -307,6 +310,7 @@ static int
 ProcRenderQueryPictFormats(ClientPtr client)
 {
     RenderClientPtr pRenderClient = GetRenderClient(client);
+    xRenderQueryPictFormatsReply *reply;
     xPictScreen *pictScreen;
     xPictDepth *pictDepth;
     xPictVisual *pictVisual;
@@ -366,8 +370,7 @@ ProcRenderQueryPictFormats(ClientPtr client)
                numScreens * sizeof(xPictScreen) +
                ndepth * sizeof(xPictDepth) +
                nvisual * sizeof(xPictVisual) + numSubpixel * sizeof(CARD32));
-
-    xRenderQueryPictFormatsReply *reply = calloc(1, rlength);
+    reply = (xRenderQueryPictFormatsReply *) calloc(1, rlength);
     if (!reply)
         return BadAlloc;
     reply->type = X_Reply;
@@ -503,6 +506,7 @@ ProcRenderQueryPictIndexValues(ClientPtr client)
     int i;
 
     REQUEST(xRenderQueryPictIndexValuesReq);
+    xRenderQueryPictIndexValuesReply *reply;
     xIndexValue *values;
 
     REQUEST_AT_LEAST_SIZE(xRenderQueryPictIndexValuesReq);
@@ -519,8 +523,7 @@ ProcRenderQueryPictIndexValues(ClientPtr client)
     num = pFormat->index.nvalues;
     rlength = (sizeof(xRenderQueryPictIndexValuesReply) +
                num * sizeof(xIndexValue));
-
-    xRenderQueryPictIndexValuesReply *reply = calloc(1, rlength);
+    reply = (xRenderQueryPictIndexValuesReply *) calloc(1, rlength);
     if (!reply)
         return BadAlloc;
 
@@ -1313,14 +1316,14 @@ ProcRenderCompositeGlyphs(ClientPtr client)
     if (nglyph <= NLOCALGLYPH)
         glyphsBase = glyphsLocal;
     else {
-        glyphsBase = calloc(nglyph, sizeof(GlyphPtr));
+        glyphsBase = xallocarray(nglyph, sizeof(GlyphPtr));
         if (!glyphsBase)
             return BadAlloc;
     }
     if (nlist <= NLOCALDELTA)
         listsBase = listsLocal;
     else {
-        listsBase = calloc(nlist, sizeof(GlyphListRec));
+        listsBase = xallocarray(nlist, sizeof(GlyphListRec));
         if (!listsBase) {
             rc = BadAlloc;
             goto bail;
@@ -1458,9 +1461,9 @@ ProcRenderCreateCursor(ClientPtr client)
     PicturePtr pSrc;
     ScreenPtr pScreen;
     unsigned short width, height;
-    CARD32 *argb;
-    unsigned char *srcline;
-    unsigned char *mskline;
+    CARD32 *argbbits, *argb;
+    unsigned char *srcbits, *srcline;
+    unsigned char *mskbits, *mskline;
     int stride;
     int x, y;
     int nbytes_mono;
@@ -1482,21 +1485,18 @@ ProcRenderCreateCursor(ClientPtr client)
         return BadAlloc;
     if (stuff->x > width || stuff->y > height)
         return BadMatch;
-
-    CARD32 *argbbits = calloc(width * height, sizeof(CARD32));
+    argbbits = malloc(width * height * sizeof(CARD32));
     if (!argbbits)
         return BadAlloc;
 
     stride = BitmapBytePad(width);
     nbytes_mono = stride * height;
-
-    unsigned char *srcbits = calloc(1, nbytes_mono);
+    srcbits = calloc(1, nbytes_mono);
     if (!srcbits) {
         free(argbbits);
         return BadAlloc;
     }
-
-    unsigned char *mskbits = calloc(1, nbytes_mono);
+    mskbits = calloc(1, nbytes_mono);
     if (!mskbits) {
         free(argbbits);
         free(srcbits);
@@ -1664,6 +1664,7 @@ ProcRenderQueryFilters(ClientPtr client)
 {
     REQUEST(xRenderQueryFiltersReq);
     DrawablePtr pDrawable;
+    xRenderQueryFiltersReply *reply;
     int nbytesName;
     int nnames;
     ScreenPtr pScreen;
@@ -1691,8 +1692,7 @@ ProcRenderQueryFilters(ClientPtr client)
     }
     len = ((nnames + 1) >> 1) + bytes_to_int32(nbytesName);
     total_bytes = sizeof(xRenderQueryFiltersReply) + (len << 2);
-
-    xRenderQueryFiltersReply *reply = calloc(1, total_bytes);
+    reply = (xRenderQueryFiltersReply *) calloc(1, total_bytes);
     if (!reply)
         return BadAlloc;
     aliases = (INT16 *) (reply + 1);
@@ -1784,8 +1784,10 @@ static int
 ProcRenderCreateAnimCursor(ClientPtr client)
 {
     REQUEST(xRenderCreateAnimCursorReq);
+    CursorPtr *cursors;
     CARD32 *deltas;
     CursorPtr pCursor;
+    int ncursor;
     xAnimCursorElt *elt;
     int i;
     int ret;
@@ -1794,14 +1796,10 @@ ProcRenderCreateAnimCursor(ClientPtr client)
     LEGAL_NEW_RESOURCE(stuff->cid, client);
     if (client->req_len & 1)
         return BadLength;
-
-    int ncursor =
+    ncursor =
         (client->req_len -
          (bytes_to_int32(sizeof(xRenderCreateAnimCursorReq)))) >> 1;
-    if (ncursor <= 0)
-        return BadValue;
-
-    CursorPtr *cursors = calloc(ncursor, sizeof(CursorPtr) + sizeof(CARD32));
+    cursors = xallocarray(ncursor, sizeof(CursorPtr) + sizeof(CARD32));
     if (!cursors)
         return BadAlloc;
     deltas = (CARD32 *) (cursors + ncursor);
@@ -2587,7 +2585,7 @@ PanoramiXRenderCreatePicture(ClientPtr client)
                                       XRC_DRAWABLE, client, DixWriteAccess);
     if (result != Success)
         return (result == BadValue) ? BadDrawable : result;
-    if (!(newPict = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newPict = (PanoramiXRes *) malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
     newPict->type = XRT_PICTURE;
     panoramix_setup_ids(newPict, client, stuff->pid);
@@ -2828,7 +2826,7 @@ PanoramiXRenderFillRectangles(ClientPtr client)
     REQUEST_AT_LEAST_SIZE(xRenderFillRectanglesReq);
     VERIFY_XIN_PICTURE(dst, stuff->dst, client, DixWriteAccess);
     extra_len = (client->req_len << 2) - sizeof(xRenderFillRectanglesReq);
-    if (extra_len && (extra = calloc(1, extra_len))) {
+    if (extra_len && (extra = (char *) malloc(extra_len))) {
         memcpy(extra, stuff + 1, extra_len);
         FOR_NSCREENS_FORWARD(j) {
             if (j)
@@ -2877,7 +2875,7 @@ PanoramiXRenderTrapezoids(ClientPtr client)
 
     extra_len = (client->req_len << 2) - sizeof(xRenderTrapezoidsReq);
 
-    if (extra_len && (extra = calloc(1, extra_len))) {
+    if (extra_len && (extra = (char *) malloc(extra_len))) {
         memcpy(extra, stuff + 1, extra_len);
 
         FOR_NSCREENS_FORWARD(j) {
@@ -2938,7 +2936,7 @@ PanoramiXRenderTriangles(ClientPtr client)
 
     extra_len = (client->req_len << 2) - sizeof(xRenderTrianglesReq);
 
-    if (extra_len && (extra = calloc(1, extra_len))) {
+    if (extra_len && (extra = (char *) malloc(extra_len))) {
         memcpy(extra, stuff + 1, extra_len);
 
         FOR_NSCREENS_FORWARD(j) {
@@ -2995,7 +2993,7 @@ PanoramiXRenderTriStrip(ClientPtr client)
 
     extra_len = (client->req_len << 2) - sizeof(xRenderTriStripReq);
 
-    if (extra_len && (extra = calloc(1, extra_len))) {
+    if (extra_len && (extra = (char *) malloc(extra_len))) {
         memcpy(extra, stuff + 1, extra_len);
 
         FOR_NSCREENS_FORWARD(j) {
@@ -3048,7 +3046,7 @@ PanoramiXRenderTriFan(ClientPtr client)
 
     extra_len = (client->req_len << 2) - sizeof(xRenderTriFanReq);
 
-    if (extra_len && (extra = calloc(1, extra_len))) {
+    if (extra_len && (extra = (char *) malloc(extra_len))) {
         memcpy(extra, stuff + 1, extra_len);
 
         FOR_NSCREENS_FORWARD(j) {
@@ -3098,7 +3096,7 @@ PanoramiXRenderAddTraps(ClientPtr client)
     REQUEST_AT_LEAST_SIZE(xRenderAddTrapsReq);
     VERIFY_XIN_PICTURE(picture, stuff->picture, client, DixWriteAccess);
     extra_len = (client->req_len << 2) - sizeof(xRenderAddTrapsReq);
-    if (extra_len && (extra = calloc(1, extra_len))) {
+    if (extra_len && (extra = (char *) malloc(extra_len))) {
         memcpy(extra, stuff + 1, extra_len);
         x_off = stuff->xOff;
         y_off = stuff->yOff;
@@ -3130,7 +3128,7 @@ PanoramiXRenderCreateSolidFill(ClientPtr client)
 
     REQUEST_AT_LEAST_SIZE(xRenderCreateSolidFillReq);
 
-    if (!(newPict = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newPict = (PanoramiXRes *) malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newPict->type = XRT_PICTURE;
@@ -3161,7 +3159,7 @@ PanoramiXRenderCreateLinearGradient(ClientPtr client)
 
     REQUEST_AT_LEAST_SIZE(xRenderCreateLinearGradientReq);
 
-    if (!(newPict = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newPict = (PanoramiXRes *) malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newPict->type = XRT_PICTURE;
@@ -3193,7 +3191,7 @@ PanoramiXRenderCreateRadialGradient(ClientPtr client)
 
     REQUEST_AT_LEAST_SIZE(xRenderCreateRadialGradientReq);
 
-    if (!(newPict = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newPict = (PanoramiXRes *) malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newPict->type = XRT_PICTURE;
@@ -3225,7 +3223,7 @@ PanoramiXRenderCreateConicalGradient(ClientPtr client)
 
     REQUEST_AT_LEAST_SIZE(xRenderCreateConicalGradientReq);
 
-    if (!(newPict = calloc(1, sizeof(PanoramiXRes))))
+    if (!(newPict = (PanoramiXRes *) malloc(sizeof(PanoramiXRes))))
         return BadAlloc;
 
     newPict->type = XRT_PICTURE;

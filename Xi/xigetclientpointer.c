@@ -36,6 +36,7 @@
 #include "windowstr.h"          /* window structure  */
 #include "scrnintstr.h"         /* screen structure  */
 #include "extnsionst.h"
+#include "extinit.h"            /* LookupDeviceIntRec */
 #include "exevents.h"
 #include "exglobals.h"
 #include "xigetclientpointer.h"
@@ -60,12 +61,13 @@ ProcXIGetClientPointer(ClientPtr client)
 {
     int rc;
     ClientPtr winclient;
+    xXIGetClientPointerReply rep;
 
     REQUEST(xXIGetClientPointerReq);
     REQUEST_SIZE_MATCH(xXIGetClientPointerReq);
 
     if (stuff->win != None) {
-        rc = dixLookupResourceOwner(&winclient, stuff->win, client, DixGetAttrAccess);
+        rc = dixLookupClient(&winclient, stuff->win, client, DixGetAttrAccess);
 
         if (rc != Success)
             return BadWindow;
@@ -73,19 +75,32 @@ ProcXIGetClientPointer(ClientPtr client)
     else
         winclient = client;
 
-    xXIGetClientPointerReply rep = {
+    rep = (xXIGetClientPointerReply) {
         .repType = X_Reply,
         .RepType = X_XIGetClientPointer,
         .sequenceNumber = client->sequence,
+        .length = 0,
         .set = (winclient->clientPtr != NULL),
         .deviceid = (winclient->clientPtr) ? winclient->clientPtr->id : 0
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.deviceid);
-    }
-    WriteToClient(client, sizeof(xXIGetClientPointerReply), &rep);
+    WriteReplyToClient(client, sizeof(xXIGetClientPointerReply), &rep);
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XGetClientPointer function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXIGetClientPointer(ClientPtr client, int size,
+                       xXIGetClientPointerReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->deviceid);
+    WriteToClient(client, size, rep);
 }

@@ -56,7 +56,6 @@ SOFTWARE.
 #include <X11/extensions/XIproto.h>
 
 #include "dix/input_priv.h"
-#include "dix/resource_priv.h"
 
 #include "inputstr.h"           /* DeviceIntPtr      */
 #include "XIstubs.h"
@@ -73,15 +72,17 @@ int
 ProcXSetDeviceValuators(ClientPtr client)
 {
     DeviceIntPtr dev;
+    xSetDeviceValuatorsReply rep;
     int rc;
 
     REQUEST(xSetDeviceValuatorsReq);
     REQUEST_AT_LEAST_SIZE(xSetDeviceValuatorsReq);
 
-    xSetDeviceValuatorsReply rep = {
+    rep = (xSetDeviceValuatorsReply) {
         .repType = X_Reply,
         .RepType = X_SetDeviceValuators,
         .sequenceNumber = client->sequence,
+        .length = 0,
         .status = Success
     };
 
@@ -111,9 +112,22 @@ ProcXSetDeviceValuators(ClientPtr client)
     if (rep.status != Success && rep.status != AlreadyGrabbed)
         return rep.status;
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-    }
-    WriteToClient(client, sizeof(xSetDeviceValuatorsReply), &rep);
+    WriteReplyToClient(client, sizeof(xSetDeviceValuatorsReply), &rep);
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XSetDeviceValuators function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXSetDeviceValuators(ClientPtr client, int size,
+                        xSetDeviceValuatorsReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

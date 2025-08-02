@@ -23,10 +23,14 @@
 #ifndef _DRI3_H_
 #define _DRI3_H_
 
+#ifdef DRI3
+
 #include <X11/extensions/dri3proto.h>
 #include <randrstr.h>
 
 #define DRI3_SCREEN_INFO_VERSION        4
+
+extern RESTYPE dri3_syncobj_type;
 
 struct dri3_syncobj
 {
@@ -43,6 +47,16 @@ struct dri3_syncobj
     void (*submitted_eventfd)(struct dri3_syncobj *syncobj, uint64_t point, int efd);
     void (*signaled_eventfd)(struct dri3_syncobj *syncobj, uint64_t point, int efd);
 };
+
+#define VERIFY_DRI3_SYNCOBJ(id, ptr, a)\
+    do {\
+        int rc = dixLookupResourceByType((void **)&(ptr), id,\
+                                         dri3_syncobj_type, client, a);\
+        if (rc != Success) {\
+            client->errorValue = id;\
+            return rc;\
+        }\
+    } while (0);
 
 typedef int (*dri3_open_proc)(ScreenPtr screen,
                               RRProviderPtr provider,
@@ -127,5 +141,13 @@ typedef struct dri3_screen_info {
 
 extern _X_EXPORT Bool
 dri3_screen_init(ScreenPtr screen, const dri3_screen_info_rec *info);
+
+extern _X_EXPORT int
+dri3_send_open_reply(ClientPtr client, int fd);
+
+extern _X_EXPORT uint32_t
+drm_format_for_depth(uint32_t depth, uint32_t bpp);
+
+#endif
 
 #endif /* _DRI3_H_ */

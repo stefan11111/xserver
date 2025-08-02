@@ -38,14 +38,10 @@
 #include "dix/input_priv.h"
 #include "dix/dix_priv.h"
 #include "dix/exevents_priv.h"
-#include "dix/inpututils_priv.h"
 #include "mi/mi_priv.h"
 #include "mi/mipointer_priv.h"
-#include "miext/extinit_priv.h"
 #include "os/client_priv.h"
 #include "os/osdep.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
 
 #include "misc.h"
 #include "os.h"
@@ -54,6 +50,7 @@
 #include "windowstr.h"
 #include "inputstr.h"
 #include "scrnintstr.h"
+#include "dixevents.h"
 #include "sleepuntil.h"
 #include "xkbsrv.h"
 #include "xkbstr.h"
@@ -61,6 +58,8 @@
 #include "mipointer.h"
 #include "xserver-properties.h"
 #include "eventstr.h"
+#include "inpututils.h"
+#include "extinit_priv.h"
 
 Bool noTestExtensions = FALSE;
 
@@ -81,6 +80,11 @@ static InternalEvent *xtest_evlist;
  * Neither of these devices can be deleted.
  */
 DeviceIntPtr xtestpointer, xtestkeyboard;
+
+#ifdef XINERAMA
+#include "panoramiX.h"
+#include "panoramiXsrv.h"
+#endif /* XINERAMA */
 
 static int XTestSwapFakeInput(ClientPtr /* client */ ,
                               xReq *    /* req */
@@ -128,7 +132,7 @@ ProcXTestCompareCursor(ClientPtr client)
     if (stuff->cursor == None)
         pCursor = NullCursor;
     else if (stuff->cursor == XTestCurrentCursor)
-        pCursor = InputDevGetSpriteCursor(ptr);
+        pCursor = GetSpriteCursor(ptr);
     else {
         rc = dixLookupResourceByType((void **) &pCursor, stuff->cursor,
                                      X11_RESTYPE_CURSOR, client, DixReadAccess);
@@ -381,7 +385,7 @@ ProcXTestFakeInput(ClientPtr client)
     switch (type) {
     case KeyPress:
     case KeyRelease:
-        if ((!dev) || (!dev->key))
+        if (!dev->key)
             return BadDevice;
 
         if (ev->u.u.detail < dev->key->xkbInfo->desc->min_key_code ||
@@ -393,7 +397,7 @@ ProcXTestFakeInput(ClientPtr client)
         need_ptr_update = 0;
         break;
     case MotionNotify:
-        if (!dev || !dev->valuator)
+        if (!dev->valuator)
             return BadDevice;
 
         if (!(extension || ev->u.keyButtonPointer.root == None)) {
@@ -424,7 +428,7 @@ ProcXTestFakeInput(ClientPtr client)
         break;
     case ButtonPress:
     case ButtonRelease:
-        if (!dev || !dev->button)
+        if (!dev->button)
             return BadDevice;
 
         if (!ev->u.u.detail || ev->u.u.detail > dev->button->numButtons) {
@@ -438,7 +442,7 @@ ProcXTestFakeInput(ClientPtr client)
 
     valuator_mask_set_range(&mask, firstValuator, numValuators, valuators);
 
-    if (dev && dev->sendEventsProc)
+    if (dev->sendEventsProc)
         (*dev->sendEventsProc) (dev, type, ev->u.u.detail, flags, &mask);
 
     if (need_ptr_update)
@@ -647,7 +651,7 @@ AllocXTestDevice(ClientPtr client, const char *name,
 BOOL
 IsXTestDevice(DeviceIntPtr dev, DeviceIntPtr master)
 {
-    if (InputDevIsMaster(dev))
+    if (IsMaster(dev))
         return FALSE;
 
     /* deviceid 0 is reserved for XIAllDevices, non-zero mid means XTest

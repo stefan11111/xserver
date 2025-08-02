@@ -21,13 +21,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "dix/dix_priv.h"
 #include "dix/property_priv.h"
-#include "dix/selection_priv.h"
-#include "miext/extinit_priv.h"
 
+#include "selection.h"
 #include "inputstr.h"
 #include "windowstr.h"
 #include "propertyst.h"
 #include "extnsionst.h"
+#include "extinit_priv.h"
 #include "xselinuxint.h"
 
 #define CTX_DEV offsetof(SELinuxSubjectRec, dev_create_sid)
@@ -55,7 +55,7 @@ int selinuxEnforcingState = SELINUX_MODE_DEFAULT;
 static char *
 SELinuxCopyContext(char *ptr, unsigned len)
 {
-    char *copy = calloc(1, len + 1);
+    char *copy = malloc(len + 1);
 
     if (!copy)
         return NULL;
@@ -298,7 +298,7 @@ ProcSELinuxGetClientContext(ClientPtr client)
     REQUEST(SELinuxGetContextReq);
     REQUEST_SIZE_MATCH(SELinuxGetContextReq);
 
-    rc = dixLookupResourceOwner(&target, stuff->id, client, DixGetAttrAccess);
+    rc = dixLookupClient(&target, stuff->id, client, DixGetAttrAccess);
     if (rc != Success)
         return rc;
 
@@ -313,8 +313,6 @@ SELinuxPopulateItem(SELinuxListItemRec * i, PrivateRec ** privPtr, CARD32 id,
     SELinuxObjectRec *obj = dixLookupPrivate(privPtr, objectKey);
     SELinuxObjectRec *data = dixLookupPrivate(privPtr, dataKey);
 
-    if (!i)
-        return BadValue;
     if (avc_sid_to_context_raw(obj->sid, &i->octx) < 0)
         return BadValue;
     if (avc_sid_to_context_raw(data->sid, &i->dctx) < 0)
@@ -333,9 +331,6 @@ SELinuxFreeItems(SELinuxListItemRec * items, int count)
 {
     int k;
 
-    if (!items)
-        return;
-
     for (k = 0; k < count; k++) {
         freecon(items[k].octx);
         freecon(items[k].dctx);
@@ -352,9 +347,6 @@ SELinuxSendItemsToClient(ClientPtr client, SELinuxListItemRec * items,
     if (size && !buf) {
         goto out;
     }
-
-    if (!buf) // silence analyzer warning
-        goto sendreply;
 
     /* Fill in the buffer */
     for (k = 0; k < count; k++) {
@@ -379,7 +371,6 @@ SELinuxSendItemsToClient(ClientPtr client, SELinuxListItemRec * items,
         pos += items[k].dctx_len;
     }
 
-sendreply: ;
     /* Send reply to client */
     SELinuxListItemsReply rep = {
         .type = X_Reply,
@@ -423,7 +414,7 @@ ProcSELinuxListProperties(ClientPtr client)
 
     /* Count the number of properties and allocate items */
     count = 0;
-    for (pProp = pWin->properties; pProp; pProp = pProp->next)
+    for (pProp = wUserProps(pWin); pProp; pProp = pProp->next)
         count++;
     items = calloc(count, sizeof(SELinuxListItemRec));
     if (count && !items)
@@ -432,7 +423,7 @@ ProcSELinuxListProperties(ClientPtr client)
     /* Fill in the items and calculate size */
     i = 0;
     size = 0;
-    for (pProp = pWin->properties; pProp; pProp = pProp->next) {
+    for (pProp = wUserProps(pWin); pProp; pProp = pProp->next) {
         id = pProp->propertyName;
         rc = SELinuxPopulateItem(items + i, &pProp->devPrivates, id, &size);
         if (rc != Success) {

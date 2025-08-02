@@ -49,7 +49,6 @@ SOFTWARE.
 #include <X11/X.h>
 #include <X11/Xproto.h>
 
-#include "dix/extension_priv.h"
 #include "dix/registry_priv.h"
 
 #include "misc.h"
@@ -67,58 +66,7 @@ static ExtensionEntry **extensions = (ExtensionEntry **) NULL;
 
 int lastEvent = EXTENSION_EVENT_BASE;
 static int lastError = FirstExtensionError;
-static unsigned int NumExtensions = RESERVED_EXTENSIONS;
-
-static struct { const char *name; int id; } reservedExt[] = {
-    { "BIG-REQUESTS",               EXTENSION_MAJOR_BIG_REQUESTS },
-    { "Apple-WM",                   EXTENSION_MAJOR_APPLE_WM },
-    { "Apple-DRI",                  EXTENSION_MAJOR_APPLE_DRI },
-    { "Composite",                  EXTENSION_MAJOR_COMPOSITE },
-    { "DAMAGE",                     EXTENSION_MAJOR_DAMAGE },
-    { "DOUBLE-BUFFER",              EXTENSION_MAJOR_DOUBLE_BUFFER },
-    { "DPMS",                       EXTENSION_MAJOR_DPMS },
-    { "DRI2",                       EXTENSION_MAJOR_DRI2 },
-    { "DRI3",                       EXTENSION_MAJOR_DRI3 },
-    { "Generic Event Extension",    EXTENSION_MAJOR_GENERIC_EVENT },
-    { "GLX",                        EXTENSION_MAJOR_GLX },
-    { "MIT-SCREEN-SAVER",           EXTENSION_MAJOR_MIT_SCREEN_SAVER },
-    { "NAMESPACE",                  EXTENSION_MAJOR_NAMESPACE },
-    { "Present",                    EXTENSION_MAJOR_PRESENT },
-    { "RANDR",                      EXTENSION_MAJOR_RANDR },
-    { "RECORD",                     EXTENSION_MAJOR_RECORD },
-    { "RENDER",                     EXTENSION_MAJOR_RENDER },
-    { "SECURITY",                   EXTENSION_MAJOR_SECURITY },
-    { "SELinux",                    EXTENSION_MAJOR_SELINUX },
-    { "SHAPE",                      EXTENSION_MAJOR_SHAPE },
-    { "MIT-SHM",                    EXTENSION_MAJOR_SHM },
-    { "SYNC",                       EXTENSION_MAJOR_SYNC },
-    { "Windows-DRI",                EXTENSION_MAJOR_WINDOWS_DRI },
-    { "XFIXES",                     EXTENSION_MAJOR_XFIXES },
-    { "XFree86-Bigfont",            EXTENSION_MAJOR_XF86_BIGFONT },
-    { "XFree86-DGA",                EXTENSION_MAJOR_XF86_DGA },
-    { "XFree86-DRI",                EXTENSION_MAJOR_XF86_DRI },
-    { "XFree86-VidModeExtension",   EXTENSION_MAJOR_XF86_VIDMODE },
-    { "XC-MISC",                    EXTENSION_MAJOR_XC_MISC },
-    { "XInputExtension",            EXTENSION_MAJOR_XINPUT },
-    { "XINERAMA",                   EXTENSION_MAJOR_XINERAMA },
-    { "XKEYBOARD",                  EXTENSION_MAJOR_XKEYBOARD },
-    { "X-Resource",                 EXTENSION_MAJOR_XRESOURCE },
-    { "XTEST",                      EXTENSION_MAJOR_XTEST },
-    { "XVideo",                     EXTENSION_MAJOR_XVIDEO },
-    { "XVideo-MotionCompensation",  EXTENSION_MAJOR_XVMC },
-};
-
-static int checkReserved(const char* name)
-{
-    for (int i=0; i<ARRAY_SIZE(reservedExt); i++) {
-        if (strcmp(name, reservedExt[i].name) == 0) {
-            if (reservedExt[i].id < (RESERVED_EXTENSIONS + EXTENSION_BASE))
-                return reservedExt[i].id;
-            FatalError("BUG: RESERVED_EXTENSIONS too small for %d\n", reservedExt[i].id);
-        }
-    }
-    return -1;
-}
+static unsigned int NumExtensions = 0;
 
 ExtensionEntry *
 AddExtension(const char *name, int NumEvents, int NumErrors,
@@ -127,10 +75,8 @@ AddExtension(const char *name, int NumEvents, int NumErrors,
              void (*CloseDownProc) (ExtensionEntry * e),
              unsigned short (*MinorOpcodeProc) (ClientPtr c3))
 {
-    if (!extensions)
-        extensions = calloc(NumExtensions, sizeof(ExtensionEntry*));
-    if (!extensions)
-        return NULL;
+    int i;
+    ExtensionEntry *ext, **newexts;
 
     if (!MainProc || !SwappedMainProc || !MinorOpcodeProc)
         return ((ExtensionEntry *) NULL);
@@ -141,28 +87,29 @@ AddExtension(const char *name, int NumEvents, int NumErrors,
         return ((ExtensionEntry *) NULL);
     }
 
-    ExtensionEntry *ext = calloc(1, sizeof(ExtensionEntry));
+    ext = calloc(1, sizeof(ExtensionEntry));
     if (!ext)
         return NULL;
-    if (!dixAllocatePrivates(&ext->devPrivates, PRIVATE_EXTENSION))
-        goto badalloc;
-    ext->name = strdup(name);
-    if (!ext->name)
-        goto badalloc;
-
-    int i = checkReserved(ext->name);
-    if (i == -1) {
-        i = NumExtensions;
-        ExtensionEntry **newexts = reallocarray(extensions, i + 1, sizeof(ExtensionEntry *));
-        if (!newexts)
-            goto badalloc;
-
-        NumExtensions++;
-        extensions = newexts;
-    } else {
-        i = i - EXTENSION_BASE;
+    if (!dixAllocatePrivates(&ext->devPrivates, PRIVATE_EXTENSION)) {
+        free(ext);
+        return NULL;
     }
-
+    ext->name = strdup(name);
+    if (!ext->name) {
+        dixFreePrivates(ext->devPrivates, PRIVATE_EXTENSION);
+        free(ext);
+        return ((ExtensionEntry *) NULL);
+    }
+    i = NumExtensions;
+    newexts = reallocarray(extensions, i + 1, sizeof(ExtensionEntry *));
+    if (!newexts) {
+        free((void *) ext->name);
+        dixFreePrivates(ext->devPrivates, PRIVATE_EXTENSION);
+        free(ext);
+        return ((ExtensionEntry *) NULL);
+    }
+    NumExtensions++;
+    extensions = newexts;
     extensions[i] = ext;
     ext->index = i;
     ext->base = i + EXTENSION_BASE;
@@ -193,14 +140,19 @@ AddExtension(const char *name, int NumEvents, int NumErrors,
     RegisterExtensionNames(ext);
 #endif
     return ext;
+}
 
-badalloc:
-    if (ext) {
-        free((char*)ext->name);
-        dixFreePrivates(ext->devPrivates, PRIVATE_EXTENSION);
-        free(ext);
+static int
+FindExtension(const char *extname, int len)
+{
+    int i;
+
+    for (i = 0; i < NumExtensions; i++) {
+        if ((strlen(extensions[i]->name) == len) &&
+            !strncmp(extname, extensions[i]->name, len))
+            break;
     }
-    return NULL;
+    return ((i == NumExtensions) ? -1 : i);
 }
 
 /*
@@ -210,17 +162,13 @@ badalloc:
 ExtensionEntry *
 CheckExtension(const char *extname)
 {
-    if (!extensions)
-        return NULL;
+    int n;
 
-    for (int i = 0; i < NumExtensions; i++) {
-        if (extensions[i] &&
-            extensions[i]->name &&
-            strcmp(extensions[i]->name, extname) == 0) {
-            return extensions[i];
-        }
-    }
-    return NULL;
+    n = FindExtension(extname, strlen(extname));
+    if (n != -1)
+        return extensions[n];
+    else
+        return NULL;
 }
 
 /*
@@ -229,7 +177,7 @@ CheckExtension(const char *extname)
 ExtensionEntry *
 GetExtensionEntry(int major)
 {
-    if ((major < EXTENSION_BASE) || !extensions)
+    if (major < EXTENSION_BASE)
         return NULL;
     major -= EXTENSION_BASE;
     if (major >= NumExtensions)
@@ -246,23 +194,18 @@ StandardMinorOpcode(ClientPtr client)
 void
 CloseDownExtensions(void)
 {
-    if (!extensions)
-        return;
+    int i;
 
-    for (int i = NumExtensions - 1; i >= 0; i--) {
-        if (!extensions[i])
-            continue;
+    for (i = NumExtensions - 1; i >= 0; i--) {
         if (extensions[i]->CloseDown)
             extensions[i]->CloseDown(extensions[i]);
         NumExtensions = i;
         free((void *) extensions[i]->name);
         dixFreePrivates(extensions[i]->devPrivates, PRIVATE_EXTENSION);
         free(extensions[i]);
-        extensions[i] = NULL;
     }
     free(extensions);
     extensions = (ExtensionEntry **) NULL;
-    NumExtensions = RESERVED_EXTENSIONS;
     lastEvent = EXTENSION_EVENT_BASE;
     lastError = FirstExtensionError;
 }
@@ -270,8 +213,6 @@ CloseDownExtensions(void)
 static Bool
 ExtensionAvailable(ClientPtr client, ExtensionEntry *ext)
 {
-    if (!ext)
-        return FALSE;
     if (XaceHookExtAccess(client, ext) != Success)
         return FALSE;
     if (!ext->base)
@@ -282,49 +223,47 @@ ExtensionAvailable(ClientPtr client, ExtensionEntry *ext)
 int
 ProcQueryExtension(ClientPtr client)
 {
+    xQueryExtensionReply reply;
+    int i;
+
     REQUEST(xQueryExtensionReq);
+
     REQUEST_FIXED_SIZE(xQueryExtensionReq, stuff->nbytes);
 
-    xQueryExtensionReply rep = {
+    reply = (xQueryExtensionReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
         .length = 0,
         .major_opcode = 0
     };
 
-    if (!NumExtensions || !extensions)
-        rep.present = xFalse;
+    if (!NumExtensions)
+        reply.present = xFalse;
     else {
-        char extname[PATH_MAX] = { 0 };
-        strncpy(extname, (char *) &stuff[1], min(stuff->nbytes, sizeof(extname)-1));
-        ExtensionEntry *extEntry = CheckExtension(extname);
-
-        if (!extEntry || !ExtensionAvailable(client, extEntry))
-            rep.present = xFalse;
+        i = FindExtension((char *) &stuff[1], stuff->nbytes);
+        if (i < 0 || !ExtensionAvailable(client, extensions[i]))
+            reply.present = xFalse;
         else {
-            rep.present = xTrue;
-            rep.major_opcode = extEntry->base;
-            rep.first_event = extEntry->eventBase;
-            rep.first_error = extEntry->errorBase;
+            reply.present = xTrue;
+            reply.major_opcode = extensions[i]->base;
+            reply.first_event = extensions[i]->eventBase;
+            reply.first_error = extensions[i]->errorBase;
         }
     }
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-    }
-    WriteToClient(client, sizeof(rep), &rep);
+    WriteReplyToClient(client, sizeof(xQueryExtensionReply), &reply);
     return Success;
 }
 
 int
 ProcListExtensions(ClientPtr client)
 {
+    xListExtensionsReply reply;
     char *bufptr, *buffer;
     int total_length = 0;
 
     REQUEST_SIZE_MATCH(xReq);
 
-    xListExtensionsReply rep = {
+    reply = (xListExtensionsReply) {
         .type = X_Reply,
         .nExtensions = 0,
         .sequenceNumber = client->sequence,
@@ -332,20 +271,22 @@ ProcListExtensions(ClientPtr client)
     };
     buffer = NULL;
 
-    if (NumExtensions && extensions) {
-        for (int i = 0; i < NumExtensions; i++) {
+    if (NumExtensions) {
+        int i;
+
+        for (i = 0; i < NumExtensions; i++) {
             /* call callbacks to find out whether to show extension */
             if (!ExtensionAvailable(client, extensions[i]))
                 continue;
 
             total_length += strlen(extensions[i]->name) + 1;
-            rep.nExtensions += 1;
+            reply.nExtensions += 1;
         }
-        rep.length = bytes_to_int32(total_length);
-        buffer = bufptr = calloc(1, total_length);
+        reply.length = bytes_to_int32(total_length);
+        buffer = bufptr = malloc(total_length);
         if (!buffer)
             return BadAlloc;
-        for (int i = 0; i < NumExtensions; i++) {
+        for (i = 0; i < NumExtensions; i++) {
             int len;
 
             if (!ExtensionAvailable(client, extensions[i]))
@@ -356,13 +297,9 @@ ProcListExtensions(ClientPtr client)
             bufptr += len;
         }
     }
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-    }
-    WriteToClient(client, sizeof(rep), &rep);
-    WriteToClient(client, total_length, buffer);
+    WriteReplyToClient(client, sizeof(xListExtensionsReply), &reply);
+    if (reply.length)
+        WriteToClient(client, total_length, buffer);
 
     free(buffer);
     return Success;

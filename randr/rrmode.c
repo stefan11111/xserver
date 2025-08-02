@@ -23,7 +23,6 @@
 
 #include "dix/dix_priv.h"
 #include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
 
 RESTYPE RRModeType;
 
@@ -71,7 +70,7 @@ RRModeCreate(xRRModeInfo * modeInfo, const char *name, ScreenPtr userScreen)
     if (!RRInit())
         return NULL;
 
-    mode = calloc(1, sizeof(RRModeRec) + modeInfo->nameLength + 1);
+    mode = malloc(sizeof(RRModeRec) + modeInfo->nameLength + 1);
     if (!mode)
         return NULL;
     mode->refcnt = 1;
@@ -84,14 +83,14 @@ RRModeCreate(xRRModeInfo * modeInfo, const char *name, ScreenPtr userScreen)
     if (num_modes)
         newModes = reallocarray(modes, num_modes + 1, sizeof(RRModePtr));
     else
-        newModes = calloc(1, sizeof(RRModePtr));
+        newModes = malloc(sizeof(RRModePtr));
 
     if (!newModes) {
         free(mode);
         return NULL;
     }
 
-    mode->mode.id = dixAllocServerXID();
+    mode->mode.id = FakeClientID(0);
     if (!AddResource(mode->mode.id, RRModeType, (void *) mode)) {
         free(newModes);
         return NULL;
@@ -169,7 +168,7 @@ RRModesForScreen(ScreenPtr pScreen, int *num_ret)
     RRModePtr *screen_modes;
     int num_screen_modes = 0;
 
-    screen_modes = calloc((num_modes ? num_modes : 1), sizeof(RRModePtr));
+    screen_modes = xallocarray((num_modes ? num_modes : 1), sizeof(RRModePtr));
     if (!screen_modes)
         return NULL;
 

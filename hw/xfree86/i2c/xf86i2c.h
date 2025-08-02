@@ -17,7 +17,7 @@ typedef struct _I2CDevRec *I2CDevPtr;
 /* I2C masters have to register themselves */
 
 typedef struct _I2CBusRec {
-    const char *BusName;
+    char *BusName;
     int scrnIndex;
     ScrnInfoPtr pScrn;
 
@@ -59,7 +59,7 @@ extern _X_EXPORT void xf86DestroyI2CBusRec(I2CBusPtr pI2CBus, Bool unalloc,
 #define I2CBusInit		xf86I2CBusInit
 extern _X_EXPORT Bool xf86I2CBusInit(I2CBusPtr pI2CBus);
 
-extern _X_EXPORT I2CBusPtr xf86I2CFindBus(int scrnIndex, const char *name);
+extern _X_EXPORT I2CBusPtr xf86I2CFindBus(int scrnIndex, char *name);
 extern _X_EXPORT int xf86I2CGetScreenBuses(int scrnIndex,
                                            I2CBusPtr ** pppI2CBus);
 
@@ -98,13 +98,20 @@ extern _X_EXPORT Bool xf86I2CWriteRead(I2CDevPtr d, I2CByte * WriteBuffer,
                                        int nRead);
 #define 	xf86I2CRead(d, rb, nr) xf86I2CWriteRead(d, NULL, 0, rb, nr)
 
+extern _X_EXPORT Bool xf86I2CReadStatus(I2CDevPtr d, I2CByte * pbyte);
 extern _X_EXPORT Bool xf86I2CReadByte(I2CDevPtr d, I2CByte subaddr,
                                       I2CByte * pbyte);
 extern _X_EXPORT Bool xf86I2CReadBytes(I2CDevPtr d, I2CByte subaddr,
                                        I2CByte * pbyte, int n);
+extern _X_EXPORT Bool xf86I2CReadWord(I2CDevPtr d, I2CByte subaddr,
+                                      unsigned short *pword);
 #define 	xf86I2CWrite(d, wb, nw) xf86I2CWriteRead(d, wb, nw, NULL, 0)
 extern _X_EXPORT Bool xf86I2CWriteByte(I2CDevPtr d, I2CByte subaddr,
                                        I2CByte byte);
+extern _X_EXPORT Bool xf86I2CWriteBytes(I2CDevPtr d, I2CByte subaddr,
+                                        I2CByte * WriteBuffer, int nWrite);
+extern _X_EXPORT Bool xf86I2CWriteWord(I2CDevPtr d, I2CByte subaddr,
+                                       unsigned short word);
 extern _X_EXPORT Bool xf86I2CWriteVec(I2CDevPtr d, I2CByte * vec, int nValues);
 
 #endif /*_XF86I2C_H */

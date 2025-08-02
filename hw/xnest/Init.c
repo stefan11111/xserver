@@ -22,9 +22,7 @@ is" without express or implied warranty.
 
 #include "dix/screenint_priv.h"
 #include "mi/mi_priv.h"
-#include "miext/extinit_priv.h"
 #include "os/ddx_priv.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
 
 #include "screenint.h"
@@ -34,8 +32,9 @@ is" without express or implied warranty.
 #include "windowstr.h"
 #include "servermd.h"
 #include "dixfontstr.h"
+#include "extinit_priv.h"
+#include "Xnest.h"
 
-#include "xnest-xcb.h"
 #include "Display.h"
 #include "Screen.h"
 #include "Pointer.h"
@@ -67,37 +66,29 @@ Bool noGlxExtension = FALSE;
 void
 InitOutput(ScreenInfo * screen_info, int argc, char *argv[])
 {
-    int i;
+    int i, j;
 
     xnestOpenDisplay(argc, argv);
 
-    screen_info->imageByteOrder = xnestUpstreamInfo.setup->image_byte_order;
-    screen_info->bitmapScanlineUnit = xnestUpstreamInfo.setup->bitmap_format_scanline_unit;
-    screen_info->bitmapScanlinePad = xnestUpstreamInfo.setup->bitmap_format_scanline_pad;
-    screen_info->bitmapBitOrder = xnestUpstreamInfo.setup->bitmap_format_bit_order;
-    screen_info->numPixmapFormats = 0;
+    screen_info->imageByteOrder = ImageByteOrder(xnestDisplay);
+    screen_info->bitmapScanlineUnit = BitmapUnit(xnestDisplay);
+    screen_info->bitmapScanlinePad = BitmapPad(xnestDisplay);
+    screen_info->bitmapBitOrder = BitmapBitOrder(xnestDisplay);
 
-    xcb_format_t *fmt = xcb_setup_pixmap_formats(xnestUpstreamInfo.setup);
-    const xcb_format_t *fmtend = fmt + xcb_setup_pixmap_formats_length(xnestUpstreamInfo.setup);
-    for(; fmt != fmtend; ++fmt) {
-        xcb_depth_iterator_t depth_iter;
-        for (depth_iter = xcb_screen_allowed_depths_iterator(xnestUpstreamInfo.screenInfo);
-             depth_iter.rem;
-             xcb_depth_next(&depth_iter))
-        {
-            if ((fmt->depth == 1) ||
-                (fmt->depth == depth_iter.data->depth)) {
+    screen_info->numPixmapFormats = 0;
+    for (i = 0; i < xnestNumPixmapFormats; i++)
+        for (j = 0; j < xnestNumDepths; j++)
+            if ((xnestPixmapFormats[i].depth == 1) ||
+                (xnestPixmapFormats[i].depth == xnestDepths[j])) {
                 screen_info->formats[screen_info->numPixmapFormats].depth =
-                    fmt->depth;
+                    xnestPixmapFormats[i].depth;
                 screen_info->formats[screen_info->numPixmapFormats].bitsPerPixel =
-                    fmt->bits_per_pixel;
+                    xnestPixmapFormats[i].bits_per_pixel;
                 screen_info->formats[screen_info->numPixmapFormats].scanlinePad =
-                    fmt->scanline_pad;
+                    xnestPixmapFormats[i].scanline_pad;
                 screen_info->numPixmapFormats++;
                 break;
             }
-        }
-    }
 
     xnestFontPrivateIndex = xfont2_allocate_font_private_index();
 
@@ -133,10 +124,7 @@ InitInput(int argc, char *argv[])
 
     mieqInit();
 
-    SetNotifyFd(xcb_get_file_descriptor(xnestUpstreamInfo.conn),
-                xnestNotifyConnection,
-                X_NOTIFY_READ,
-                NULL);
+    SetNotifyFd(XConnectionNumber(xnestDisplay), xnestNotifyConnection, X_NOTIFY_READ, NULL);
 
     RegisterBlockAndWakeupHandlers(xnestBlockHandler, xnestWakeupHandler, NULL);
 }
@@ -153,6 +141,13 @@ ddxGiveUp(enum ExitCode error)
     xnestDoFullGeneration = TRUE;
     xnestCloseDisplay();
 }
+
+#ifdef __APPLE__
+void
+DarwinHandleGUI(int argc, char *argv[])
+{
+}
+#endif
 
 void
 OsVendorInit(void)

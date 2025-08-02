@@ -41,7 +41,7 @@
 #include "scrnintstr.h"
 #include "globals.h"
 
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
 #include "xf86_OSproc.h"
 
@@ -482,7 +482,7 @@ AddEdge(xf86EdgePtr edge,
         }
 
         if (!pEdge) {
-            if (!(pNew = calloc(1, sizeof(xf86EdgeRec))))
+            if (!(pNew = malloc(sizeof(xf86EdgeRec))))
                 break;
 
             pNew->screen = screen;
@@ -500,7 +500,7 @@ AddEdge(xf86EdgePtr edge,
             break;
         }
         else if (min < pEdge->start) {
-            if (!(pNew = calloc(1, sizeof(xf86EdgeRec))))
+            if (!(pNew = malloc(sizeof(xf86EdgeRec))))
                 break;
 
             pNew->screen = screen;

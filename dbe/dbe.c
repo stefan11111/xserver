@@ -40,12 +40,10 @@
 #include <X11/Xproto.h>
 
 #include "dix/dix_priv.h"
-#include "dix/rpcbuf_priv.h"
-#include "dix/screen_hooks_priv.h"
-#include "miext/extinit_priv.h"
 
 #include "scrnintstr.h"
 #include "extnsionst.h"
+#include "extinit_priv.h"
 #include "gcstruct.h"
 #include "dixstruct.h"
 #include "dbestruct.h"
@@ -82,6 +80,12 @@ DbeStubScreen(DbeScreenPrivPtr pDbeScreenPriv, int *nStubbedScreens)
 {
     /* Stub DIX. */
     pDbeScreenPriv->SetupBackgroundPainter = NULL;
+
+    /* Do not unwrap PositionWindow nor DestroyWindow.  If the DDX
+     * initialization function failed, we assume that it did not wrap
+     * PositionWindow.  Also, DestroyWindow is only wrapped if the DDX
+     * initialization function succeeded.
+     */
 
     /* Stub DDX. */
     pDbeScreenPriv->GetVisualInfo = NULL;
@@ -466,7 +470,7 @@ ProcDbeSwapBuffers(ClientPtr client)
     dbeSwapInfo = (xDbeSwapInfo *) &stuff[1];
 
     /* Allocate array to record swap information. */
-    swapInfo = calloc(nStuff, sizeof(DbeSwapInfoRec));
+    swapInfo = xallocarray(nStuff, sizeof(DbeSwapInfoRec));
     if (swapInfo == NULL) {
         return BadAlloc;
     }
@@ -561,10 +565,14 @@ ProcDbeGetVisualInfo(ClientPtr client)
 {
     REQUEST(xDbeGetVisualInfoReq);
     DbeScreenPrivPtr pDbeScreenPriv;
+    xDbeGetVisualInfoReply rep;
     Drawable *drawables;
     DrawablePtr *pDrawables = NULL;
-    register int i, rc;
+    register int i, j, rc;
     register int count;         /* number of visual infos in reply */
+    register int length;        /* length of reply */
+    ScreenPtr pScreen;
+    XdbeScreenVisualInfo *pScrVisInfo;
 
     REQUEST_AT_LEAST_SIZE(xDbeGetVisualInfoReq);
     if (stuff->n > UINT32_MAX / sizeof(CARD32))
@@ -575,7 +583,7 @@ ProcDbeGetVisualInfo(ClientPtr client)
         return BadAlloc;
     /* Make sure any specified drawables are valid. */
     if (stuff->n != 0) {
-        if (!(pDrawables = calloc(stuff->n, sizeof(DrawablePtr)))) {
+        if (!(pDrawables = xallocarray(stuff->n, sizeof(DrawablePtr)))) {
             return BadAlloc;
         }
 
@@ -592,58 +600,42 @@ ProcDbeGetVisualInfo(ClientPtr client)
     }
 
     count = (stuff->n == 0) ? screenInfo.numScreens : stuff->n;
+    if (!(pScrVisInfo = calloc(count, sizeof(XdbeScreenVisualInfo)))) {
+        free(pDrawables);
 
-    x_rpcbuf_t rpcbuf = { .swapped = client->swapped, .err_clear = TRUE };
+        return BadAlloc;
+    }
+
+    length = 0;
 
     for (i = 0; i < count; i++) {
-        ScreenPtr pScreen = (stuff->n == 0) ? screenInfo.screens[i] :
+        pScreen = (stuff->n == 0) ? screenInfo.screens[i] :
             pDrawables[i]->pScreen;
         pDbeScreenPriv = DBE_SCREEN_PRIV(pScreen);
 
         rc = XaceHookScreenAccess(client, pScreen, DixGetAttrAccess);
         if (rc != Success)
-            goto clearRpcBuf;
+            goto freeScrVisInfo;
 
-        XdbeScreenVisualInfo visualInfo = { 0 };
-        if (!(pDbeScreenPriv->GetVisualInfo(pScreen, &visualInfo))) {
-            /* We failed to alloc visualInfo.visinfo. */
+        if (!(*pDbeScreenPriv->GetVisualInfo) (pScreen, &pScrVisInfo[i])) {
+            /* We failed to alloc pScrVisInfo[i].visinfo. */
             rc = BadAlloc;
 
             /* Free visinfos that we allocated for previous screen infos. */
-            goto clearRpcBuf;
+            goto freeScrVisInfo;
         }
 
-        /* ensure enough buffer space here, so we don't need to check for
-           errors on individual operations */
-        if (!x_rpcbuf_makeroom(&rpcbuf, (visualInfo.count+1)*8)) {
-            rc = BadAlloc;
-            free(visualInfo.visinfo);
-            goto clearRpcBuf;
-        }
+        /* Account for n, number of xDbeVisInfo items in list. */
+        length += sizeof(CARD32);
 
-        /* For each screen in the reply, send off the visual info */
-
-        x_rpcbuf_write_CARD32(&rpcbuf, visualInfo.count);
-        for (int j = 0; j < visualInfo.count; j++) {
-            /* Write visualID(32), depth(8), perfLevel(8), and pad(16). */
-            x_rpcbuf_write_CARD32(&rpcbuf, visualInfo.visinfo[j].visual);
-            x_rpcbuf_write_CARD8(&rpcbuf, visualInfo.visinfo[j].depth);
-            x_rpcbuf_write_CARD8(&rpcbuf, visualInfo.visinfo[j].perflevel);
-            x_rpcbuf_write_CARD16(&rpcbuf, 0);
-        }
-
-        free(visualInfo.visinfo);
+        /* Account for n xDbeVisInfo items */
+        length += pScrVisInfo[i].count * sizeof(xDbeVisInfo);
     }
 
-    if (rpcbuf.error) {
-        rc = BadAlloc;
-        goto clearRpcBuf;
-    }
-
-    xDbeGetVisualInfoReply rep = {
+    rep = (xDbeGetVisualInfoReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
-        .length = bytes_to_int32(rpcbuf.wpos),
+        .length = bytes_to_int32(length),
         .m = count
     };
 
@@ -653,12 +645,58 @@ ProcDbeGetVisualInfo(ClientPtr client)
         swapl(&rep.m);
     }
 
-    rc = Success;
+    /* Send off reply. */
     WriteToClient(client, sizeof(xDbeGetVisualInfoReply), &rep);
-    WriteRpcbufToClient(client, &rpcbuf);
 
-clearRpcBuf:
-    x_rpcbuf_clear(&rpcbuf);
+    for (i = 0; i < count; i++) {
+        CARD32 data32;
+
+        /* For each screen in the reply, send off the visual info */
+
+        /* Send off number of visuals. */
+        data32 = (CARD32) pScrVisInfo[i].count;
+
+        if (client->swapped) {
+            swapl(&data32);
+        }
+
+        WriteToClient(client, sizeof(CARD32), &data32);
+
+        /* Now send off visual info items. */
+        for (j = 0; j < pScrVisInfo[i].count; j++) {
+            xDbeVisInfo visInfo;
+
+            /* Copy the data in the client data structure to a protocol
+             * data structure.  We will send data to the client from the
+             * protocol data structure.
+             */
+
+            visInfo.visualID = (CARD32) pScrVisInfo[i].visinfo[j].visual;
+            visInfo.depth = (CARD8) pScrVisInfo[i].visinfo[j].depth;
+            visInfo.perfLevel = (CARD8) pScrVisInfo[i].visinfo[j].perflevel;
+
+            if (client->swapped) {
+                swapl(&visInfo.visualID);
+
+                /* We do not need to swap depth and perfLevel since they are
+                 * already 1 byte quantities.
+                 */
+            }
+
+            /* Write visualID(32), depth(8), perfLevel(8), and pad(16). */
+            WriteToClient(client, 2 * sizeof(CARD32), &visInfo.visualID);
+        }
+    }
+
+    rc = Success;
+
+ freeScrVisInfo:
+    /* Clean up memory. */
+    for (i = 0; i < count; i++) {
+        free(pScrVisInfo[i].visinfo);
+    }
+    free(pScrVisInfo);
+
     free(pDrawables);
 
     return rc;
@@ -1041,7 +1079,7 @@ DbeSetupBackgroundPainter(WindowPtr pWin, GCPtr pGC)
         return FALSE;
     }
 
-    return ChangeGC(NULL, pGC, gcmask, gcvalues) == 0;
+    return ChangeGC(NullClient, pGC, gcmask, gcvalues) == 0;
 }                               /* DbeSetupBackgroundPainter() */
 
 /******************************************************************************
@@ -1163,9 +1201,7 @@ DbeWindowPrivDelete(void *pDbeWinPriv, XID id)
     return Success;
 
 }                               /* DbeWindowPrivDelete() */
-
-static void miDbeWindowDestroy(CallbackListPtr *pcbl, ScreenPtr pScreen, WindowPtr pWin);
-
+
 /******************************************************************************
  *
  * DBE DIX Procedure: DbeResetProc
@@ -1189,39 +1225,94 @@ DbeResetProc(ExtensionEntry * extEntry)
         pDbeScreenPriv = DBE_SCREEN_PRIV(pScreen);
 
         if (pDbeScreenPriv) {
-            dixScreenUnhookWindowDestroy(pScreen, miDbeWindowDestroy);
-            dixScreenUnhookWindowPosition(pScreen, miDbeWindowPosition);
+            /* Unwrap DestroyWindow, which was wrapped in DbeExtensionInit(). */
+            pScreen->DestroyWindow = pDbeScreenPriv->DestroyWindow;
+            pScreen->PositionWindow = pDbeScreenPriv->PositionWindow;
             free(pDbeScreenPriv);
         }
     }
-}
+}                               /* DbeResetProc() */
+
+/******************************************************************************
+ *
+ * DBE DIX Procedure: DbeDestroyWindow
+ *
+ * Description:
+ *
+ *     This is the wrapper for pScreen->DestroyWindow.
+ *     This function frees buffer resources for a window before it is
+ *     destroyed.
+ *
+ *****************************************************************************/
 
-/**
- * @brief window destroy callback
- *
- * Called by DIX when window is being destroyed.
- *
- */
-static void miDbeWindowDestroy(CallbackListPtr *pcbl, ScreenPtr pScreen, WindowPtr pWin)
+static Bool
+DbeDestroyWindow(WindowPtr pWin)
 {
+    DbeScreenPrivPtr pDbeScreenPriv;
+    DbeWindowPrivPtr pDbeWindowPriv;
+    ScreenPtr pScreen;
+    Bool ret;
+
     /*
      **************************************************************************
+     ** 1. Unwrap the member routine.
+     **************************************************************************
+     */
+
+    pScreen = pWin->drawable.pScreen;
+    pDbeScreenPriv = DBE_SCREEN_PRIV(pScreen);
+    pScreen->DestroyWindow = pDbeScreenPriv->DestroyWindow;
+
+    /*
+     **************************************************************************
+     ** 2. Do any work necessary before the member routine is called.
+     **
      **    Call the window priv delete function for all buffer IDs associated
      **    with this window.
      **************************************************************************
      */
 
-    DbeWindowPrivPtr pDbeWindowPriv;
-    while ((pDbeWindowPriv = DBE_WINDOW_PRIV(pWin))) {
+    if ((pDbeWindowPriv = DBE_WINDOW_PRIV(pWin))) {
+        while (pDbeWindowPriv) {
             /* *DbeWinPrivDelete() will free the window private and set it to
              * NULL if there are no more buffer IDs associated with this
              * window.
              */
             FreeResource(pDbeWindowPriv->IDs[0], X11_RESTYPE_NONE);
             pDbeWindowPriv = DBE_WINDOW_PRIV(pWin);
+        }
     }
-}
 
+    /*
+     **************************************************************************
+     ** 3. Call the member routine, saving its result if necessary.
+     **************************************************************************
+     */
+
+    ret = (*pScreen->DestroyWindow) (pWin);
+
+    /*
+     **************************************************************************
+     ** 4. Rewrap the member routine, restoring the wrapper value first in case
+     **    the wrapper (or something that it wrapped) change this value.
+     **************************************************************************
+     */
+
+    pDbeScreenPriv->DestroyWindow = pScreen->DestroyWindow;
+    pScreen->DestroyWindow = DbeDestroyWindow;
+
+    /*
+     **************************************************************************
+     ** 5. Do any work necessary after the member routine has been called.
+     **
+     **    In this case we do not need to do anything.
+     **************************************************************************
+     */
+
+    return ret;
+
+}                               /* DbeDestroyWindow() */
+
 /******************************************************************************
  *
  * DBE DIX Procedure: DbeExtensionInit
@@ -1272,7 +1363,7 @@ DbeExtensionInit(void)
 
         pScreen = screenInfo.screens[i];
 
-        if (!(pDbeScreenPriv = calloc(1, sizeof(DbeScreenPrivRec)))) {
+        if (!(pDbeScreenPriv = malloc(sizeof(DbeScreenPrivRec)))) {
             /* If we can not alloc a window or screen private,
              * then free any privates that we already alloc'ed and return
              */
@@ -1304,10 +1395,12 @@ DbeExtensionInit(void)
             pDbeScreenPriv = DBE_SCREEN_PRIV(pScreen);
 
             if (ddxInitSuccess) {
-                /* Hook in our window destructor. The DDX initialization function
-                 * already added WindowPosition hook for us.
+                /* Wrap DestroyWindow.  The DDX initialization function
+                 * already wrapped PositionWindow for us.
                  */
-                dixScreenHookWindowDestroy(pScreen, miDbeWindowDestroy);
+
+                pDbeScreenPriv->DestroyWindow = pScreen->DestroyWindow;
+                pScreen->DestroyWindow = DbeDestroyWindow;
             }
             else {
                 /* DDX initialization failed.  Stub the screen. */

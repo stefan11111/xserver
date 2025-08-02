@@ -46,7 +46,7 @@ fbOverlayGetScreenPrivateKey(void)
  * Replace this if you want something supporting
  * multiple overlays with the same depth
  */
-static Bool
+Bool
 fbOverlayCreateWindow(WindowPtr pWin)
 {
     FbOverlayScrPrivPtr pScrPriv = fbOverlayGetScrPriv(pWin->drawable.pScreen);
@@ -76,7 +76,7 @@ fbOverlayCreateWindow(WindowPtr pWin)
     return FALSE;
 }
 
-static Bool
+Bool
 fbOverlayCloseScreen(ScreenPtr pScreen)
 {
     FbOverlayScrPrivPtr pScrPriv = fbOverlayGetScrPriv(pScreen);
@@ -92,7 +92,7 @@ fbOverlayCloseScreen(ScreenPtr pScreen)
 /*
  * Return layer containing this window
  */
-static int
+int
 fbOverlayWindowLayer(WindowPtr pWin)
 {
     FbOverlayScrPrivPtr pScrPriv = fbOverlayGetScrPriv(pWin->drawable.pScreen);
@@ -105,7 +105,7 @@ fbOverlayWindowLayer(WindowPtr pWin)
     return 0;
 }
 
-static Bool
+Bool
 fbOverlayCreateScreenResources(ScreenPtr pScreen)
 {
     int i;
@@ -143,7 +143,7 @@ fbOverlayCreateScreenResources(ScreenPtr pScreen)
     return TRUE;
 }
 
-static void
+void
 fbOverlayPaintKey(DrawablePtr pDrawable,
                   RegionPtr pRegion, CARD32 pixel, int layer)
 {
@@ -154,7 +154,7 @@ fbOverlayPaintKey(DrawablePtr pDrawable,
 /*
  * Track visible region for each layer
  */
-static void
+void
 fbOverlayUpdateLayerRegion(ScreenPtr pScreen, int layer, RegionPtr prgn)
 {
     FbOverlayScrPrivPtr pScrPriv = fbOverlayGetScrPriv(pScreen);
@@ -186,7 +186,7 @@ fbOverlayUpdateLayerRegion(ScreenPtr pScreen, int layer, RegionPtr prgn)
 /*
  * Copy only areas in each layer containing real bits
  */
-static void
+void
 fbOverlayCopyWindow(WindowPtr pWin, DDXPointRec ptOldOrg, RegionPtr prgnSrc)
 {
     ScreenPtr pScreen = pWin->drawable.pScreen;
@@ -235,12 +235,25 @@ fbOverlayCopyWindow(WindowPtr pWin, DDXPointRec ptOldOrg, RegionPtr prgnSrc)
     RegionUninit(&rgnDst);
 }
 
-static void
+void
 fbOverlayWindowExposures(WindowPtr pWin, RegionPtr prgn)
 {
     fbOverlayUpdateLayerRegion(pWin->drawable.pScreen,
                                fbOverlayWindowLayer(pWin), prgn);
     miWindowExposures(pWin, prgn);
+}
+
+Bool
+fbOverlaySetupScreen(ScreenPtr pScreen,
+                     void *pbits1,
+                     void *pbits2,
+                     int xsize,
+                     int ysize,
+                     int dpix,
+                     int dpiy, int width1, int width2, int bpp1, int bpp2)
+{
+    return fbSetupScreen(pScreen,
+                         pbits1, xsize, ysize, dpix, dpiy, width1, bpp1);
 }
 
 Bool
@@ -260,6 +273,7 @@ fbOverlayFinishScreenInit(ScreenPtr pScreen,
     int nvisuals;
     int ndepths;
     VisualID defaultVisual;
+    FbOverlayScrPrivPtr pScrPriv;
 
     if (!dixRegisterPrivateKey
         (&fbOverlayScreenPrivateKeyRec, PRIVATE_SCREEN, 0))
@@ -268,7 +282,7 @@ fbOverlayFinishScreenInit(ScreenPtr pScreen,
     if (bpp1 == 24 || bpp2 == 24)
         return FALSE;
 
-    FbOverlayScrPrivPtr pScrPriv = calloc(1, sizeof(FbOverlayScrPrivRec));
+    pScrPriv = malloc(sizeof(FbOverlayScrPrivRec));
     if (!pScrPriv)
         return FALSE;
 

@@ -20,10 +20,13 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef _FBPICT_H_
 #define _FBPICT_H_
-
-#include "fb.h"
 
 /* fbpict.c */
 extern _X_EXPORT void
@@ -41,5 +44,36 @@ fbComposite(CARD8 op,
 extern _X_EXPORT void
 fbAddTraps(PicturePtr pPicture,
            INT16 xOff, INT16 yOff, int ntrap, xTrap * traps);
+
+extern _X_EXPORT void
+fbRasterizeTrapezoid(PicturePtr alpha, xTrapezoid * trap, int x_off, int y_off);
+
+extern _X_EXPORT void
+fbAddTriangles(PicturePtr pPicture,
+               INT16 xOff, INT16 yOff, int ntri, xTriangle * tris);
+
+extern _X_EXPORT void
+fbTrapezoids(CARD8 op,
+             PicturePtr pSrc,
+             PicturePtr pDst,
+             PictFormatPtr maskFormat,
+             INT16 xSrc, INT16 ySrc, int ntrap, xTrapezoid * traps);
+
+extern _X_EXPORT void
+fbTriangles(CARD8 op,
+            PicturePtr pSrc,
+            PicturePtr pDst,
+            PictFormatPtr maskFormat,
+            INT16 xSrc, INT16 ySrc, int ntris, xTriangle * tris);
+
+extern _X_EXPORT void
+fbGlyphs(CARD8 op,
+	 PicturePtr pSrc,
+	 PicturePtr pDst,
+	 PictFormatPtr maskFormat,
+	 INT16 xSrc,
+	 INT16 ySrc, int nlist,
+	 GlyphListPtr list,
+	 GlyphPtr *glyphs);
 
 #endif                          /* _FBPICT_H_ */

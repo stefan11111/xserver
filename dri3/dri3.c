@@ -19,12 +19,9 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
  * OF THIS SOFTWARE.
  */
-#include <dix-config.h>
-
-#include "dix/screen_hooks_priv.h"
-#include "miext/extinit_priv.h"
 
 #include "dri3_priv.h"
+#include "extinit_priv.h"
 #include <drm_fourcc.h>
 
 static int dri3_request;
@@ -32,11 +29,15 @@ DevPrivateKeyRec dri3_screen_private_key;
 
 static int dri3_screen_generation;
 
-static void dri3_screen_close(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
+static Bool
+dri3_close_screen(ScreenPtr screen)
 {
     dri3_screen_priv_ptr screen_priv = dri3_screen_priv(screen);
-    dixScreenUnhookClose(screen, dri3_screen_close);
+
+    unwrap(screen_priv, screen, CloseScreen);
+
     free(screen_priv);
+    return (*screen->CloseScreen) (screen);
 }
 
 Bool
@@ -52,7 +53,7 @@ dri3_screen_init(ScreenPtr screen, const dri3_screen_info_rec *info)
         if (!screen_priv)
             return FALSE;
 
-        dixScreenHookClose(screen, dri3_screen_close);
+        wrap(screen_priv, screen, CloseScreen, dri3_close_screen);
 
         screen_priv->info = info;
 

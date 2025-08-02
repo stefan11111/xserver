@@ -1,6 +1,3 @@
-module_abi_tag = 'xlibre-25.0'
-module_abi_dir = join_paths(module_dir, module_abi_tag)
-
 xorg_inc = include_directories(
     'common',
     'ddc',
@@ -19,7 +16,6 @@ xorg_inc = include_directories(
 xorg_c_args = []
 xorg_c_args += '-DHAVE_XORG_CONFIG_H'
 xorg_c_args += '-DXORG_NO_SDKSYMS'
-xorg_c_args += ('-DXORG_MODULE_ABI_TAG="'+module_abi_tag+'"')
 
 pciaccess_dep = []
 if get_option('pciaccess')
@@ -28,7 +24,6 @@ endif
 
 # subdirs for convenience libraries statically linked into Xorg
 subdir('common')
-subdir('compat')
 subdir('ddc')
 if build_dri1
     subdir('dri')
@@ -58,7 +53,6 @@ xorg_link = [
     libxserver,
     libglxvnd,
     xorg_common,
-    xorg_compat,
     xorg_loader,
     xorg_ddc,
     xorg_xkb,
@@ -79,7 +73,7 @@ if build_dri2
     xorg_link += xorg_dri2
 endif
 
-if host_machine.system() == 'windows'
+if host_machine.system() == 'cygwin' or host_machine.system() == 'windows'
     linker_export_flags = '-Wl,--export-all-symbols'
 elif host_machine.system() == 'sunos' or host_machine.system() == 'darwin'
     linker_export_flags = []
@@ -137,8 +131,12 @@ subdir('shadowfb')
 if build_vgahw
     subdir('vgahw')
 endif
-
-subdir('drivers')
+if build_modesetting
+   subdir('drivers/modesetting')
+endif
+if get_option('xf86-input-inputtest')
+    subdir('drivers/inputtest')
+endif
 
 meson.add_install_script(
     'sh', '-c',

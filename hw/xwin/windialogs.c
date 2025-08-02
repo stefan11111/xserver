@@ -230,7 +230,7 @@ winDisplayExitDialog(winPrivScreenPtr pScreenPriv)
 
     /* Count up running clients (clients[0] is serverClient) */
     for (i = 1; i < currentMaxClients; i++)
-        if (clients[i] != NULL)
+        if (clients[i] != NullClient)
             liveClients++;
     /* Count down server internal clients */
     if (pScreenPriv->pScreenInfo->fMultiWindow)

@@ -180,7 +180,7 @@ winUninstallColormap(ColormapPtr pmap)
     /* Install the default cmap in place of the cmap to be uninstalled */
     if (pmap->mid != pmap->pScreen->defColormap) {
         dixLookupResourceByType((void *) &curpmap, pmap->pScreen->defColormap,
-                                X11_RESTYPE_COLORMAP, NULL, DixUnknownAccess);
+                                X11_RESTYPE_COLORMAP, NullClient, DixUnknownAccess);
         (*pmap->pScreen->InstallColormap) (curpmap);
     }
 }
@@ -405,6 +405,7 @@ winGetPaletteDD(ScreenPtr pScreen, ColormapPtr pcmap)
     Pixel pixel;                /* Pixel == CARD32 */
     CARD16 nRed, nGreen, nBlue; /* CARD16 == unsigned short */
     UINT uiSystemPaletteEntries;
+    LPPALETTEENTRY ppeColors = NULL;
     HDC hdc = NULL;
 
     /* Get a DC to obtain the default palette */
@@ -428,9 +429,9 @@ winGetPaletteDD(ScreenPtr pScreen, ColormapPtr pcmap)
 #endif
 
     /* Allocate palette entries structure */
-    LPPALETTEENTRY ppeColors = calloc(uiSystemPaletteEntries, sizeof(PALETTEENTRY));
+    ppeColors = malloc(uiSystemPaletteEntries * sizeof(PALETTEENTRY));
     if (ppeColors == NULL) {
-        ErrorF("winGetPaletteDD - calloc () for colormap failed\n");
+        ErrorF("winGetPaletteDD - malloc () for colormap failed\n");
         return FALSE;
     }
 
@@ -520,12 +521,12 @@ winCreateDefColormap(ScreenPtr pScreen)
 #endif
 
     /* Allocate an X colormap, owned by client 0 */
-    if (dixCreateColormap(pScreen->defColormap,
-                          pScreen,
-                          pVisual,
-                          &pcmap,
-                          (pVisual->class & DynamicClass) ? AllocNone : AllocAll,
-                          serverClient) != Success) {
+    if (CreateColormap(pScreen->defColormap,
+                       pScreen,
+                       pVisual,
+                       &pcmap,
+                       (pVisual->class & DynamicClass) ? AllocNone : AllocAll,
+                       0) != Success) {
         ErrorF("winCreateDefColormap - CreateColormap failed\n");
         return FALSE;
     }

@@ -144,7 +144,7 @@ RegionInit(RegionPtr _pReg, BoxPtr _rect, int _size)
         size_t rgnSize;
         (_pReg)->extents = RegionEmptyBox;
         if (((_size) > 1) && ((rgnSize = RegionSizeof(_size)) > 0) &&
-            (((_pReg)->data = (RegDataPtr) calloc(1, rgnSize)) != NULL)) {
+            (((_pReg)->data = (RegDataPtr) malloc(rgnSize)) != NULL)) {
             (_pReg)->data->size = (_size);
             (_pReg)->data->numRects = 0;
         }
@@ -163,8 +163,7 @@ static inline void
 RegionUninit(RegionPtr _pReg)
 {
     if ((_pReg)->data && (_pReg)->data->size) {
-        if ((_pReg)->data != &RegionEmptyData)
-            free((_pReg)->data);
+        free((_pReg)->data);
         (_pReg)->data = NULL;
     }
 }

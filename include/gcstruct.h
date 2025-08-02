@@ -279,6 +279,6 @@ typedef struct _GC {
     const GCOps *ops;
     PrivateRec *devPrivates;
     RegionPtr pCompositeClip;
-} GCRec;
+} GC;
 
 #endif                          /* GCSTRUCT_H */

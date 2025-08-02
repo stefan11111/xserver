@@ -59,6 +59,8 @@ SOFTWARE.
 #define SAMETIME 0
 #define LATER 1
 
+#define NullClient ((ClientPtr) 0)
+
 #define REQUEST(type)                                                   \
     type * stuff = (type *)client->requestBuffer;
 
@@ -90,6 +92,23 @@ SOFTWARE.
             return(BadLength);                                          \
     } while (0)
 
+#define LEGAL_NEW_RESOURCE(id,client)           \
+    do {                                        \
+        if (!LegalNewID((id), (client))) {      \
+            (client)->errorValue = (id);        \
+            return BadIDChoice;                 \
+        }                                       \
+    } while (0)
+
+#define WriteReplyToClient(pClient, size, pReply)                       \
+    do {                                                                \
+        if ((pClient)->swapped)                                         \
+            (*ReplySwapVector[((xReq *)(pClient)->requestBuffer)->reqType]) \
+                (pClient, (int)(size), pReply);                         \
+        else                                                            \
+            WriteToClient(pClient, (int)(size), (pReply));              \
+    } while (0)
+
 #define WriteSwappedDataToClient(pClient, size, pbuf)                   \
     do {                                                                \
         if ((pClient)->swapped)                                         \
@@ -117,7 +136,13 @@ typedef struct _TimeStamp {
     CARD32 milliseconds;
 } TimeStamp;
 
+typedef int HWEventQueueType;
+typedef HWEventQueueType *HWEventQueuePtr;
+
 /* dispatch.c */
+extern _X_EXPORT void SetInputCheck(HWEventQueuePtr /*c0 */ ,
+                                    HWEventQueuePtr /*c1 */ );
+
 extern _X_EXPORT void UpdateCurrentTime(void);
 
 extern _X_EXPORT void UpdateCurrentTimeIf(void);
@@ -137,6 +162,16 @@ extern _X_EXPORT void UpdateCurrentTimeIf(void);
  */
 _X_EXPORT int dixDestroyPixmap(void *pPixmap, XID unused);
 
+extern _X_EXPORT ClientPtr NextAvailableClient(void *ospriv);
+
+extern _X_EXPORT void SendErrorToClient(ClientPtr /*client */ ,
+                                        unsigned int /*majorCode */ ,
+                                        unsigned int /*minorCode */ ,
+                                        XID /*resId */ ,
+                                        int /*errorCode */ );
+
+extern _X_EXPORT void MarkClientException(ClientPtr /*client */ );
+
 /* dixutils.c */
 
 extern _X_EXPORT int dixLookupWindow(WindowPtr *result,
@@ -154,6 +189,16 @@ extern _X_EXPORT int dixLookupFontable(FontPtr *result,
 
 extern _X_EXPORT void NoopDDA(void);
 
+extern _X_EXPORT int AlterSaveSetForClient(ClientPtr /*client */ ,
+                                           WindowPtr /*pWin */ ,
+                                           unsigned /*mode */ ,
+                                           Bool /*toRoot */ ,
+                                           Bool /*map */ );
+
+extern _X_EXPORT void BlockHandler(void *timeout);
+
+extern _X_EXPORT void WakeupHandler(int result);
+
 typedef void (*ServerBlockHandlerProcPtr) (void *blockData,
                                            void *timeout);
 
@@ -168,10 +213,39 @@ extern _X_EXPORT void RemoveBlockAndWakeupHandlers(ServerBlockHandlerProcPtr blo
                                                    ServerWakeupHandlerProcPtr wakeupHandler,
                                                    void *blockData);
 
+extern _X_EXPORT void InitBlockAndWakeupHandlers(void);
+
 extern _X_EXPORT Bool QueueWorkProc(Bool (*function)(ClientPtr clientUnused,
                                                      void *closure),
                                     ClientPtr client,
                                     void *closure);
+
+typedef Bool (*ClientSleepProcPtr) (ClientPtr client,
+                                    void *closure);
+
+extern _X_EXPORT Bool ClientSleep(ClientPtr client,
+                                  ClientSleepProcPtr function,
+                                  void *closure);
+
+#ifndef ___CLIENTSIGNAL_DEFINED___
+#define ___CLIENTSIGNAL_DEFINED___
+extern _X_EXPORT Bool ClientSignal(ClientPtr /*client */ );
+#endif                          /* ___CLIENTSIGNAL_DEFINED___ */
+
+#define CLIENT_SIGNAL_ANY ((void *)-1)
+extern _X_EXPORT int ClientSignalAll(ClientPtr /*client*/,
+                                     ClientSleepProcPtr /*function*/,
+                                     void * /*closure*/);
+
+extern _X_EXPORT void ClientWakeup(ClientPtr /*client */ );
+
+extern _X_EXPORT Bool ClientIsAsleep(ClientPtr /*client */ );
+
+extern _X_EXPORT void SendGraphicsExpose(ClientPtr /*client */ ,
+                                         RegionPtr /*pRgn */ ,
+                                         XID /*drawable */ ,
+                                         int /*major */ ,
+                                         int  /*minor */);
 
 /* atom.c */
 
@@ -183,12 +257,112 @@ extern _X_EXPORT Bool ValidAtom(Atom /*atom */ );
 
 extern _X_EXPORT const char *NameForAtom(Atom /*atom */ );
 
+extern _X_EXPORT void
+AtomError(void)
+    _X_NORETURN;
+
+extern _X_EXPORT void
+FreeAllAtoms(void);
+
+extern _X_EXPORT void
+InitAtoms(void);
+
+/* main.c */
+
+extern _X_EXPORT void
+SetVendorRelease(int release);
+
 /* events.c */
+
+extern _X_EXPORT void
+ConfineToShape(DeviceIntPtr /* pDev */ ,
+               RegionPtr /* shape */ ,
+               int * /* px */ ,
+               int * /* py */ );
+
+extern _X_EXPORT Bool
+IsParent(WindowPtr /* maybeparent */ ,
+         WindowPtr /* child */ );
+
+extern _X_EXPORT WindowPtr
+GetCurrentRootWindow(DeviceIntPtr pDev);
+
+extern _X_EXPORT WindowPtr
+GetSpriteWindow(DeviceIntPtr pDev);
+
+extern _X_EXPORT void
+NoticeTime(const DeviceIntPtr dev,
+           TimeStamp time);
+
+extern _X_EXPORT void
+NoticeEventTime(InternalEvent *ev,
+                DeviceIntPtr dev);
+
+extern _X_EXPORT TimeStamp
+LastEventTime(int deviceid);
+
+extern _X_EXPORT Bool
+LastEventTimeWasReset(int deviceid);
+
+extern _X_EXPORT void
+LastEventTimeToggleResetFlag(int deviceid, Bool state);
+
+extern _X_EXPORT void
+LastEventTimeToggleResetAll(Bool state);
+
+extern _X_EXPORT int
+DeliverEventsToWindow(DeviceIntPtr /* pWin */ ,
+                      WindowPtr /* pWin */ ,
+                      xEventPtr /* pEvents */ ,
+                      int /* count */ ,
+                      Mask /* filter */ ,
+                      GrabPtr /* grab */ );
+
+extern _X_EXPORT void
+DeliverRawEvent(RawDeviceEvent * /* ev */ ,
+                DeviceIntPtr    /* dev */
+    );
+
+extern _X_EXPORT void
+WindowHasNewCursor(WindowPtr /* pWin */ );
+
+extern _X_EXPORT int
+OtherClientGone(void *value,
+                XID id);
+
+extern _X_EXPORT int
+DeliverEvents(WindowPtr /*pWin */ ,
+              xEventPtr /*xE */ ,
+              int /*count */ ,
+              WindowPtr /*otherParent */ );
 
 extern _X_EXPORT void
 WriteEventsToClient(ClientPtr /*pClient */ ,
                     int /*count */ ,
                     xEventPtr /*events */ );
+
+extern _X_EXPORT int
+TryClientEvents(ClientPtr /*client */ ,
+                DeviceIntPtr /* device */ ,
+                xEventPtr /*pEvents */ ,
+                int /*count */ ,
+                Mask /*mask */ ,
+                Mask /*filter */ ,
+                GrabPtr /*grab */ );
+
+extern _X_EXPORT void
+WindowsRestructured(void);
+
+extern _X_EXPORT DeviceIntPtr
+PickPointer(ClientPtr /* client */ );
+
+extern _X_EXPORT DeviceIntPtr
+PickKeyboard(ClientPtr /* client */ );
+
+#ifdef RANDR
+extern _X_EXPORT void
+ScreenRestructured(ScreenPtr pScreen);
+#endif
 
 /*
  *  ServerGrabCallback stuff
@@ -217,10 +391,30 @@ typedef struct {
     int count;
 } EventInfoRec;
 
+/*
+ *  DeviceEventCallback stuff
+ */
+
+extern _X_EXPORT CallbackListPtr DeviceEventCallback;
+
 typedef struct {
     InternalEvent *event;
     DeviceIntPtr device;
 } DeviceEventInfoRec;
+
+extern _X_EXPORT CallbackListPtr RootWindowFinalizeCallback;
+
+extern _X_EXPORT Bool
+IsPointerDevice(DeviceIntPtr dev);
+
+extern _X_EXPORT Bool
+IsKeyboardDevice(DeviceIntPtr dev);
+
+extern _X_EXPORT Bool
+IsMaster(DeviceIntPtr dev);
+
+extern _X_EXPORT Bool
+IsFloating(DeviceIntPtr dev);
 
 extern _X_EXPORT void *lastGLContext;
 

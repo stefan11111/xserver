@@ -24,7 +24,7 @@
 
 #include <string.h>
 
-#include "fb/fb_priv.h"
+#include "fb.h"
 
 void
 fbPutImage(DrawablePtr pDrawable,

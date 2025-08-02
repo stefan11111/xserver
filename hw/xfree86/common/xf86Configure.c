@@ -32,8 +32,7 @@
 #include "os/ddx_priv.h"
 #include "os/osdep.h"
 
-#include "xf86_priv.h"
-#include "xf86Bus.h"
+#include "xf86.h"
 #include "xf86Config.h"
 #include "xf86_OSlib.h"
 #include "xf86Priv.h"
@@ -182,9 +181,7 @@ configureInputSection(void)
         }
     }
 
-    if (!(mouse = calloc(1, sizeof(XF86ConfInputRec))))
-        return NULL;
-
+    mouse = calloc(1, sizeof(XF86ConfInputRec));
     mouse->inp_identifier = XNFstrdup("Mouse0");
     mouse->inp_driver = XNFstrdup("mouse");
     mouse->inp_option_lst =
@@ -216,9 +213,9 @@ configureScreenSection(int screennum)
     ptr->scrn_device_str = tmp;
 
     for (i = 0; i < ARRAY_SIZE(depths); i++) {
-        XF86ConfDisplayPtr conf_display = calloc(1, sizeof(XF86ConfDisplayRec));
-        if (!conf_display)
-            continue;
+        XF86ConfDisplayPtr conf_display;
+
+        conf_display = calloc(1, sizeof(XF86ConfDisplayRec));
         conf_display->disp_depth = depths[i];
         conf_display->disp_black.red = conf_display->disp_white.red = -1;
         conf_display->disp_black.green = conf_display->disp_white.green = -1;
@@ -342,8 +339,9 @@ configureLayoutSection(void)
     ptr->lay_identifier = "X.org Configured";
 
     {
-        XF86ConfInputrefPtr iptr = calloc(1, sizeof(XF86ConfInputrefRec));
-        assert(iptr);
+        XF86ConfInputrefPtr iptr;
+
+        iptr = malloc(sizeof(XF86ConfInputrefRec));
         iptr->list.next = NULL;
         iptr->iref_option_lst = NULL;
         iptr->iref_inputdev_str = XNFstrdup("Mouse0");
@@ -355,8 +353,9 @@ configureLayoutSection(void)
     }
 
     {
-        XF86ConfInputrefPtr iptr = calloc(1, sizeof(XF86ConfInputrefRec));
-        assert(iptr);
+        XF86ConfInputrefPtr iptr;
+
+        iptr = malloc(sizeof(XF86ConfInputrefRec));
         iptr->list.next = NULL;
         iptr->iref_option_lst = NULL;
         iptr->iref_inputdev_str = XNFstrdup("Keyboard0");
@@ -368,10 +367,10 @@ configureLayoutSection(void)
     }
 
     for (scrnum = 0; scrnum < nDevToConfig; scrnum++) {
+        XF86ConfAdjacencyPtr aptr;
         char *tmp;
 
-        XF86ConfAdjacencyPtr aptr = calloc(1, sizeof(XF86ConfAdjacencyRec));
-        assert(aptr);
+        aptr = malloc(sizeof(XF86ConfAdjacencyRec));
         aptr->list.next = NULL;
         aptr->adj_x = 0;
         aptr->adj_y = 0;
@@ -413,9 +412,9 @@ configureModuleSection(void)
     elist = LoaderListDir("extensions", NULL);
     if (elist) {
         for (el = elist; *el; el++) {
-            XF86LoadPtr module = calloc(1, sizeof(XF86LoadRec));
-            if (!module)
-                return ptr;
+            XF86LoadPtr module;
+
+            module = calloc(1, sizeof(XF86LoadRec));
             module->load_name = *el;
             ptr->mod_load_lst = (XF86LoadPtr) xf86addListItem((glp) ptr->
                                                               mod_load_lst,
@@ -465,7 +464,6 @@ handle_detailed_input(struct detailed_monitor_section *det_mon, void *data)
         ptr->mon_modelname = realloc(ptr->mon_modelname,
                                      strlen((char *) (det_mon->section.name)) +
                                      1);
-        assert(ptr->mon_modelname);
         strcpy(ptr->mon_modelname, (char *) (det_mon->section.name));
         break;
     case DS_RANGES:
@@ -655,7 +653,6 @@ DoConfigure(void)
         XF86ConfMonitorPtr monitor_ptr;
         XF86ConfScreenPtr screen_ptr;
 
-        assert(xf86config);
         device_ptr = configureDeviceSection(screennum);
         xf86config->conf_device_lst = (XF86ConfDevicePtr) xf86addListItem((glp)
                                                                           xf86config->

@@ -50,7 +50,17 @@ OR PERFORMANCE OF THIS SOFTWARE.
 
 #include <dix-config.h>
 
-#if defined(WIN32)
+#ifdef __CYGWIN__
+#include <stdlib.h>
+#include <signal.h>
+/*
+   Sigh... We really need a prototype for this to know it is stdcall,
+   but #include-ing <windows.h> here is not a good idea...
+*/
+__stdcall unsigned long GetTickCount(void);
+#endif
+
+#if defined(WIN32) && !defined(__CYGWIN__)
 #include <X11/Xwinsock.h>
 #endif
 #include <X11/Xos.h>
@@ -62,9 +72,13 @@ OR PERFORMANCE OF THIS SOFTWARE.
 #endif
 #include "misc.h"
 #include <X11/X.h>
-#include "os/Xtrans.h"
+#define XSERV_t
+#define TRANS_SERVER
+#define TRANS_REOPEN
+#include <X11/Xtrans/Xtrans.h>
 
-#include <libgen.h>
+#include "os/audit.h"
+#include "os/client_priv.h"
 
 #include "input.h"
 #include "dixfont.h"
@@ -82,7 +96,7 @@ OR PERFORMANCE OF THIS SOFTWARE.
 #include <sys/stat.h>
 #include <ctype.h>              /* for isspace */
 #include <stdarg.h>
-#include <stdlib.h>             /* for calloc() */
+#include <stdlib.h>             /* for malloc() */
 
 #if defined(TCPCONN)
 #ifndef WIN32
@@ -92,24 +106,21 @@ OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "dix/dix_priv.h"
 #include "dix/input_priv.h"
-#include "miext/extinit_priv.h"
-#include "os/audit.h"
 #include "os/auth.h"
 #include "os/bug_priv.h"
 #include "os/cmdline.h"
-#include "os/client_priv.h"
 #include "os/ddx_priv.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
 #include "os/serverlock.h"
-#include "Xext/xf86bigfontsrv.h" /* XF86BigfontCleanup() */
-#include "xkb/xkbsrv_priv.h"
+
 #include "dixstruct.h"
+#include "xkbsrv.h"
 #include "picture.h"
 #include "miinitext.h"
 #include "present.h"
 #include "dixstruct_priv.h"
 #include "dpmsproc.h"
+#include "extinit_priv.h"
 
 #define X_INCLUDE_NETDB_H
 #include <X11/Xos_r.h>
@@ -137,7 +148,7 @@ static clockid_t clockid;
 OsSigHandlerPtr
 OsSignal(int sig, OsSigHandlerPtr handler)
 {
-#if defined(WIN32)
+#if defined(WIN32) && !defined(__CYGWIN__)
     return signal(sig, handler);
 #else
     struct sigaction act, oact;
@@ -195,7 +206,7 @@ ForceClockId(clockid_t forced_clockid)
 }
 #endif
 
-#if (defined WIN32 && defined __MINGW32__)
+#if (defined WIN32 && defined __MINGW32__) || defined(__CYGWIN__)
 CARD32
 GetTimeInMillis(void)
 {
@@ -291,9 +302,15 @@ UseMsg(void)
     ErrorF("+iglx                  Allow creating indirect GLX contexts\n");
     ErrorF("-iglx                  Prohibit creating indirect GLX contexts (default)\n");
     ErrorF("-I                     ignore all remaining arguments\n");
-#ifdef CONFIG_NAMESPACE
-    ErrorF("-namespace <conf>      Enable NAMESPACE extension with given config file\n");
-#endif /* CONFIG_NAMESPACE */
+#ifdef RLIMIT_DATA
+    ErrorF("-ld int                limit data space to N Kb\n");
+#endif
+#ifdef RLIMIT_NOFILE
+    ErrorF("-lf int                limit number of open files to N\n");
+#endif
+#ifdef RLIMIT_STACK
+    ErrorF("-ls int                limit stack space to N Kb\n");
+#endif
     LockServerUseMsg();
     ErrorF("-maxclients n          set maximum number of clients (power of two)\n");
     ErrorF("-nolisten string       don't listen on protocol\n");
@@ -421,12 +438,6 @@ ProcessCommandLine(int argc, char *argv[])
                            defaultNoListenList[i]);
     }
     SeatId = getenv("XDG_SEAT");
-
-#ifdef CONFIG_SYSLOG
-    xorgSyslogIdent = getenv("SYSLOG_IDENT");
-    if (!xorgSyslogIdent)
-        xorgSyslogIdent = strdup(basename(argv[0]));
-#endif
 
     for (i = 1; i < argc; i++) {
         /* call ddx first, so it can peek/override if it wants */
@@ -563,9 +574,39 @@ ProcessCommandLine(int argc, char *argv[])
             else
                 UseMsg();
         }
+#ifdef RLIMIT_DATA
+        else if (strcmp(argv[i], "-ld") == 0) {
+            if (++i < argc) {
+                limitDataSpace = atoi(argv[i]);
+                if (limitDataSpace > 0)
+                    limitDataSpace *= 1024;
+            }
+            else
+                UseMsg();
+        }
+#endif
+#ifdef RLIMIT_NOFILE
+        else if (strcmp(argv[i], "-lf") == 0) {
+            if (++i < argc)
+                limitNoFile = atoi(argv[i]);
+            else
+                UseMsg();
+        }
+#endif
+#ifdef RLIMIT_STACK
+        else if (strcmp(argv[i], "-ls") == 0) {
+            if (++i < argc) {
+                limitStackSpace = atoi(argv[i]);
+                if (limitStackSpace > 0)
+                    limitStackSpace *= 1024;
+            }
+            else
+                UseMsg();
+        }
+#endif
 #ifdef LOCK_SERVER
         else if (strcmp(argv[i], "-nolock") == 0) {
-#if !defined(WIN32)
+#if !defined(WIN32) && !defined(__CYGWIN__)
             if (getuid() != 0)
                 ErrorF
                     ("Warning: the -nolock option can only be used by root\n");
@@ -692,16 +733,6 @@ ProcessCommandLine(int argc, char *argv[])
                 UseMsg();
             }
         }
-#ifdef CONFIG_NAMESPACE
-        else if (strcmp(argv[i], "-namespace") == 0) {
-            if (++i < argc) {
-                namespaceConfigFile = argv[i];
-                noNamespaceExtension = FALSE;
-            }
-            else
-                UseMsg();
-        }
-#endif
 #ifdef XINERAMA
         else if (strcmp(argv[i], "+xinerama") == 0) {
             noPanoramiXExtension = FALSE;
@@ -774,9 +805,6 @@ ProcessCommandLine(int argc, char *argv[])
             else
                 UseMsg();
         }
-#ifdef CONFIG_SYSLOG
-        else if (ProcessCmdLineMultiInt(argc, argv, &i, "-syslogverbose", &xorgSyslogVerbosity));
-#endif
         else {
             ErrorF("Unrecognized option: %s\n", argv[i]);
             UseMsg();
@@ -828,9 +856,7 @@ set_font_authorizations(char **authorizations, int *authlen, void *client)
 #endif
 
         len = strlen(hnameptr) + 1;
-        result = calloc(1, len + sizeof(AUTHORIZATION_NAME) + 4);
-        if (!result)
-            return 0;
+        result = malloc(len + sizeof(AUTHORIZATION_NAME) + 4);
 
         p = result;
         *p++ = sizeof(AUTHORIZATION_NAME) >> 8;
@@ -1002,7 +1028,7 @@ OsAbort(void)
 #ifndef __APPLE__
     OsBlockSignals();
 #endif
-#if !defined(WIN32)
+#if !defined(WIN32) || defined(__CYGWIN__)
     /* abort() raises SIGABRT, so we have to stop handling that to prevent
      * recursion
      */
@@ -1041,7 +1067,7 @@ Popen(const char *command, const char *type)
     if ((*type != 'r' && *type != 'w') || type[1])
         return NULL;
 
-    if ((cur = calloc(1, sizeof(struct pid))) == NULL)
+    if ((cur = malloc(sizeof(struct pid))) == NULL)
         return NULL;
 
     if (pipe(pdes) < 0) {
@@ -1440,7 +1466,7 @@ CheckUserAuthorization(void)
 #endif
 }
 
-#if !defined(WIN32)
+#if !defined(WIN32) || defined(__CYGWIN__)
 /* Move a file descriptor out of the way of our select mask; this
  * is useful for file descriptors which will never appear in the
  * select mask to avoid reducing the number of clients that can

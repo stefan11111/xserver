@@ -19,9 +19,8 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
  * OF THIS SOFTWARE.
  */
-#include <dix-config.h>
 
-#include "randr/randrstr_priv.h"
+#include "randrstr.h"
 
 #ifdef RANDR_10_INTERFACE
 static RRModePtr
@@ -59,7 +58,7 @@ RROldModeAdd(RROutputPtr output, RRScreenSizePtr size, int refresh)
         modes = reallocarray(output->modes,
                              output->numModes + 1, sizeof(RRModePtr));
     else
-        modes = calloc(1, sizeof(RRModePtr));
+        modes = malloc(sizeof(RRModePtr));
     if (!modes) {
         RRModeDestroy(mode);
         FreeResource(mode->mode.id, 0);
@@ -296,6 +295,17 @@ RRRegisterRate(ScreenPtr pScreen, RRScreenSizePtr pSize, int rate)
     pRate->rate = rate;
     pSize->pRates = pNew;
     return TRUE;
+}
+
+Rotation
+RRGetRotation(ScreenPtr pScreen)
+{
+    RROutputPtr output = RRFirstOutput(pScreen);
+
+    if (!output)
+        return RR_Rotate_0;
+
+    return output->crtc->rotation;
 }
 
 void

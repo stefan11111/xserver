@@ -1,9 +1,6 @@
 #include <dix-config.h>
 
 #include <stdlib.h>
-
-#include "dix/resource_priv.h"
-
 #include "misc.h"
 #include "hashtable.h"
 
@@ -42,7 +39,7 @@ ht_create(int             keySize,
 {
     int c;
     int numBuckets;
-    HashTable ht = calloc(1, sizeof(struct HashTableRec));
+    HashTable ht = malloc(sizeof(struct HashTableRec));
 
     if (!ht) {
         return NULL;
@@ -55,7 +52,7 @@ ht_create(int             keySize,
     ht->elements = 0;
     ht->bucketBits = INITHASHSIZE;
     numBuckets = 1 << ht->bucketBits;
-    ht->buckets = calloc(numBuckets, sizeof(*ht->buckets));
+    ht->buckets = xallocarray(numBuckets, sizeof(*ht->buckets));
     ht->cdata = cdata;
 
     if (ht->buckets) {
@@ -96,7 +93,7 @@ double_size(HashTable ht)
     int newNumBuckets = 1 << newBucketBits;
     int c;
 
-    newBuckets = calloc(newNumBuckets, sizeof(*ht->buckets));
+    newBuckets = xallocarray(newNumBuckets, sizeof(*ht->buckets));
     if (newBuckets) {
         for (c = 0; c < newNumBuckets; ++c) {
             xorg_list_init(&newBuckets[c]);
@@ -130,7 +127,7 @@ ht_add(HashTable ht, const void *key)
     if (!elem) {
         goto outOfMemory;
     }
-    elem->key = calloc(1, ht->keySize);
+    elem->key = malloc(ht->keySize);
     if (!elem->key) {
         goto outOfMemory;
     }

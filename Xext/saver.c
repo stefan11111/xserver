@@ -36,12 +36,8 @@ in this Software without prior written authorization from the X Consortium.
 #include "dix/colormap_priv.h"
 #include "dix/cursor_priv.h"
 #include "dix/dix_priv.h"
-#include "dix/window_priv.h"
-#include "miext/extinit_priv.h"
 #include "os/osdep.h"
 #include "os/screensaver.h"
-#include "Xext/panoramiX.h"
-#include "Xext/panoramiXsrv.h"
 
 #include "misc.h"
 #include "os.h"
@@ -53,13 +49,23 @@ in this Software without prior written authorization from the X Consortium.
 #include "resource.h"
 #include "gcstruct.h"
 #include "cursorstr.h"
+#include "colormapst.h"
 #include "xace.h"
 #include "inputstr.h"
+#ifdef XINERAMA
+#include "panoramiX.h"
+#include "panoramiXsrv.h"
+#endif /* XINERAMA */
 #ifdef DPMSExtension
 #include <X11/extensions/dpmsconst.h>
 #include "dpmsproc.h"
 #endif
 #include "protocol-versions.h"
+#include "extinit_priv.h"
+
+// temporary workaround for win32/mingw32 name clash
+// see: https://gitlab.freedesktop.org/xorg/xserver/-/merge_requests/1355
+#undef CreateWindow
 
 Bool noScreenSaverExtension = FALSE;
 
@@ -470,7 +476,7 @@ CreateSaverWindow(ScreenPtr pScreen)
     if (GrabInProgress && GrabInProgress != pAttr->client->index)
         return FALSE;
 
-    pWin = dixCreateWindow(pSaver->wid, pScreen->root,
+    pWin = CreateWindow(pSaver->wid, pScreen->root,
                         pAttr->x, pAttr->y, pAttr->width, pAttr->height,
                         pAttr->borderWidth, pAttr->class,
                         pAttr->mask, (XID *) pAttr->values,
@@ -495,11 +501,13 @@ CreateSaverWindow(ScreenPtr pScreen)
         mask |= CWBorderPixmap;
     }
     if (pAttr->pCursor) {
-        if (!MakeWindowOptional(pWin)) {
-            FreeResource(pWin->drawable.id, X11_RESTYPE_NONE);
-            return FALSE;
-        }
-        CursorPtr cursor = RefCursor(pAttr->pCursor);
+        CursorPtr cursor;
+        if (!pWin->optional)
+            if (!MakeWindowOptional(pWin)) {
+                FreeResource(pWin->drawable.id, X11_RESTYPE_NONE);
+                return FALSE;
+            }
+        cursor = RefCursor(pAttr->pCursor);
         if (pWin->optional->cursor)
             FreeCursor(pWin->optional->cursor, (Cursor) 0);
         pWin->optional->cursor = cursor;
@@ -749,7 +757,7 @@ ScreenSaverSetAttributes(ClientPtr client, xScreenSaverSetAttributesReq *stuff)
     depth = stuff->depth;
     visual = stuff->visualID;
 
-    /* copied directly from dixCreateWindow */
+    /* copied directly from CreateWindow */
 
     if (class == CopyFromParent)
         class = pParent->drawable.class;
@@ -802,7 +810,7 @@ ScreenSaverSetAttributes(ClientPtr client, xScreenSaverSetAttributesReq *stuff)
         return BadMatch;
     }
 
-    /* end of errors from dixCreateWindow */
+    /* end of errors from CreateWindow */
 
     pPriv = GetScreenPrivate(pScreen);
     if (pPriv && pPriv->attr) {
@@ -820,7 +828,7 @@ ScreenSaverSetAttributes(ClientPtr client, xScreenSaverSetAttributesReq *stuff)
         goto bail;
     }
     /* over allocate for override redirect */
-    pAttr->values = values = calloc(len + 1, sizeof(unsigned long));
+    pAttr->values = values = xallocarray(len + 1, sizeof(unsigned long));
     if (!values) {
         ret = BadAlloc;
         goto bail;
@@ -1209,7 +1217,7 @@ ProcScreenSaverSuspend(ClientPtr client)
      * to the record, so the screensaver will be re-enabled and the record freed
      * if the client disconnects without reenabling it first.
      */
-    this = calloc(1, sizeof(ScreenSaverSuspensionRec));
+    this = malloc(sizeof(ScreenSaverSuspensionRec));
 
     if (!this)
         return BadAlloc;

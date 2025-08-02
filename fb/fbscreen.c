@@ -22,10 +22,9 @@
 
 #include <dix-config.h>
 
-#include "fb/fb_priv.h"
 #include "os/osdep.h"
 
-#undef CreateWindow
+#include "fb.h"
 
 Bool
 fbCloseScreen(ScreenPtr pScreen)
@@ -100,7 +99,7 @@ fbSetupScreen(ScreenPtr pScreen, void *pbits, /* pointer to screen bitmap */
 {                               /* bits per pixel for screen */
     if (!fbAllocatePrivates(pScreen))
         return FALSE;
-    pScreen->defColormap = dixAllocServerXID();
+    pScreen->defColormap = FakeClientID(0);
     if (bpp > 1) {
 	/* let CreateDefColormap do whatever it wants for pixels */
 	pScreen->blackPixel = pScreen->whitePixel = (Pixel) 0;

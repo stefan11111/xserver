@@ -26,7 +26,6 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
  */
-#include <dix-config.h>
 
 #include "vndserver_priv.h"
 
@@ -36,12 +35,12 @@
 #include <dixstruct.h>
 #include <extnsionst.h>
 #include <glx_extinit.h>
+#include "extinit_priv.h"
 
 #include <GL/glxproto.h>
 #include "vndservervendor.h"
 
 #include "dix/dix_priv.h"
-#include "miext/extinit_priv.h"
 
 Bool noGlxExtension = FALSE;
 

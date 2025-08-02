@@ -145,6 +145,21 @@ CopySwapDeviceEnable(ClientPtr client, DeviceIntPtr dev, char *buf)
 
 /***********************************************************************
  *
+ * This procedure writes the reply for the xGetDeviceControl function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXGetDeviceControl(ClientPtr client, int size, xGetDeviceControlReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
+}
+
+/***********************************************************************
+ *
  * Get the state of the specified device control.
  *
  */
@@ -153,8 +168,9 @@ int
 ProcXGetDeviceControl(ClientPtr client)
 {
     int rc, total_length = 0;
-    char *savbuf;
+    char *buf, *savbuf;
     DeviceIntPtr dev;
+    xGetDeviceControlReply rep;
 
     REQUEST(xGetDeviceControlReq);
     REQUEST_SIZE_MATCH(xGetDeviceControlReq);
@@ -162,6 +178,13 @@ ProcXGetDeviceControl(ClientPtr client)
     rc = dixLookupDevice(&dev, stuff->deviceid, client, DixGetAttrAccess);
     if (rc != Success)
         return rc;
+
+    rep = (xGetDeviceControlReply) {
+        .repType = X_Reply,
+        .RepType = X_GetDeviceControl,
+        .sequenceNumber = client->sequence,
+        .length = 0
+    };
 
     switch (stuff->control) {
     case DEVICE_RESOLUTION:
@@ -183,7 +206,7 @@ ProcXGetDeviceControl(ClientPtr client)
         return BadValue;
     }
 
-    char *buf = calloc(1, total_length);
+    buf = (char *) malloc(total_length);
     if (!buf)
         return BadAlloc;
     savbuf = buf;
@@ -202,18 +225,8 @@ ProcXGetDeviceControl(ClientPtr client)
         break;
     }
 
-    xGetDeviceControlReply rep = {
-        .repType = X_Reply,
-        .RepType = X_GetDeviceControl,
-        .sequenceNumber = client->sequence,
-        .length = bytes_to_int32(total_length),
-    };
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-    }
-    WriteToClient(client, sizeof(xGetDeviceControlReply), &rep);
+    rep.length = bytes_to_int32(total_length);
+    WriteReplyToClient(client, sizeof(xGetDeviceControlReply), &rep);
     WriteToClient(client, total_length, savbuf);
     free(savbuf);
     return Success;

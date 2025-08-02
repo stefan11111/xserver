@@ -41,7 +41,6 @@ THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 #include "os/bug_priv.h"
 #include "os/cmdline.h"
-#include "os/log_priv.h"
 #include "xkb/xkbsrv_priv.h"
 
 #include "misc.h"
@@ -52,6 +51,8 @@ THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "xkbgeom.h"
 
 #define      _XKB_RF_NAMES_PROP_ATOM         "_XKB_RULES_NAMES"
+
+#define	CREATE_ATOM(s)	MakeAtom(s,sizeof(s)-1,1)
 
 #if defined(__alpha) || defined(__alpha__)
 #define	LED_COMPOSE	2
@@ -139,6 +140,7 @@ XkbWriteRulesProp(void)
 {
     int len, out;
     Atom name;
+    char *pval;
 
     len = (XkbRulesUsed ? strlen(XkbRulesUsed) : 0);
     len += (XkbModelUsed ? strlen(XkbModelUsed) : 0);
@@ -156,7 +158,7 @@ XkbWriteRulesProp(void)
         ErrorF("[xkb] Atom error: %s not created\n", _XKB_RF_NAMES_PROP_ATOM);
         return TRUE;
     }
-    char *pval = calloc(1, len);
+    pval = (char *) malloc(len);
     if (!pval) {
         ErrorF("[xkb] Allocation error: %s proprerty not created\n",
                _XKB_RF_NAMES_PROP_ATOM);
@@ -206,11 +208,11 @@ XkbInitRules(XkbRMLVOSet *rmlvo,
              const char *variant,
              const char *options)
 {
-    rmlvo->rules = rules ? strdup(rules) : NULL;
-    rmlvo->model = model ? strdup(model) : NULL;
-    rmlvo->layout = layout ? strdup(layout) : NULL;
-    rmlvo->variant = variant ? strdup(variant) : NULL;
-    rmlvo->options = options ? strdup(options) : NULL;
+    rmlvo->rules = rules ? XNFstrdup(rules) : NULL;
+    rmlvo->model = model ? XNFstrdup(model) : NULL;
+    rmlvo->layout = layout ? XNFstrdup(layout) : NULL;
+    rmlvo->variant = variant ? XNFstrdup(variant) : NULL;
+    rmlvo->options = options ? XNFstrdup(options) : NULL;
 }
 
 static void
@@ -385,7 +387,7 @@ XkbInitNames(XkbSrvInfoPtr xkbi)
     xkb = xkbi->desc;
     if ((rtrn = XkbAllocNames(xkb, XkbAllNamesMask, 0, 0)) != Success)
         return rtrn;
-    unknown = dixAddAtom("unknown");
+    unknown = CREATE_ATOM("unknown");
     names = xkb->names;
     if (names->keycodes == None)
         names->keycodes = unknown;
@@ -401,25 +403,25 @@ XkbInitNames(XkbSrvInfoPtr xkbi)
         names->compat = unknown;
     if (!(xkb->defined & XkmVirtualModsMask)) {
         if (names->vmods[vmod_NumLock] == None)
-            names->vmods[vmod_NumLock] = dixAddAtom("NumLock");
+            names->vmods[vmod_NumLock] = CREATE_ATOM("NumLock");
         if (names->vmods[vmod_Alt] == None)
-            names->vmods[vmod_Alt] = dixAddAtom("Alt");
+            names->vmods[vmod_Alt] = CREATE_ATOM("Alt");
         if (names->vmods[vmod_AltGr] == None)
-            names->vmods[vmod_AltGr] = dixAddAtom("ModeSwitch");
+            names->vmods[vmod_AltGr] = CREATE_ATOM("ModeSwitch");
     }
 
     if (!(xkb->defined & XkmIndicatorsMask) ||
         !(xkb->defined & XkmGeometryMask)) {
         initIndicatorNames(NULL, xkb);
         if (names->indicators[LED_CAPS - 1] == None)
-            names->indicators[LED_CAPS - 1] = dixAddAtom("Caps Lock");
+            names->indicators[LED_CAPS - 1] = CREATE_ATOM("Caps Lock");
         if (names->indicators[LED_NUM - 1] == None)
-            names->indicators[LED_NUM - 1] = dixAddAtom("Num Lock");
+            names->indicators[LED_NUM - 1] = CREATE_ATOM("Num Lock");
         if (names->indicators[LED_SCROLL - 1] == None)
-            names->indicators[LED_SCROLL - 1] = dixAddAtom("Scroll Lock");
+            names->indicators[LED_SCROLL - 1] = CREATE_ATOM("Scroll Lock");
 #ifdef LED_COMPOSE
         if (names->indicators[LED_COMPOSE - 1] == None)
-            names->indicators[LED_COMPOSE - 1] = dixAddAtom("Compose");
+            names->indicators[LED_COMPOSE - 1] = CREATE_ATOM("Compose");
 #endif
     }
 
@@ -737,7 +739,7 @@ XkbProcessArguments(int argc, char *argv[], int i)
 {
     if (strncmp(argv[i], "-xkbdir", 7) == 0) {
         if (++i < argc) {
-#if !defined(WIN32)
+#if !defined(WIN32) && !defined(__CYGWIN__)
             if (getuid() != geteuid()) {
                 LogMessage(X_WARNING,
                            "-xkbdir is not available for setuid X servers\n");

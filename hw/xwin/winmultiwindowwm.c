@@ -37,6 +37,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#ifdef __CYGWIN__
+#include <sys/select.h>
+#endif
 #include <fcntl.h>
 #include <setjmp.h>
 #define HANDLE void *
@@ -84,6 +87,9 @@ extern void winUpdateRgnMultiWindow(WindowPtr pWin);
 
 #define WIN_CONNECT_RETRIES	5
 #define WIN_CONNECT_DELAY	5
+#ifdef HAS_DEVWINDOWS
+#define WIN_MSG_QUEUE_FNAME	"/dev/windows"
+#endif
 
 /*
  * Local structures
@@ -452,7 +458,7 @@ GetWindowName(WMInfoPtr pWMInfo, xcb_window_t iWin, char **ppWindowName)
                 (strstr(pszWindowName, pszClientHostname) == 0)) {
                 /* ... add '@<clientmachine>' to end of window name */
                 *ppWindowName =
-                    calloc(1, strlen(pszWindowName) +
+                    malloc(strlen(pszWindowName) +
                            strlen(pszClientMachine) + 2);
                 strcpy(*ppWindowName, pszWindowName);
                 strcat(*ppWindowName, "@");
@@ -628,7 +634,8 @@ UpdateName(WMInfoPtr pWMInfo, xcb_window_t iWindow)
             /* Convert from UTF-8 to wide char */
             int iLen =
                 MultiByteToWideChar(CP_UTF8, 0, pszWindowName, -1, NULL, 0);
-            wchar_t *pwszWideWindowName = calloc(iLen + 1, sizeof(wchar_t));
+            wchar_t *pwszWideWindowName =
+                malloc(sizeof(wchar_t)*(iLen + 1));
             MultiByteToWideChar(CP_UTF8, 0, pszWindowName, -1,
                                 pwszWideWindowName, iLen);
 
@@ -1394,7 +1401,7 @@ winInitWM(void **ppWMInfo,
 
     /* Bail if the input parameters are bad */
     if (pArg == NULL || pWMInfo == NULL || pXMsgArg == NULL) {
-        ErrorF("winInitWM - calloc failed.\n");
+        ErrorF("winInitWM - malloc failed.\n");
         free(pArg);
         free(pWMInfo);
         free(pXMsgArg);
@@ -1622,12 +1629,13 @@ winInitMultiWindowWM(WMInfoPtr pWMInfo, WMProcArgPtr pProcArg)
 void
 winSendMessageToWM(void *pWMInfo, winWMMessagePtr pMsg)
 {
+    WMMsgNodePtr pNode;
 
 #if ENABLE_DEBUG
     ErrorF("winSendMessageToWM %s\n", MessageName(pMsg));
 #endif
 
-    WMMsgNodePtr pNode = calloc(1, sizeof(WMMsgNodeRec));
+    pNode = malloc(sizeof(WMMsgNodeRec));
     if (pNode != NULL) {
         memcpy(&pNode->msg, pMsg, sizeof(winWMMessageRec));
         PushMessage(&((WMInfoPtr) pWMInfo)->wmMsgQueue, pNode);

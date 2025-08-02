@@ -38,7 +38,7 @@
 #include "os.h"
 #include "windowstr.h"
 #include "propertyst.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
 #include "xf86Parser.h"
 #include "xf86Xinput.h"
@@ -115,6 +115,8 @@ xf86InfoRec xf86Info = {
     .allowMouseOpenFail = FALSE,
     .vidModeEnabled = TRUE,
     .vidModeAllowNonLocal = FALSE,
+    .miscModInDevEnabled = TRUE,
+    .miscModInDevAllowNonLocal = FALSE,
     .pmFlag = TRUE,
 #if defined(CONFIG_HAL) || defined(CONFIG_UDEV) || defined(CONFIG_WSCONS)
     .forceInputDevices = FALSE,
@@ -148,6 +150,7 @@ Bool xf86Resetting = FALSE;
 Bool xf86Initialising = FALSE;
 Bool xf86DoConfigure = FALSE;
 Bool xf86ProbeIgnorePrimary = FALSE;
+Bool xf86DoShowOptions = FALSE;
 DriverPtr *xf86DriverList = NULL;
 int xf86NumDrivers = 0;
 InputDriverPtr *xf86InputDriverList = NULL;
@@ -166,6 +169,7 @@ const char *xf86VisualNames[] = {
 
 /* Parameters set only from the command line */
 Bool xf86fpFlag = FALSE;
+Bool xf86sFlag = FALSE;
 Bool xf86bsEnableFlag = FALSE;
 Bool xf86bsDisableFlag = FALSE;
 Bool xf86silkenMouseDisableFlag = FALSE;
@@ -178,8 +182,8 @@ char *xf86LayoutName = NULL;
 char *xf86ScreenName = NULL;
 char *xf86PointerName = NULL;
 char *xf86KeyboardName = NULL;
-int xf86Verbose = 0;
-int xf86LogVerbose = 3;
+int xf86Verbose = DEFAULT_VERBOSE;
+int xf86LogVerbose = DEFAULT_LOG_VERBOSE;
 int xf86FbBpp = -1;
 int xf86Depth = -1;
 rgb xf86Weight = { 0, 0, 0 };

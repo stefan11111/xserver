@@ -34,7 +34,6 @@
 
 #include <errno.h>
 
-#include "dix/dix_priv.h"
 #include "dix/property_priv.h"
 
 #include "quartz.h"
@@ -43,6 +42,7 @@
 #include "dixstruct.h"
 #include "globals.h"
 #include "extnsionst.h"
+#include "colormapst.h"
 #include "cursorstr.h"
 #include "scrnintstr.h"
 #include "windowstr.h"
@@ -63,7 +63,7 @@
         static Atom atom;                                           \
         if (generation != serverGeneration) {                       \
             generation = serverGeneration;                          \
-            atom = dixAddAtom(atom_name);                           \
+            atom = MakeAtom(atom_name, strlen(atom_name), TRUE);  \
         }                                                           \
         return atom;                                                \
     }
@@ -691,6 +691,7 @@ SNotifyEvent(xAppleWMNotifyEvent *from, xAppleWMNotifyEvent *to)
 static int
 SProcAppleWMQueryVersion(register ClientPtr client)
 {
+    REQUEST(xAppleWMQueryVersionReq);
     return ProcAppleWMQueryVersion(client);
 }
 
@@ -720,7 +721,7 @@ AppleWMExtensionInit(AppleWMProcsPtr procsPtr)
 
     ClientType = CreateNewResourceType(WMFreeClient, "WMClient");
     EventType = CreateNewResourceType(WMFreeEvents, "WMEvent");
-    eventResource = dixAllocServerXID();
+    eventResource = FakeClientID(0);
 
     if (ClientType && EventType &&
         (extEntry = AddExtension(APPLEWMNAME,

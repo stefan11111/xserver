@@ -24,9 +24,9 @@
 
 #include <stdlib.h>
 
-#include "fb/fb_priv.h"
+#include "fb.h"
 
-static const GCFuncs fbGCFuncs = {
+const GCFuncs fbGCFuncs = {
     fbValidateGC,
     miChangeGC,
     miCopyGC,
@@ -36,7 +36,7 @@ static const GCFuncs fbGCFuncs = {
     miCopyClip,
 };
 
-static const GCOps fbGCOps = {
+const GCOps fbGCOps = {
     fbFillSpans,
     fbSetSpans,
     fbPutImage,
@@ -45,11 +45,11 @@ static const GCOps fbGCOps = {
     fbPolyPoint,
     fbPolyLine,
     fbPolySegment,
-    miPolyRectangle,
+    fbPolyRectangle,
     fbPolyArc,
     miFillPolygon,
     fbPolyFillRect,
-    miPolyFillArc,
+    fbPolyFillArc,
     miPolyText8,
     miPolyText16,
     miImageText8,

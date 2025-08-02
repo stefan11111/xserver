@@ -35,8 +35,6 @@
 #endif
 #include "win.h"
 
-#include "randr/randrstr_priv.h"
-
 /*
  * Answer queries about the RandR features supported.
  */
@@ -266,14 +264,14 @@ winRandRInit(ScreenPtr pScreen)
         output->crtc = crtc;
 
         /* Set crtc outputs (should use RRCrtcNotify?) */
-        crtc->outputs = calloc(1, sizeof(RROutputPtr));
+        crtc->outputs = malloc(sizeof(RROutputPtr));
         crtc->outputs[0] = output;
         crtc->numOutputs = 1;
 
         pRRScrPriv->primaryOutput = output;
 
         /* Ensure we have space for exactly one mode */
-        output->modes = calloc(1, sizeof(RRModePtr));
+        output->modes = malloc(sizeof(RRModePtr));
         output->modes[0] = NULL;
 
         /* Set mode to current display size */

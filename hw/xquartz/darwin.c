@@ -34,11 +34,8 @@
 #include <X11/X.h>
 #include <X11/Xproto.h>
 
-#include "miext/extinit_priv.h"
 #include "os/ddx_priv.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
-#include "xkb/xkbsrv_priv.h"
 
 #include "os.h"
 #include "servermd.h"
@@ -54,6 +51,7 @@
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
 #include "exevents.h"
+#include "extinit.h"
 #include "glx_extinit.h"
 #include "xserver-properties.h"
 
@@ -174,7 +172,7 @@ void
 DarwinPrintBanner(void)
 {
     ErrorF("Xquartz starting:\n");
-    ErrorF("XLibre X Server %s\n", XSERVER_VERSION);
+    ErrorF("X.Org X Server %s\n", XSERVER_VERSION);
 }
 
 /*

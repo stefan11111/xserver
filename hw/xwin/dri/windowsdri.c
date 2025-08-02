@@ -36,6 +36,7 @@
 #include "glx/dri_helpers.h"
 
 static int WindowsDRIErrorBase = 0;
+static unsigned char WindowsDRIReqCode = 0;
 static int WindowsDRIEventBase = 0;
 
 static void
@@ -258,6 +259,7 @@ WindowsDRIExtensionInit(void)
                                  WindowsDRIResetProc,
                                  StandardMinorOpcode))) {
         size_t i;
+        WindowsDRIReqCode = (unsigned char)extEntry->base;
         WindowsDRIErrorBase = extEntry->errorBase;
         WindowsDRIEventBase = extEntry->eventBase;
         for (i = 0; i < WindowsDRINumberEvents; i++)

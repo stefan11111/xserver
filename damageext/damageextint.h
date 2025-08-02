@@ -19,22 +19,23 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef _DAMAGEEXTINT_H_
 #define _DAMAGEEXTINT_H_
 
-#include <dix-config.h>
-
 #include <X11/X.h>
 #include <X11/Xproto.h>
-#include <X11/extensions/damageproto.h>
-
-#include "dix/selection_priv.h"
-
 #include "misc.h"
 #include "os.h"
 #include "dixstruct.h"
 #include "extnsionst.h"
+#include <X11/extensions/damageproto.h>
 #include "windowstr.h"
+#include "selection.h"
 #include "scrnintstr.h"
 #include "damage.h"
 #include "xfixes.h"

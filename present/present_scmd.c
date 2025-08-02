@@ -21,8 +21,6 @@
  */
 #include <dix-config.h>
 
-#include "randr/randrstr_priv.h"
-
 #include "present_priv.h"
 #include <misync.h>
 #include <misyncstr.h>
@@ -137,7 +135,9 @@ present_check_flip(RRCrtcPtr            crtc,
 
     /* Does the window match the pixmap exactly? */
     if (window->drawable.x != 0 || window->drawable.y != 0 ||
+#if defined(COMPOSITE) || defined(ROOTLESS)
         window->drawable.x != pixmap->screen_x || window->drawable.y != pixmap->screen_y ||
+#endif
         window->drawable.width != pixmap->drawable.width ||
         window->drawable.height != pixmap->drawable.height) {
         return FALSE;

@@ -39,12 +39,10 @@
 #endif
 
 #include <X11/X.h>
-
-#include "os/log_priv.h"
-
 #include "os.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
+#include "extinit.h"
 
 #ifdef XF86VIDMODE
 #include "vidmodestr.h"
@@ -400,7 +398,7 @@ xf86VidModeInit(ScreenPtr pScreen)
 {
     VidModePtr pVidMode;
 
-    if (!xf86Info.vidModeEnabled) {
+    if (!xf86GetVidModeEnabled()) {
         DebugF("!xf86GetVidModeEnabled()\n");
         return FALSE;
     }
@@ -448,7 +446,7 @@ XFree86VidModeExtensionInit(void)
     DebugF("XFree86VidModeExtensionInit");
 
     /* This means that the DDX doesn't want the vidmode extension enabled */
-    if (!xf86Info.vidModeEnabled)
+    if (!xf86GetVidModeEnabled())
         return;
 
     for (i = 0; i < screenInfo.numScreens; i++) {
@@ -459,7 +457,7 @@ XFree86VidModeExtensionInit(void)
     if (!enabled)
         return;
 
-   VidModeAddExtension(xf86Info.vidModeAllowNonLocal);
+   VidModeAddExtension(xf86GetVidModeAllowNonLocal());
 }
 
 #endif                          /* XF86VIDMODE */

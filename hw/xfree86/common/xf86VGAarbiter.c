@@ -30,8 +30,6 @@
 
 #include "xorg-config.h"
 
-#include "dix/colormap_priv.h"
-
 #include "xf86VGAarbiter_priv.h"
 #include "xf86VGAarbiterPriv.h"
 #include "xf86Bus.h"
@@ -139,6 +137,15 @@ xf86VGAarbiterScrnInit(ScrnInfoPtr pScrn)
     pScrn->vgaDev = dev;
 }
 
+void
+xf86VGAarbiterDeviceDecodes(ScrnInfoPtr pScrn, int rsrc)
+{
+    if (vga_no_arb)
+        return;
+    pci_device_vgaarb_set_target(pScrn->vgaDev);
+    pci_device_vgaarb_decodes(rsrc);
+}
+
 Bool
 xf86VGAarbiterWrapFunctions(void)
 {
@@ -177,7 +184,7 @@ xf86VGAarbiterWrapFunctions(void)
         if (!dixRegisterPrivateKey(&VGAarbiterScreenKeyRec, PRIVATE_SCREEN, 0))
             return FALSE;
 
-        if (!(pScreenPriv = calloc(1, sizeof(VGAarbiterScreenRec))))
+        if (!(pScreenPriv = malloc(sizeof(VGAarbiterScreenRec))))
             return FALSE;
 
         dixSetPrivate(&pScreen->devPrivates, VGAarbiterScreenKey, pScreenPriv);
@@ -603,7 +610,7 @@ VGAarbiterDestroyClip(GCPtr pGC)
 /* GC Ops */
 static void
 VGAarbiterFillSpans(DrawablePtr pDraw,
-                    GCPtr pGC,
+                    GC * pGC,
                     int nInit,
                     DDXPointPtr pptInit, int *pwidthInit, int fSorted)
 {
@@ -652,7 +659,7 @@ VGAarbiterPutImage(DrawablePtr pDraw,
 static RegionPtr
 VGAarbiterCopyArea(DrawablePtr pSrc,
                    DrawablePtr pDst,
-                   GCPtr pGC,
+                   GC * pGC,
                    int srcx, int srcy,
                    int width, int height, int dstx, int dsty)
 {

@@ -33,7 +33,6 @@ THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <X11/Xproto.h>
 #include <X11/extensions/XI.h>
 
-#include "dix/input_priv.h"
 #include "xkb/xkbsrv_priv.h"
 
 #include "misc.h"
@@ -458,7 +457,7 @@ XkbForceUpdateDeviceLEDs(DeviceIntPtr dev)
     sli = XkbFindSrvLedInfo(dev, XkbDfltXIClass, XkbDfltXIId, 0);
     XkbDDXUpdateDeviceIndicators(dev, sli, sli->effectiveState);
 
-    if (InputDevIsMaster(dev)) {
+    if (IsMaster(dev)) {
         master = dev;
         nt_list_for_each_entry(dev, inputInfo.devices, next) {
             if (!dev->key || GetMaster(dev, MASTER_KEYBOARD) != master)
@@ -806,7 +805,7 @@ XkbFlushLedEvents(DeviceIntPtr dev,
                 XkbDDXUpdateDeviceIndicators(dev, sli, sli->effectiveState);
             XkbSendExtensionDeviceNotify(dev, cause->client, ed);
         }
-        memset((char *) ed, 0, sizeof(xkbExtensionDeviceNotify));
+        memset((char *) ed, 0, sizeof(XkbExtensionDeviceNotify));
     }
     return;
 }

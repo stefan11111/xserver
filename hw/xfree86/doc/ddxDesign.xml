@@ -1859,6 +1859,28 @@ functions:
 
 	</para></blockquote>
 
+     <blockquote><para>
+	  <programlisting>
+    int xf86GetDepth();
+	  </programlisting>
+	  <blockquote><para>
+      Returns the <option>-depth</option> command line setting.  If not
+      set on the command line, <constant>-1</constant> is returned.
+	    </para></blockquote>
+
+	</para></blockquote>
+
+     <blockquote><para>
+	  <programlisting>
+    rgb xf86GetWeight();
+	  </programlisting>
+	  <blockquote><para>
+      Returns the <option>-weight</option> command line setting.  If not
+      set on the command line, <literal remap="tt">{0, 0, 0}</literal> is returned.
+	    </para></blockquote>
+
+	</para></blockquote>
+
       <blockquote><para>
 	  <programlisting>
     Gamma xf86GetGamma();
@@ -1868,6 +1890,17 @@ functions:
       <option>-ggamma</option>, <option>-bgamma</option> command line settings.
       If not set on the command line, <literal remap="tt">{0.0, 0.0, 0.0}</literal>
       is returned.
+	    </para></blockquote>
+
+	</para></blockquote>
+
+      <blockquote><para>
+	  <programlisting>
+    Bool xf86GetFlipPixels();
+	  </programlisting>
+	  <blockquote><para>
+      Returns <constant>TRUE</constant> if <option>-flippixels</option> is
+      present on the command line, and <constant>FALSE</constant> otherwise.
 	    </para></blockquote>
 
 	</para></blockquote>
@@ -1971,6 +2004,18 @@ functions is as follows:
 	  <blockquote><para>
       Returns <constant>TRUE</constant> if the server is at the end of a
       generation and is in the process of exiting, and
+      <constant>FALSE</constant> otherwise.
+	    </para></blockquote>
+
+	</para></blockquote>
+
+      <blockquote><para>
+	  <programlisting>
+    Bool xf86ServerIsResetting();
+	  </programlisting>
+	  <blockquote><para>
+      Returns <constant>TRUE</constant> if the server is at the end of a
+      generation and is in the process of resetting, and
       <constant>FALSE</constant> otherwise.
 	    </para></blockquote>
 
@@ -2585,6 +2630,18 @@ Several functions are provided to simplify resource registration:
       This function returns <constant>TRUE</constant> if the entity referenced
       by <parameter>entityIndex</parameter> is the primary display device (i.e.,
       the one initialised at boot time and used in text mode).
+		</para>
+
+	      </blockquote></para></blockquote>
+
+	  <blockquote><para>
+	      <programlisting>
+    Bool xf86IsScreenPrimary(ScrnInfoPtr pScrn);
+	      </programlisting>
+	      <blockquote><para>
+      This function returns <constant>TRUE</constant> if the primary entity
+      is registered with the screen referenced by
+      <parameter>pScrn</parameter>.
 		</para>
 
 	      </blockquote></para></blockquote>
@@ -3263,6 +3320,18 @@ video memory using the following functions (definitions taken from
     )
       </programlisting>
     </para>
+
+    <para>
+The function:
+      <programlisting>
+    Bool xf86FBManagerRunning(ScreenPtr pScreen);
+      </programlisting>
+
+can be used by an extension to check if the driver has initialized
+the memory manager.  The manager is not available if this returns
+<constant>FALSE</constant> and the functions above will all fail.
+    </para>
+
 
     <para>
 <function>xf86AllocateOffscreenArea()</function> can be used to request a

@@ -33,6 +33,7 @@
 #include "windowstr.h"
 #include "input.h"
 #include "resource.h"
+#include "colormapst.h"
 #include "cursorstr.h"
 #include "dixstruct.h"
 #include "gcstruct.h"
@@ -91,6 +92,7 @@ int
 PictureGetFilterId(const char *filter, int len, Bool makeit)
 {
     int i;
+    char *name;
     char **names;
 
     if (len < 0)
@@ -101,7 +103,7 @@ PictureGetFilterId(const char *filter, int len, Bool makeit)
             return i;
     if (!makeit)
         return -1;
-    char *name = calloc(1, len + 1);
+    name = malloc(len + 1);
     if (!name)
         return -1;
     memcpy(name, filter, len);
@@ -109,7 +111,7 @@ PictureGetFilterId(const char *filter, int len, Bool makeit)
     if (filterNames)
         names = reallocarray(filterNames, nfilterNames + 1, sizeof(char *));
     else
-        names = calloc(1, sizeof(char *));
+        names = malloc(sizeof(char *));
     if (!names) {
         free(name);
         return -1;
@@ -187,7 +189,7 @@ PictureAddFilter(ScreenPtr pScreen,
         filters =
             reallocarray(ps->filters, ps->nfilters + 1, sizeof(PictFilterRec));
     else
-        filters = calloc(1, sizeof(PictFilterRec));
+        filters = malloc(sizeof(PictFilterRec));
     if (!filters)
         return -1;
     ps->filters = filters;
@@ -221,7 +223,7 @@ PictureSetFilterAlias(ScreenPtr pScreen, const char *filter, const char *alias)
                                    ps->nfilterAliases + 1,
                                    sizeof(PictFilterAliasRec));
         else
-            aliases = calloc(1, sizeof(PictFilterAliasRec));
+            aliases = malloc(sizeof(PictFilterAliasRec));
         if (!aliases)
             return FALSE;
         ps->filterAliases = aliases;
@@ -376,7 +378,7 @@ SetPicturePictFilter(PicturePtr pPicture, PictFilterPtr pFilter,
         return BadMatch;
 
     if (nparams != pPicture->filter_nparams) {
-        xFixed *new_params = calloc(nparams, sizeof(xFixed));
+        xFixed *new_params = xallocarray(nparams, sizeof(xFixed));
 
         if (!new_params && nparams)
             return BadAlloc;
@@ -385,8 +387,7 @@ SetPicturePictFilter(PicturePtr pPicture, PictFilterPtr pFilter,
         pPicture->filter_nparams = nparams;
     }
     for (i = 0; i < nparams; i++)
-        if (pPicture->filter_params)
-            pPicture->filter_params[i] = params[i];
+        pPicture->filter_params[i] = params[i];
     pPicture->filter = pFilter->id;
 
     if (pPicture->pDrawable) {

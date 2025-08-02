@@ -1,6 +1,3 @@
-#ifndef XSERVER_WFBRENAME_H
-#define XSERVER_WFBRENAME_H
-
 #define fbAddTraps wfbAddTraps
 #define fbAddTriangles wfbAddTriangles
 #define fbAllocatePrivates wfbAllocatePrivates
@@ -62,6 +59,7 @@
 #define fbGlyph16 wfbGlyph16
 #define fbGlyph32 wfbGlyph32
 #define fbGlyph8 wfbGlyph8
+#define fbGlyphs wfbGlyphs
 #define fbImageGlyphBlt wfbImageGlyphBlt
 #define fbIn wfbIn
 #define fbInitializeColormap wfbInitializeColormap
@@ -70,9 +68,18 @@
 #define FbMergeRopBits wFbMergeRopBits
 #define fbOddTile wfbOddTile
 #define fbOver wfbOver
+#define fbOverlayCloseScreen wfbOverlayCloseScreen
+#define fbOverlayCopyWindow wfbOverlayCopyWindow
+#define fbOverlayCreateScreenResources wfbOverlayCreateScreenResources
+#define fbOverlayCreateWindow wfbOverlayCreateWindow
 #define fbOverlayFinishScreenInit wfbOverlayFinishScreenInit
 #define fbOverlayGeneration wfbOverlayGeneration
 #define fbOverlayGetScreenPrivateKey wfbOverlayGetScreenPrivateKey
+#define fbOverlayPaintKey wfbOverlayPaintKey
+#define fbOverlaySetupScreen wfbOverlaySetupScreen
+#define fbOverlayUpdateLayerRegion wfbOverlayUpdateLayerRegion
+#define fbOverlayWindowExposures wfbOverlayWindowExposures
+#define fbOverlayWindowLayer wfbOverlayWindowLayer
 #define fbPadPixmap wfbPadPixmap
 #define fbPictureInit wfbPictureInit
 #define fbPixmapToRegion wfbPixmapToRegion
@@ -121,5 +128,3 @@
 #define fbWinPrivateKeyRec wfbWinPrivateKeyRec
 #define free_pixman_pict wfb_free_pixman_pict
 #define image_from_pict wfb_image_from_pict
-
-#endif /* XSERVER_WFBRENAME_H */

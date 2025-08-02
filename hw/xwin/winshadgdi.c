@@ -151,6 +151,7 @@ static
 winQueryRGBBitsAndMasks(ScreenPtr pScreen)
 {
     winScreenPriv(pScreen);
+    BITMAPINFOHEADER *pbmih = NULL;
     Bool fReturn = TRUE;
     LPDWORD pdw = NULL;
     DWORD dwRedBits, dwGreenBits, dwBlueBits;
@@ -186,9 +187,9 @@ winQueryRGBBitsAndMasks(ScreenPtr pScreen)
     }
 
     /* Allocate a bitmap header and color table */
-    BITMAPINFOHEADER *pbmih = calloc(1, sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD));
+    pbmih = malloc(sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD));
     if (pbmih == NULL) {
-        ErrorF("winQueryRGBBitsAndMasks - calloc failed\n");
+        ErrorF("winQueryRGBBitsAndMasks - malloc failed\n");
         return FALSE;
     }
 
@@ -540,9 +541,9 @@ winInitScreenShadowGDI(ScreenPtr pScreen)
     pScreenPriv->hdcShadow = CreateCompatibleDC(pScreenPriv->hdcScreen);
 
     /* Allocate bitmap info header */
-    pScreenPriv->pbmih = calloc(1, sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD));
+    pScreenPriv->pbmih = malloc(sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD));
     if (pScreenPriv->pbmih == NULL) {
-        ErrorF("winInitScreenShadowGDI - calloc () failed\n");
+        ErrorF("winInitScreenShadowGDI - malloc () failed\n");
         return FALSE;
     }
 
@@ -827,6 +828,7 @@ winBltExposedWindowRegionShadowGDI(ScreenPtr pScreen, WindowPtr pWin)
         return 0;
     }
 
+#ifdef COMPOSITE
     if (pWin->redirectDraw != RedirectDrawNone) {
         HBITMAP hBitmap;
         HDC hdcPixmap;
@@ -862,12 +864,13 @@ winBltExposedWindowRegionShadowGDI(ScreenPtr pScreen, WindowPtr pWin)
                     ps.rcPaint.top + pWin->borderWidth,
                     SRCCOPY))
             ErrorF("winBltExposedWindowRegionShadowGDI - BitBlt failed: 0x%08x\n",
-                   (unsigned int)GetLastError());
+                   GetLastError());
 
         /* Release DC */
         DeleteDC(hdcPixmap);
     }
     else
+#endif
     {
     /* Try to copy from the shadow buffer to the invalidated region */
     if (!BitBlt(hdcUpdate,
@@ -1262,6 +1265,7 @@ winSetEngineFunctionsShadowGDI(ScreenPtr pScreen)
             winCreateBoundingWindowFullScreen;
     else
         pScreenPriv->pwinCreateBoundingWindow = winCreateBoundingWindowWindowed;
+    pScreenPriv->pwinFinishScreenInit = winFinishScreenInitFB;
     pScreenPriv->pwinBltExposedRegions = winBltExposedRegionsShadowGDI;
     pScreenPriv->pwinBltExposedWindowRegion = winBltExposedWindowRegionShadowGDI;
     pScreenPriv->pwinActivateApp = winActivateAppShadowGDI;

@@ -90,11 +90,6 @@ typedef struct _ScreenSaverStuff {
                                  Bool /*force */ );
 } ScreenSaverStuffRec;
 
-typedef enum {
-    WINDOW_VRR_DISABLED = 0,
-    WINDOW_VRR_ENABLED,
-} WindowVRRMode;
-
 /*
  *  There is a typedef for each screen function pointer so that code that
  *  needs to declare a screen function pointer (e.g. in a screen private
@@ -181,8 +176,6 @@ typedef void (*ClearToBackgroundProcPtr) (WindowPtr /*pWindow */ ,
 typedef void (*ClipNotifyProcPtr) (WindowPtr /*pWindow */ ,
                                    int /*dx */ ,
                                    int /*dy */ );
-
-typedef void (*SetWindowVRRModeProcPtr) (WindowPtr pWindow, WindowVRRMode mode);
 
 /* pixmap will exist only for the duration of the current rendering operation */
 #define CREATE_PIXMAP_USAGE_SCRATCH                     1
@@ -497,16 +490,7 @@ typedef void (*DPMSProcPtr)(ScreenPtr pScreen, int level);
     required. Unwrap occurs at the top of each function, just after
     entry, and Wrap occurs at the bottom of each function, just
     before returning.
-
-    DestroyWindow() should NOT be wrapped anymore
-    use dixScreenHookWindowDestroy() instead.
  */
-
-#define _SCREEN_HOOK_TYPE(NAME, FUNCTYPE, ARRSIZE) \
-    struct { \
-        FUNCTYPE func; \
-        void *arg; \
-    } NAME[ARRSIZE];
 
 typedef struct _Screen {
     int myNum;                  /* index of this instance in Screens[] */
@@ -674,32 +658,6 @@ typedef struct _Screen {
     ReplaceScanoutPixmapProcPtr ReplaceScanoutPixmap;
     XYToWindowProcPtr XYToWindow;
     DPMSProcPtr DPMS;
-
-    /* additional window destructors (replaces wrapping DestroyWindow).
-       should NOT be touched outside of DIX core */
-    CallbackListPtr hookWindowDestroy;
-
-    /* additional window position notify hooks (replaces wrapping PositionWindow)
-       should NOT be touched outside of DIX core */
-    CallbackListPtr hookWindowPosition;
-
-    /* additional screen close notify hooks (replaces wrapping CloseScreen)
-       should NOT be touched outside of DIX core */
-    CallbackListPtr hookClose;
-
-    /* additional pixmap destroy notify hooks (replaces wrapping DestroyPixmap)
-       should NOT be touched outside of DIX core */
-    CallbackListPtr hookPixmapDestroy;
-
-    /* hooks run right after SUCCESSFUL CreateScreenResources
-       should NOT be touched outside of DIX core */
-    CallbackListPtr hookPostCreateResources;
-
-    SetWindowVRRModeProcPtr SetWindowVRRMode;
-
-    /* additional screen post-close notify hooks (replaces wrapping CloseScreen)
-       should NOT be touched outside of DIX core */
-    CallbackListPtr hookPostClose;
 } ScreenRec;
 
 static inline RegionPtr

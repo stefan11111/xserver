@@ -43,6 +43,7 @@
 #include "misc.h"
 #include "dixstruct.h"
 #include "extnsionst.h"
+#include "colormapst.h"
 #include "cursorstr.h"
 #include "scrnintstr.h"
 #include "servermd.h"
@@ -62,6 +63,7 @@ AppleDRIResetProc(ExtensionEntry* extEntry);
 static int
 ProcAppleDRICreatePixmap(ClientPtr client);
 
+static unsigned char DRIReqCode = 0;
 static int DRIEventBase = 0;
 
 static void
@@ -394,6 +396,7 @@ SNotifyEvent(xAppleDRINotifyEvent *from,
 static int
 SProcAppleDRIQueryVersion(register ClientPtr client)
 {
+    REQUEST(xAppleDRIQueryVersionReq);
     return ProcAppleDRIQueryVersion(client);
 }
 
@@ -507,6 +510,7 @@ AppleDRIExtensionInit(void)
                                  AppleDRIResetProc,
                                  StandardMinorOpcode))) {
         size_t i;
+        DRIReqCode = (unsigned char)extEntry->base;
         DRIErrorBase = extEntry->errorBase;
         DRIEventBase = extEntry->eventBase;
         for (i = 0; i < AppleDRINumberEvents; i++)

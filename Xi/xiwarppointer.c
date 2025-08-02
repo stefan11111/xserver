@@ -38,7 +38,6 @@
 
 #include "dix/cursor_priv.h"
 #include "dix/dix_priv.h"
-#include "dix/input_priv.h"
 #include "mi/mipointer_priv.h"
 
 #include "inputstr.h"           /* DeviceIntPtr      */
@@ -98,8 +97,8 @@ ProcXIWarpPointer(ClientPtr client)
         return rc;
     }
 
-    if ((!InputDevIsMaster(pDev) && !InputDevIsFloating(pDev)) ||
-        (InputDevIsMaster(pDev) && !IsPointerDevice(pDev))) {
+    if ((!IsMaster(pDev) && !IsFloating(pDev)) ||
+        (IsMaster(pDev) && !IsPointerDevice(pDev))) {
         client->errorValue = stuff->deviceid;
         return BadDevice;
     }
@@ -177,9 +176,8 @@ ProcXIWarpPointer(ClientPtr client)
             y = pSprite->physLimits.y2 - 1;
 
         if (pSprite->hotShape)
-            ConfineToShape(pSprite->hotShape, &x, &y);
-        if (newScreen->SetCursorPosition)
-            newScreen->SetCursorPosition(pDev, newScreen, x, y, TRUE);
+            ConfineToShape(pDev, pSprite->hotShape, &x, &y);
+        (*newScreen->SetCursorPosition) (pDev, newScreen, x, y, TRUE);
     }
     else if (!PointerConfinedToScreen(pDev)) {
         NewCurrentScreen(pDev, newScreen, x, y);

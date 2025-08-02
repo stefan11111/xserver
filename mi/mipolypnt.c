@@ -65,7 +65,7 @@ miPolyPoint(DrawablePtr pDrawable, GCPtr pGC, int mode, /* Origin or Previous */
     int i;
     xPoint *ppt;
 
-    if (!(pwidthInit = calloc(npt, sizeof(int))))
+    if (!(pwidthInit = xallocarray(npt, sizeof(int))))
         return;
 
     /* make pointlist origin relative */
@@ -94,7 +94,7 @@ miPolyPoint(DrawablePtr pDrawable, GCPtr pGC, int mode, /* Origin or Previous */
     fsOld.val = pGC->fillStyle;
     fsNew.val = FillSolid;
     if (pGC->fillStyle != FillSolid) {
-        ChangeGC(NULL, pGC, GCFillStyle, &fsNew);
+        ChangeGC(NullClient, pGC, GCFillStyle, &fsNew);
         ValidateGC(pDrawable, pGC);
     }
     pwidth = pwidthInit;
@@ -103,7 +103,7 @@ miPolyPoint(DrawablePtr pDrawable, GCPtr pGC, int mode, /* Origin or Previous */
     (*pGC->ops->FillSpans) (pDrawable, pGC, npt, pptInit, pwidthInit, FALSE);
 
     if (fsOld.val != FillSolid) {
-        ChangeGC(NULL, pGC, GCFillStyle, &fsOld);
+        ChangeGC(NullClient, pGC, GCFillStyle, &fsOld);
         ValidateGC(pDrawable, pGC);
     }
     free(pwidthInit);

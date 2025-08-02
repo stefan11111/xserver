@@ -24,7 +24,7 @@
 
 #include <stdlib.h>
 
-#include "fb/fb_priv.h"
+#include "fb.h"
 
 void
 fbCopyNtoN(DrawablePtr pSrcDrawable,
@@ -192,7 +192,7 @@ fbCopyNto1(DrawablePtr pSrcDrawable,
             height = pbox->y2 - pbox->y1;
 
             tmpStride = ((width + FB_STIP_MASK) >> FB_STIP_SHIFT);
-            tmp = calloc(tmpStride * height, sizeof(FbStip));
+            tmp = xallocarray(tmpStride * height, sizeof(FbStip));
             if (!tmp)
                 return;
 

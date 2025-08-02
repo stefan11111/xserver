@@ -43,12 +43,19 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
 SOFTWARE.
 
 ******************************************************************/
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef _OSDEP_H_
 #define _OSDEP_H_ 1
 
-#include <dix-config.h>
-
 #include <X11/Xdefs.h>
+
+#if defined(XDMCP) || defined(HASXDMAUTH)
+#include <X11/Xdmcp.h>
+#endif
 
 #include <limits.h>
 #include <stddef.h>
@@ -72,6 +79,13 @@ SOFTWARE.
 # endif
 #else   /* WIN32 The socket errorcodes differ from the normal errors */
 #define ETEST(err) (err == EAGAIN || err == WSAEWOULDBLOCK)
+#endif
+
+#if defined(XDMCP) || defined(HASXDMAUTH)
+typedef Bool (*ValidatorFunc) (ARRAY8Ptr Auth, ARRAY8Ptr Data, int packet_type);
+typedef Bool (*GeneratorFunc) (ARRAY8Ptr Auth, ARRAY8Ptr Data, int packet_type);
+typedef Bool (*AddAuthorFunc) (unsigned name_length, const char *name,
+                               unsigned data_length, char *data);
 #endif
 
 typedef struct _connectionInput *ConnectionInputPtr;
@@ -120,6 +134,9 @@ extern Bool NewOutputPending;
 /* in access.c */
 extern Bool ComputeLocalClient(ClientPtr client);
 
+/* in auth.c */
+extern void GenerateRandomData(int len, char *buf);
+
 /* OsTimer functions */
 void TimerInit(void);
 Bool TimerForce(OsTimerPtr timer);
@@ -166,13 +183,8 @@ void OsInit(void);
 void OsCleanup(Bool);
 void OsVendorFatalError(const char *f, va_list args) _X_ATTRIBUTE_PRINTF(1, 0);
 void OsVendorInit(void);
-
-_X_EXPORT /* needed by the int10 module, but should not be used by OOT drivers */
 void OsBlockSignals(void);
-
-_X_EXPORT /* needed by the int10 module, but should not be used by OOT drivers */
 void OsReleaseSignals(void);
-
 void OsResetSignals(void);
 void OsAbort(void) _X_NORETURN;
 void AbortServer(void) _X_NORETURN;
@@ -192,6 +204,10 @@ void CloseDownConnection(ClientPtr client);
 
 extern int LimitClients;
 extern Bool PartialNetwork;
+
+extern int limitDataSpace;
+extern int limitStackSpace;
+extern int limitNoFile;
 
 extern Bool CoreDump;
 extern Bool NoListenAll;
@@ -214,12 +230,6 @@ Ones(unsigned long mask)
     y = mask - y - ((y >> 1) & 033333333333);
     return (((y + (y >> 3)) & 030707070707) % 077);
 }
-#endif
-
-/* static assert for protocol structure sizes */
-#ifndef __size_assert
-#define __size_assert(what, howmuch) \
-  typedef char what##_size_wrong_[( !!(sizeof(what) == howmuch) )*2-1 ]
 #endif
 
 #endif                          /* _OSDEP_H_ */

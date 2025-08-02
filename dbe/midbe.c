@@ -85,7 +85,7 @@ miDbeGetVisualInfo(ScreenPtr pScreen, XdbeScreenVisualInfo * pScrVisInfo)
     }
 
     /* Allocate an array of XdbeVisualInfo items. */
-    if (!(visInfo = calloc(count, sizeof(XdbeVisualInfo)))) {
+    if (!(visInfo = xallocarray(count, sizeof(XdbeVisualInfo)))) {
         return FALSE;           /* memory alloc failure */
     }
 
@@ -375,13 +375,14 @@ miDbeSwapBuffers(ClientPtr client, int *pNumWindows, DbeSwapInfoPtr swapInfo)
  *     the resources associated with a DBE buffer ID.  There are 5 ways that
  *     miDbeWinPrivDelete() can be called by FreeResource().  They are:
  *
- *     - A DBE window is destroyed, in which case the DbeWindowDestroy()
- *       callback is invoked.  It calls FreeResource() for all DBE buffer IDs.
+ *     - A DBE window is destroyed, in which case the DbeDestroyWindow()
+ *       wrapper is invoked.  The wrapper calls FreeResource() for all DBE
+ *       buffer IDs.
  *
  *     - miDbeAllocBackBufferName() calls FreeResource() to clean up resources
  *       after a buffer allocation failure.
  *
- *     - The WindowPosition hook, miDbeWindowPosition(), calls
+ *     - The PositionWindow wrapper, miDbePositionWindow(), calls
  *       FreeResource() when it fails to create buffers of the new size.
  *       FreeResource() is called for all DBE buffer IDs.
  *
@@ -431,20 +432,22 @@ miDbeWinPrivDelete(DbeWindowPrivPtr pDbeWindowPriv, XID bufId)
     if (pDbeWindowPriv->pBackBuffer)
         dixDestroyPixmap(pDbeWindowPriv->pBackBuffer, 0);
 }                               /* miDbeWinPrivDelete() */
-
+
 /******************************************************************************
  *
- * DBE MI Procedure: miDbeWindowPosition
+ * DBE MI Procedure: miDbePositionWindow
  *
  * Description:
  *
- *     This function was cloned from miMbxWindowPosition() in mimultibuf.c.
+ *     This function was cloned from miMbxPositionWindow() in mimultibuf.c.
  *     This function resizes the buffer when the window is resized.
  *
  *****************************************************************************/
 
-void miDbeWindowPosition(CallbackListPtr *pcbl, ScreenPtr pScreen, XorgScreenWindowPositionParamRec *param)
+static Bool
+miDbePositionWindow(WindowPtr pWin, int x, int y)
 {
+    ScreenPtr pScreen;
     DbeScreenPrivPtr pDbeScreenPriv;
     DbeWindowPrivPtr pDbeWindowPriv;
     int width, height;
@@ -457,9 +460,43 @@ void miDbeWindowPosition(CallbackListPtr *pcbl, ScreenPtr pScreen, XorgScreenWin
     Bool clear;
     GCPtr pGC;
     xRectangle clearRect;
+    Bool ret;
 
-    WindowPtr pWin = param->window;
+    /*
+     **************************************************************************
+     ** 1. Unwrap the member routine.
+     **************************************************************************
+     */
+
+    pScreen = pWin->drawable.pScreen;
     pDbeScreenPriv = DBE_SCREEN_PRIV(pScreen);
+    pScreen->PositionWindow = pDbeScreenPriv->PositionWindow;
+
+    /*
+     **************************************************************************
+     ** 2. Do any work necessary before the member routine is called.
+     **
+     **    In this case we do not need to do anything.
+     **************************************************************************
+     */
+
+    /*
+     **************************************************************************
+     ** 3. Call the member routine, saving its result if necessary.
+     **************************************************************************
+     */
+
+    ret = (*pScreen->PositionWindow) (pWin, x, y);
+
+    /*
+     **************************************************************************
+     ** 4. Rewrap the member routine, restoring the wrapper value first in case
+     **    the wrapper (or something that it wrapped) change this value.
+     **************************************************************************
+     */
+
+    pDbeScreenPriv->PositionWindow = pScreen->PositionWindow;
+    pScreen->PositionWindow = miDbePositionWindow;
 
     /*
      **************************************************************************
@@ -467,12 +504,14 @@ void miDbeWindowPosition(CallbackListPtr *pcbl, ScreenPtr pScreen, XorgScreenWin
      **************************************************************************
      */
 
-    if (!(pDbeWindowPriv = DBE_WINDOW_PRIV(pWin)))
-        return;
+    if (!(pDbeWindowPriv = DBE_WINDOW_PRIV(pWin))) {
+        return ret;
+    }
 
     if (pDbeWindowPriv->width == pWin->drawable.width &&
-        pDbeWindowPriv->height == pWin->drawable.height)
-        return;
+        pDbeWindowPriv->height == pWin->drawable.height) {
+        return ret;
+    }
 
     width = pWin->drawable.width;
     height = pWin->drawable.height;
@@ -556,7 +595,7 @@ void miDbeWindowPosition(CallbackListPtr *pcbl, ScreenPtr pScreen, XorgScreenWin
         }
 
         FreeScratchGC(pGC);
-        return;
+        return FALSE;
     }
 
     else {
@@ -606,8 +645,11 @@ void miDbeWindowPosition(CallbackListPtr *pcbl, ScreenPtr pScreen, XorgScreenWin
 
         FreeScratchGC(pGC);
     }
-}
 
+    return ret;
+
+}                               /* miDbePositionWindow() */
+
 /******************************************************************************
  *
  * DBE MI Procedure: miDbeInit
@@ -621,7 +663,9 @@ void miDbeWindowPosition(CallbackListPtr *pcbl, ScreenPtr pScreen, XorgScreenWin
 Bool
 miDbeInit(ScreenPtr pScreen, DbeScreenPrivPtr pDbeScreenPriv)
 {
-    dixScreenHookWindowPosition(pScreen, miDbeWindowPosition);
+    /* Wrap functions. */
+    pDbeScreenPriv->PositionWindow = pScreen->PositionWindow;
+    pScreen->PositionWindow = miDbePositionWindow;
 
     /* Initialize the per-screen DBE function pointers. */
     pDbeScreenPriv->GetVisualInfo = miDbeGetVisualInfo;

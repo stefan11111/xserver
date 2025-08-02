@@ -28,13 +28,11 @@
 #include <X11/X.h>
 #include <X11/Xproto.h>
 #include <X11/Xos.h>
-
-#include "dix/colormap_priv.h"
-
 #include "scrnintstr.h"
 #include "pixmapstr.h"
 #include "windowstr.h"
 #include "servermd.h"
+#include "colormapst.h"
 #include "gcstruct.h"
 #include "input.h"
 #include "mipointer.h"
@@ -143,6 +141,9 @@ typedef struct {
 
     ColormapPtr pInstalledmap;  /* current colormap */
     xColorItem systemPalette[KD_MAX_PSEUDO_SIZE];       /* saved windows colors */
+
+    CreateScreenResourcesProcPtr CreateScreenResources;
+    CloseScreenProcPtr CloseScreen;
 } KdPrivScreenRec, *KdPrivScreenPtr;
 
 typedef enum _kdPointerState {
@@ -217,7 +218,7 @@ void KdRemovePointerDriver(KdPointerDriver * driver);
 KdPointerInfo *KdNewPointer(void);
 void KdFreePointer(KdPointerInfo *);
 int KdAddPointer(KdPointerInfo * ki);
-int KdAddConfigPointer(const char *pointer);
+int KdAddConfigPointer(char *pointer);
 void KdRemovePointer(KdPointerInfo * ki);
 
 #define KD_KEY_COUNT 248
@@ -274,19 +275,9 @@ void KdAddKeyboardDriver(KdKeyboardDriver * driver);
 void KdRemoveKeyboardDriver(KdKeyboardDriver * driver);
 KdKeyboardInfo *KdNewKeyboard(void);
 void KdFreeKeyboard(KdKeyboardInfo * ki);
-int KdAddConfigKeyboard(const char *pointer);
+int KdAddConfigKeyboard(char *pointer);
 int KdAddKeyboard(KdKeyboardInfo * ki);
 void KdRemoveKeyboard(KdKeyboardInfo * ki);
-
-typedef struct _KdOsFuncs {
-    int (*Init) (void); /* Only called when the X server is started, when serverGeneration == 1 */
-    void (*Enable) (void);        /* called when screen is enabled */
-    void (*Disable) (void);       /* called when screen is disabled */
-    Bool (*SpecialKey) (KeySym);
-    void (*Fini) (void);
-    void (*pollEvents) (void);    /* called when driver shall poll for new events */
-    void (*Bell) (int, int, int); /* if not NULL called instead of the keyboard driver's function */
-} KdOsFuncs;
 
 typedef struct _KdPointerMatrix {
     int matrix[2][3];
@@ -298,13 +289,6 @@ extern DevPrivateKeyRec kdScreenPrivateKeyRec;
 
 extern Bool kdEmulateMiddleButton;
 extern Bool kdDisableZaphod;
-
-/*
- * pointer to OS/platform specific callbacks from kdrive core back
- * into the individual Xserver implementations.
- * Initialized via KdOSInit()
- */
-extern const KdOsFuncs *kdOsFuncs;
 
 #define KdGetScreenPriv(pScreen) ((KdPrivScreenPtr) \
     dixLookupPrivate(&(pScreen)->devPrivates, kdScreenPrivateKey))
@@ -361,15 +345,6 @@ void
 
 int
  KdProcessArgument(int argc, char **argv, int i);
-
-/*
- * Initialize OS/platform specific parts of the Kdrive Xserver.
- * Also filling kdOsFuncs with the given call vector table.
- *
- * @param pOsFuncs pointer to KdOsFuncs structure. Must be valid for the
- *                 whole lifetime of the Xserver process.
- */
-void KdOsInit(const KdOsFuncs * pOsFuncs);
 
 void
  KdOsAddInputDrivers(void);
@@ -459,7 +434,5 @@ void
 /* function prototypes to be implemented by the drivers */
 void
  InitCard(char *name);
-
-Bool KdCloseScreen(ScreenPtr pScreen);
 
 #endif                          /* _KDRIVE_H_ */

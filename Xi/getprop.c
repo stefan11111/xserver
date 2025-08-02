@@ -94,15 +94,18 @@ ProcXGetDeviceDontPropagateList(ClientPtr client)
     int i, rc;
     XEventClass *buf = NULL, *tbuf;
     WindowPtr pWin;
+    xGetDeviceDontPropagateListReply rep;
     OtherInputMasks *others;
 
     REQUEST(xGetDeviceDontPropagateListReq);
     REQUEST_SIZE_MATCH(xGetDeviceDontPropagateListReq);
 
-    xGetDeviceDontPropagateListReply rep = {
+    rep = (xGetDeviceDontPropagateListReply) {
         .repType = X_Reply,
         .RepType = X_GetDeviceDontPropagateList,
         .sequenceNumber = client->sequence,
+        .length = 0,
+        .count = 0
     };
 
     rc = dixLookupWindow(&pWin, stuff->window, client, DixGetAttrAccess);
@@ -114,9 +117,7 @@ ProcXGetDeviceDontPropagateList(ClientPtr client)
             ClassFromMask(NULL, others->dontPropagateMask[i], i, &count, COUNT);
         if (count) {
             rep.count = count;
-            buf = calloc(rep.count, sizeof(XEventClass));
-            if (!buf)
-                return BadAlloc;
+            buf = xallocarray(rep.count, sizeof(XEventClass));
             rep.length = bytes_to_int32(rep.count * sizeof(XEventClass));
 
             tbuf = buf;
@@ -126,12 +127,7 @@ ProcXGetDeviceDontPropagateList(ClientPtr client)
         }
     }
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.count);
-    }
-    WriteToClient(client, sizeof(xGetDeviceDontPropagateListReply), &rep);
+    WriteReplyToClient(client, sizeof(xGetDeviceDontPropagateListReply), &rep);
 
     if (count) {
         client->pSwapReplyFunc = (ReplySwapPtr) Swap32Write;
@@ -167,4 +163,21 @@ XEventClass
                 }
         }
     return buf;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XGetDeviceDontPropagateList function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXGetDeviceDontPropagateList(ClientPtr client, int size,
+                                xGetDeviceDontPropagateListReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->count);
+    WriteToClient(client, size, rep);
 }

@@ -63,12 +63,10 @@
 
 #include "dix/dix_priv.h"
 #include "dix/input_priv.h"
-#include "include/property.h"
 #include "mi/mi_priv.h"
-#include "os/log_priv.h"
 
 #include "misc.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
 #include "xf86_os_support.h"
 #include "xf86_OSlib.h"
@@ -90,8 +88,7 @@
 #endif
 
 #include "xf86platformBus.h"
-
-#include "../os-support/linux/systemd-logind.h"
+#include "systemd-logind.h"
 
 extern void (*xf86OSPMClose) (void);
 
@@ -263,6 +260,16 @@ xf86RemoveEnabledDevice(InputInfoPtr pInfo)
     InputThreadUnregisterDev(pInfo->fd);
 }
 
+/*
+ * xf86PrintBacktrace --
+ *    Print a stack backtrace for debugging purposes.
+ */
+void
+xf86PrintBacktrace(void)
+{
+    xorg_backtrace();
+}
+
 static void
 xf86ReleaseKeys(DeviceIntPtr pDev)
 {
@@ -295,7 +302,8 @@ xf86ReleaseKeys(DeviceIntPtr pDev)
     }
 }
 
-static void xf86DisableInputDeviceForVTSwitch(InputInfoPtr pInfo)
+void
+xf86DisableInputDeviceForVTSwitch(InputInfoPtr pInfo)
 {
     if (!pInfo->dev)
         return;
@@ -324,10 +332,14 @@ xf86EnableInputDeviceForVTSwitch(InputInfoPtr pInfo)
 static void
 xf86UpdateHasVTProperty(Bool hasVT)
 {
+    Atom property_name;
     int32_t value = hasVT ? 1 : 0;
     int i;
 
-    Atom property_name = dixAddAtom(HAS_VT_ATOM_NAME);
+    property_name = MakeAtom(HAS_VT_ATOM_NAME, sizeof(HAS_VT_ATOM_NAME) - 1,
+                             FALSE);
+    if (property_name == BAD_RESOURCE)
+        FatalError("Failed to retrieve \"HAS_VT\" atom\n");
     for (i = 0; i < xf86NumScreens; i++) {
         dixChangeWindowProperty(serverClient,
                                 xf86ScrnToScreen(xf86Screens[i])->root,
@@ -336,35 +348,7 @@ xf86UpdateHasVTProperty(Bool hasVT)
     }
 }
 
-static void xf86DisableInputHandler(void *handler);
-static void xf86EnableInputHandler(void *handler);
-
-static void _xf86EnableGeneralHandler(void *handler);
-static void _xf86DisableGeneralHandler(void *handler);
-
-_X_EXPORT /* needs to be exported for Nvidia legacy (470.256.02) */
-void xf86EnableGeneralHandler(void *handler);
-
-_X_EXPORT /* needs to be exported for Nvidia legacy (470.256.02) */
-void xf86DisableGeneralHandler(void *handler);
-
-void xf86EnableGeneralHandler(void *handler) {
-    LogMessageVerb(X_WARNING, 0, "Outdated driver still using xf86EnableGeneralHandler() !\n");
-    LogMessageVerb(X_WARNING, 0, "File a bug report to driver vendor or use a FOSS driver.\n");
-    LogMessageVerb(X_WARNING, 0, "https://forums.developer.nvidia.com/c/gpu-graphics/linux/148\n");
-    LogMessageVerb(X_WARNING, 0, "Proprietary drivers are inherently unstable, they just can't be done right.\n");
-    _xf86EnableGeneralHandler(handler);
-}
-
-void xf86DisableGeneralHandler(void *handler) {
-    LogMessageVerb(X_WARNING, 0, "Outdated driver still using xf86DisableGeneralHandler() !\n");
-    LogMessageVerb(X_WARNING, 0, "File a bug report to driver vendor or use a FOSS driver.\n");
-    LogMessageVerb(X_WARNING, 0, "https://forums.developer.nvidia.com/c/gpu-graphics/linux/148\n");
-    LogMessageVerb(X_WARNING, 0, "Proprietary drivers are inherently unstable, they just can't be done right.\n");
-    _xf86DisableGeneralHandler(handler);
-}
-
-static void
+void
 xf86VTLeave(void)
 {
     int i;
@@ -372,7 +356,7 @@ xf86VTLeave(void)
     IHPtr ih;
 
     DebugF("xf86VTSwitch: Leaving, xf86Exiting is %s\n",
-           (dispatchException & DE_TERMINATE) ? "TRUE" : "FALSE");
+           BOOLTOSTRING((dispatchException & DE_TERMINATE) ? TRUE : FALSE));
 #ifdef DPMSExtension
     if (DPMSPowerLevel != DPMSModeOn)
         DPMSSet(serverClient, DPMSModeOn);
@@ -391,7 +375,7 @@ xf86VTLeave(void)
         if (ih->is_input)
             xf86DisableInputHandler(ih);
         else
-            _xf86DisableGeneralHandler(ih);
+            xf86DisableGeneralHandler(ih);
     }
     for (pInfo = xf86InputDevs; pInfo; pInfo = pInfo->next)
         xf86DisableInputDeviceForVTSwitch(pInfo);
@@ -451,7 +435,7 @@ switch_failed:
         if (ih->is_input)
             xf86EnableInputHandler(ih);
         else
-            _xf86EnableGeneralHandler(ih);
+            xf86EnableGeneralHandler(ih);
     }
     input_unlock();
 }
@@ -499,7 +483,7 @@ xf86VTEnter(void)
         if (ih->is_input)
             xf86EnableInputHandler(ih);
         else
-            _xf86EnableGeneralHandler(ih);
+            xf86EnableGeneralHandler(ih);
     }
 #ifdef XSERVER_PLATFORM_BUS
     /* check for any new output devices */
@@ -580,6 +564,16 @@ addInputHandler(int fd, InputHandlerProc proc, void *data)
 }
 
 void *
+xf86AddInputHandler(int fd, InputHandlerProc proc, void *data)
+{
+    IHPtr ih = addInputHandler(fd, proc, data);
+
+    if (ih)
+        ih->is_input = TRUE;
+    return ih;
+}
+
+void *
 xf86AddGeneralHandler(int fd, InputHandlerProc proc, void *data)
 {
     IHPtr ih = addInputHandler(fd, proc, data);
@@ -621,10 +615,27 @@ removeInputHandler(IHPtr ih)
         p = InputHandlers;
         while (p && p->next != ih)
             p = p->next;
-        if (ih && p)
+        if (ih)
             p->next = ih->next;
     }
     free(ih);
+}
+
+int
+xf86RemoveInputHandler(void *handler)
+{
+    IHPtr ih;
+    int fd;
+
+    if (!handler)
+        return -1;
+
+    ih = handler;
+    fd = ih->fd;
+
+    removeInputHandler(ih);
+
+    return fd;
 }
 
 int
@@ -644,7 +655,8 @@ xf86RemoveGeneralHandler(void *handler)
     return fd;
 }
 
-static void xf86DisableInputHandler(void *handler)
+void
+xf86DisableInputHandler(void *handler)
 {
     IHPtr ih;
 
@@ -657,7 +669,8 @@ static void xf86DisableInputHandler(void *handler)
         RemoveNotifyFd(ih->fd);
 }
 
-static void _xf86DisableGeneralHandler(void *handler)
+void
+xf86DisableGeneralHandler(void *handler)
 {
     IHPtr ih;
 
@@ -670,7 +683,8 @@ static void _xf86DisableGeneralHandler(void *handler)
         RemoveNotifyFd(ih->fd);
 }
 
-static void xf86EnableInputHandler(void *handler)
+void
+xf86EnableInputHandler(void *handler)
 {
     IHPtr ih;
 
@@ -683,7 +697,8 @@ static void xf86EnableInputHandler(void *handler)
         SetNotifyFd(ih->fd, xf86InputHandlerNotify, X_NOTIFY_READ, ih);
 }
 
-static void _xf86EnableGeneralHandler(void *handler)
+void
+xf86EnableGeneralHandler(void *handler)
 {
     IHPtr ih;
 

@@ -63,36 +63,7 @@ typedef struct _PropertyStateRec {
     int state;
 } PropertyStateRec;
 
-typedef struct _PropertyFilterParam {
-    // used by all requests
-    ClientPtr client;
-    Window window;
-    Atom property;
-    Atom type;
-
-    // in case of RotateProperties
-    Atom *atoms;
-    size_t nAtoms;
-    size_t nPositions;
-
-    // caller notification
-    Bool skip;                 // TRUE if the call shouldn't be executed
-    int status;                // the status code to return when skip = TRUE
-    Mask access_mode;
-
-    int format;
-    int mode;
-    unsigned long len;
-    const void *value;
-    Bool sendevent;
-
-    // only for GetProperty
-    BOOL delete;
-    CARD32 longOffset;
-    CARD32 longLength;
-} PropertyFilterParam;
-
-extern CallbackListPtr PropertyFilterCallback;
+extern CallbackListPtr PropertyStateCallback;
 
 int dixLookupProperty(PropertyPtr *result, WindowPtr pWin, Atom proprty,
                       ClientPtr pClient, Mask access_mode);

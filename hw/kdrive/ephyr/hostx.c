@@ -31,21 +31,13 @@
 #include <string.h>             /* for memset */
 #include <errno.h>
 #include <time.h>
+#include <err.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/time.h>
 #include <sys/mman.h>
 
-// workaround for name clash between Xlib and Xserver:
-// GL might pull in Xlib.h (why ?), which is definining a type "GC", that's
-// conflicting with Xserver's "GC" type.
-#define GC XlibGC
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#undef GC
-
 #include "dix/input_priv.h"
-#include "glamor/glamor_priv.h"
 
 #include "hostx.h"
 
@@ -66,6 +58,7 @@
 #include <xcb/glx.h>
 #include <epoxy/common.h>
 #include <epoxy/gl.h>
+#include "glamor.h"
 #include "glamor_glx_provider.h"
 #include "ephyr_glamor.h"
 #endif
@@ -248,6 +241,7 @@ hostx_get_output_geometry(const char *output,
                           int *width, int *height)
 {
     int i, name_len = 0, output_found = FALSE;
+    char *name = NULL;
     xcb_generic_error_t *error;
     xcb_randr_query_version_cookie_t version_c;
     xcb_randr_query_version_reply_t *version_r;
@@ -306,9 +300,7 @@ hostx_get_output_geometry(const char *output,
 
         /* Get output name */
         name_len = xcb_randr_get_output_info_name_length(output_info_r);
-        char *name = calloc(1, name_len + 1);
-        if (!name)
-            continue;
+        name = malloc(name_len + 1);
         strncpy(name, (char*)xcb_randr_get_output_info_name(output_info_r), name_len);
         name[name_len] = '\0';
 
@@ -532,6 +524,7 @@ hostx_init(void)
     uint32_t pixel;
     int index;
     char *tmpstr;
+    char *class_hint;
     size_t class_len;
     xcb_screen_t *xscreen;
     xcb_rectangle_t rect = { 0, 0, 1, 1 };
@@ -656,7 +649,7 @@ hostx_init(void)
             if (tmpstr && (!ephyrResNameFromCmd))
                 ephyrResName = tmpstr;
             class_len = strlen(ephyrResName) + 1 + strlen("Xephyr") + 1;
-            char *class_hint = calloc(1, class_len);
+            class_hint = malloc(class_len);
             if (class_hint) {
                 strcpy(class_hint, ephyrResName);
                 strcpy(class_hint + strlen(ephyrResName) + 1, "Xephyr");
@@ -938,7 +931,7 @@ hostx_screen_init(KdScreenInfo *screen,
             scrpriv->ximg->byte_order = IMAGE_BYTE_ORDER;
 
         scrpriv->ximg->data =
-            calloc(scrpriv->ximg->stride, buffer_height);
+            xallocarray(scrpriv->ximg->stride, buffer_height);
     }
 
     if (!HostX.size_set_from_configure)
@@ -1007,7 +1000,7 @@ hostx_screen_init(KdScreenInfo *screen,
         *bits_per_pixel = scrpriv->server_depth;
 
         EPHYR_DBG("server bpp %i", bytes_per_pixel);
-        scrpriv->fb_data = calloc(stride, buffer_height);
+        scrpriv->fb_data = xallocarray (stride, buffer_height);
         return scrpriv->fb_data;
     }
 }

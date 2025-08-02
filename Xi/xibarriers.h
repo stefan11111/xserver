@@ -1,11 +1,14 @@
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef _XIBARRIERS_H_
 #define _XIBARRIERS_H_
 
-#include <dix-config.h>
-
 #include "resource.h"
 
-extern RESTYPE PointerBarrierType;
+extern _X_EXPORT RESTYPE PointerBarrierType;
 
 struct PointerBarrier {
     INT16 x1, x2, y1, y2;

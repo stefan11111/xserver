@@ -34,6 +34,7 @@
 #include <gcstruct.h>
 #include <picturestr.h>
 #include <fb.h>
+#include <fbpict.h>
 #ifdef GLAMOR_FOR_XORG
 #include <xf86xv.h>
 #endif
@@ -105,18 +106,30 @@ extern _X_EXPORT void glamor_fini(ScreenPtr screen);
  * screen pixmap which must be a glamor pixmap and requires
  * the internal data structure still exist at that time.
  * Otherwise, the glamor internal structure will not be freed.*/
+extern _X_EXPORT Bool glamor_close_screen(ScreenPtr screen);
 
 extern _X_EXPORT uint32_t glamor_get_pixmap_texture(PixmapPtr pixmap);
+
+extern _X_EXPORT Bool glamor_set_pixmap_texture(PixmapPtr pixmap,
+                                                unsigned int tex);
+
+extern _X_EXPORT void glamor_set_pixmap_type(PixmapPtr pixmap,
+                                             glamor_pixmap_type_t type);
 
 extern _X_EXPORT void glamor_clear_pixmap(PixmapPtr pixmap);
 
 extern _X_EXPORT void glamor_block_handler(ScreenPtr screen);
 
+/* This function should be called after glamor_init,
+ * but before adding a glamor GLX provider */
+extern _X_EXPORT void glamor_set_glvnd_vendor(ScreenPtr screen,
+                                              const char *vendor);
+extern _X_EXPORT const char *glamor_get_glvnd_vendor(ScreenPtr screen);
+
 extern _X_EXPORT PixmapPtr glamor_create_pixmap(ScreenPtr screen, int w, int h,
                                                 int depth, unsigned int usage);
 extern _X_EXPORT Bool glamor_destroy_pixmap(PixmapPtr pixmap);
 
-/* needed by Xrdp module */
 #define GLAMOR_CREATE_PIXMAP_CPU        0x100
 #define GLAMOR_CREATE_PIXMAP_FIXUP      0x101
 #define GLAMOR_CREATE_FBO_NO_FBO        0x103
@@ -135,7 +148,19 @@ extern _X_EXPORT Bool glamor_destroy_pixmap(PixmapPtr pixmap);
 extern _X_EXPORT void glamor_egl_exchange_buffers(PixmapPtr front,
                                                   PixmapPtr back);
 
+extern _X_EXPORT void glamor_pixmap_exchange_fbos(PixmapPtr front,
+                                                  PixmapPtr back);
+
+/* The DDX is not supposed to call these four functions */
+extern _X_EXPORT void glamor_enable_dri3(ScreenPtr screen);
+extern _X_EXPORT int glamor_egl_fds_from_pixmap(ScreenPtr, PixmapPtr, int *,
+                                                uint32_t *, uint32_t *,
+                                                uint64_t *);
+extern _X_EXPORT int glamor_egl_fd_name_from_pixmap(ScreenPtr, PixmapPtr,
+                                                    CARD16 *, CARD32 *);
+
 extern _X_EXPORT struct gbm_device *glamor_egl_get_gbm_device(ScreenPtr screen);
+extern _X_EXPORT int glamor_egl_fd_from_pixmap(ScreenPtr, PixmapPtr, CARD16 *, CARD32 *);
 
 /* @glamor_supports_pixmap_import_export: Returns whether
  * glamor_fds_from_pixmap(), glamor_name_from_pixmap(), and
@@ -151,6 +176,23 @@ extern _X_EXPORT struct gbm_device *glamor_egl_get_gbm_device(ScreenPtr screen);
  * .EGL_KHR_surfaceless_context
  * */
 extern _X_EXPORT Bool glamor_supports_pixmap_import_export(ScreenPtr screen);
+
+/* @glamor_fds_from_pixmap: Get a dma-buf fd from a pixmap.
+ *
+ * @screen: Current screen pointer.
+ * @pixmap: The pixmap from which we want the fd.
+ * @fds, @strides, @offsets: Pointers to fill info of each plane.
+ * @modifier: Pointer to fill the modifier of the buffer.
+ *
+ * the pixmap and the buffer associated by the fds will share the same
+ * content. The caller is responsible to close the returned file descriptors.
+ * Returns the number of planes, -1 on error.
+ * */
+extern _X_EXPORT int glamor_fds_from_pixmap(ScreenPtr screen,
+                                            PixmapPtr pixmap,
+                                            int *fds,
+                                            uint32_t *strides, uint32_t *offsets,
+                                            uint64_t *modifier);
 
 /* @glamor_fd_from_pixmap: Get a dma-buf fd from a pixmap.
  *
@@ -217,6 +259,31 @@ extern _X_EXPORT int glamor_name_from_pixmap(PixmapPtr pixmap,
 extern _X_EXPORT struct gbm_bo *glamor_gbm_bo_from_pixmap(ScreenPtr screen,
                                                           PixmapPtr pixmap);
 
+/* @glamor_pixmap_from_fds: Creates a pixmap to wrap a dma-buf fds.
+ *
+ * @screen: Current screen pointer.
+ * @num_fds: Number of fds to import
+ * @fds: The dma-buf fds to import.
+ * @width: The width of the buffers.
+ * @height: The height of the buffers.
+ * @stride: The stride of the buffers.
+ * @depth: The depth of the buffers.
+ * @bpp: The bpp of the buffers.
+ * @modifier: The modifier of the buffers.
+ *
+ * Returns a valid pixmap if the import succeeded, else NULL.
+ * */
+extern _X_EXPORT PixmapPtr glamor_pixmap_from_fds(ScreenPtr screen,
+                                                  CARD8 num_fds,
+                                                  const int *fds,
+                                                  CARD16 width,
+                                                  CARD16 height,
+                                                  const CARD32 *strides,
+                                                  const CARD32 *offsets,
+                                                  CARD8 depth,
+                                                  CARD8 bpp,
+                                                  uint64_t modifier);
+
 /* @glamor_pixmap_from_fd: Creates a pixmap to wrap a dma-buf fd.
  *
  * @screen: Current screen pointer.
@@ -257,6 +324,20 @@ extern _X_EXPORT Bool glamor_back_pixmap_from_fd(PixmapPtr pixmap,
                                                  CARD8 depth,
                                                  CARD8 bpp);
 
+extern _X_EXPORT Bool glamor_get_formats(ScreenPtr screen,
+                                         CARD32 *num_formats,
+                                         CARD32 **formats);
+
+extern _X_EXPORT Bool glamor_get_modifiers(ScreenPtr screen,
+                                           uint32_t format,
+                                           uint32_t *num_modifiers,
+                                           uint64_t **modifiers);
+
+extern _X_EXPORT Bool glamor_get_drawable_modifiers(DrawablePtr draw,
+                                                    uint32_t format,
+                                                    uint32_t *num_modifiers,
+                                                    uint64_t **modifiers);
+
 extern _X_EXPORT void glamor_set_drawable_modifiers_func(ScreenPtr screen,
                                                          GetDrawableModifiersFuncPtr func);
 
@@ -276,6 +357,24 @@ extern _X_EXPORT void glamor_set_drawable_modifiers_func(ScreenPtr screen,
 extern _X_EXPORT Bool glamor_egl_init(ScrnInfoPtr scrn, int fd);
 
 extern _X_EXPORT Bool glamor_egl_init_textured_pixmap(ScreenPtr screen);
+
+/* @glamor_egl_create_textured_screen: Create textured screen pixmap.
+ *
+ * @screen: screen pointer to be processed.
+ * @handle: screen pixmap's BO handle.
+ * @stride: screen pixmap's stride in bytes.
+ *
+ * This function is similar with the create_textured_pixmap. As the
+ * screen pixmap is a special, we handle it separately in this function.
+ */
+extern _X_EXPORT Bool glamor_egl_create_textured_screen(ScreenPtr screen,
+                                                        int handle, int stride);
+
+/* Obsolete entrypoint, temporarily left here for API compatibility
+ * for xf86-video-ati.
+ */
+#define glamor_egl_create_textured_screen_ext(a, b, c, d) \
+    glamor_egl_create_textured_screen(a, b, c)
 
 /*
  * @glamor_egl_create_textured_pixmap: Try to create a textured pixmap from
@@ -310,12 +409,20 @@ extern _X_EXPORT const char *glamor_egl_get_driver_name(ScreenPtr screen);
 
 #endif
 
+extern _X_EXPORT void glamor_egl_screen_init(ScreenPtr screen,
+                                             struct glamor_context *glamor_ctx);
+
 extern _X_EXPORT int glamor_create_gc(GCPtr gc);
 
 extern _X_EXPORT void glamor_validate_gc(GCPtr gc, unsigned long changes,
                                          DrawablePtr drawable);
 
+extern _X_EXPORT void glamor_destroy_gc(GCPtr gc);
+
 #define HAS_GLAMOR_DESTROY_GC 1
+
+extern Bool _X_EXPORT glamor_change_window_attributes(WindowPtr pWin, unsigned long mask);
+extern void _X_EXPORT glamor_copy_window(WindowPtr window, DDXPointRec old_origin, RegionPtr src_region);
 
 extern _X_EXPORT void glamor_finish(ScreenPtr screen);
 #define HAS_GLAMOR_TEXT 1

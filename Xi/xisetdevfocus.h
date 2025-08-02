@@ -22,10 +22,13 @@
  *
  * Author: Peter Hutterer
  */
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef XISETDEVFOCUS_H
 #define XISETDEVFOCUS_H 1
-
-#include <dix-config.h>
 
 int SProcXISetFocus(ClientPtr client);
 int ProcXISetFocus(ClientPtr client);
@@ -33,4 +36,5 @@ int ProcXISetFocus(ClientPtr client);
 int SProcXIGetFocus(ClientPtr client);
 int ProcXIGetFocus(ClientPtr client);
 
+void SRepXIGetFocus(ClientPtr client, int len, xXIGetFocusReply * rep);
 #endif                          /* XISETDEVFOCUS_H */

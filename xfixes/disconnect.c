@@ -66,7 +66,6 @@ ProcXFixesSetClientDisconnectMode(ClientPtr client)
     ClientDisconnectPtr pDisconnect = GetClientDisconnect(client);
 
     REQUEST(xXFixesSetClientDisconnectModeReq);
-    REQUEST_SIZE_MATCH(xXFixesSetClientDisconnectModeReq);
 
     pDisconnect->disconnect_mode = stuff->disconnect_mode;
 
@@ -77,33 +76,43 @@ int _X_COLD
 SProcXFixesSetClientDisconnectMode(ClientPtr client)
 {
     REQUEST(xXFixesSetClientDisconnectModeReq);
-    REQUEST_SIZE_MATCH(xXFixesSetClientDisconnectModeReq);
+    REQUEST_AT_LEAST_SIZE(xXFixesSetClientDisconnectModeReq);
 
     swapl(&stuff->disconnect_mode);
 
-    return ProcXFixesSetClientDisconnectMode(client);
+    return (*ProcXFixesVector[stuff->xfixesReqType]) (client);
 }
 
 int
 ProcXFixesGetClientDisconnectMode(ClientPtr client)
 {
     ClientDisconnectPtr pDisconnect = GetClientDisconnect(client);
+    xXFixesGetClientDisconnectModeReply reply;
 
     REQUEST_SIZE_MATCH(xXFixesGetClientDisconnectModeReq);
 
-    xXFixesGetClientDisconnectModeReply rep = {
+    reply = (xXFixesGetClientDisconnectModeReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
         .length = 0,
         .disconnect_mode = pDisconnect->disconnect_mode,
     };
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.disconnect_mode);
+        swaps(&reply.sequenceNumber);
+        swapl(&reply.disconnect_mode);
     }
-    WriteToClient(client, sizeof(rep), &rep);
+    WriteToClient(client, sizeof(xXFixesGetClientDisconnectModeReply), &reply);
 
     return Success;
+}
+
+int _X_COLD
+SProcXFixesGetClientDisconnectMode(ClientPtr client)
+{
+    REQUEST(xXFixesGetClientDisconnectModeReq);
+    REQUEST_SIZE_MATCH(xXFixesGetClientDisconnectModeReq);
+
+    return (*ProcXFixesVector[stuff->xfixesReqType]) (client);
 }
 
 Bool

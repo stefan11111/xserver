@@ -28,11 +28,10 @@
 #include <X11/X.h>
 
 #include "dix/input_priv.h"
-#include "dix/screen_hooks_priv.h"
 
 #include "os.h"
 #include "globals.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86str.h"
 #include "xf86Priv.h"
 #include "xf86DDC.h"
@@ -41,6 +40,7 @@
 #include "inputstr.h"
 
 typedef struct _xf86RandRInfo {
+    CloseScreenProcPtr CloseScreen;
     int virtualX;
     int virtualY;
     int mmWidth;
@@ -242,7 +242,7 @@ xf86RandRSetConfig(ScreenPtr pScreen,
     Bool view_adjusted = FALSE;
 
     for (dev = inputInfo.devices; dev; dev = dev->next) {
-        if (!InputDevIsMaster(dev) && !InputDevIsFloating(dev))
+        if (!IsMaster(dev) && !IsFloating(dev))
             continue;
 
         miPointerGetPosition(dev, &pos[dev->id][0], &pos[dev->id][1]);
@@ -314,7 +314,7 @@ xf86RandRSetConfig(ScreenPtr pScreen,
      * FIXME: duplicated code, see modes/xf86RandR12.c
      */
     for (dev = inputInfo.devices; dev; dev = dev->next) {
-        if (!InputDevIsMaster(dev) && !InputDevIsFloating(dev))
+        if (!IsMaster(dev) && !IsFloating(dev))
             continue;
 
         if (pScreen == miPointerGetScreen(dev)) {
@@ -325,13 +325,12 @@ xf86RandRSetConfig(ScreenPtr pScreen,
             py = (py >= pScreen->height ? (pScreen->height - 1) : py);
 
             /* Setting the viewpoint makes only sense on one device */
-            if (!view_adjusted && InputDevIsMaster(dev)) {
+            if (!view_adjusted && IsMaster(dev)) {
                 xf86SetViewport(pScreen, px, py);
                 view_adjusted = TRUE;
             }
 
-            if (pScreen->SetCursorPosition)
-                pScreen->SetCursorPosition(dev, pScreen, px, py, FALSE);
+            (*pScreen->SetCursorPosition) (dev, pScreen, px, py, FALSE);
         }
     }
 
@@ -341,28 +340,73 @@ xf86RandRSetConfig(ScreenPtr pScreen,
 /*
  * Reset size back to original
  */
-static void xf86RandRCloseScreen(CallbackListPtr *pcbl,
-                                 ScreenPtr pScreen, void *unused)
+static Bool
+xf86RandRCloseScreen(ScreenPtr pScreen)
 {
     ScrnInfoPtr scrp = xf86ScreenToScrn(pScreen);
-    if (!scrp)
-        return;
-
     XF86RandRInfoPtr randrp = XF86RANDRINFO(pScreen);
 
     scrp->virtualX = pScreen->width = randrp->virtualX;
     scrp->virtualY = pScreen->height = randrp->virtualY;
     scrp->currentMode = scrp->modes;
-
-    dixScreenUnhookClose(pScreen, xf86RandRCloseScreen);
+    pScreen->CloseScreen = randrp->CloseScreen;
     free(randrp);
     dixSetPrivate(&pScreen->devPrivates, xf86RandRKey, NULL);
+    return (*pScreen->CloseScreen) (pScreen);
+}
+
+Rotation
+xf86GetRotation(ScreenPtr pScreen)
+{
+    if (xf86RandRKey == NULL)
+        return RR_Rotate_0;
+
+    return XF86RANDRINFO(pScreen)->rotation;
+}
+
+/* Function to change RandR's idea of the virtual screen size */
+Bool
+xf86RandRSetNewVirtualAndDimensions(ScreenPtr pScreen,
+                                    int newvirtX, int newvirtY, int newmmWidth,
+                                    int newmmHeight, Bool resetMode)
+{
+    XF86RandRInfoPtr randrp;
+
+    if (xf86RandRKey == NULL)
+        return FALSE;
+
+    randrp = XF86RANDRINFO(pScreen);
+    if (randrp == NULL)
+        return FALSE;
+
+    if (newvirtX > 0)
+        randrp->virtualX = newvirtX;
+
+    if (newvirtY > 0)
+        randrp->virtualY = newvirtY;
+
+    if (newmmWidth > 0)
+        randrp->mmWidth = newmmWidth;
+
+    if (newmmHeight > 0)
+        randrp->mmHeight = newmmHeight;
+
+    /* This is only for during server start */
+    if (resetMode) {
+	ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
+        return (xf86RandRSetMode(pScreen,
+                                 pScrn->currentMode,
+                                 TRUE, pScreen->mmWidth, pScreen->mmHeight));
+    }
+
+    return TRUE;
 }
 
 Bool
 xf86RandRInit(ScreenPtr pScreen)
 {
     rrScrPrivPtr rp;
+    XF86RandRInfoPtr randrp;
     ScrnInfoPtr scrp = xf86ScreenToScrn(pScreen);
 
 #ifdef XINERAMA
@@ -376,7 +420,7 @@ xf86RandRInit(ScreenPtr pScreen)
     if (!dixRegisterPrivateKey(&xf86RandRKeyRec, PRIVATE_SCREEN, 0))
         return FALSE;
 
-    XF86RandRInfoPtr randrp = calloc(1, sizeof(XF86RandRInfoRec));
+    randrp = malloc(sizeof(XF86RandRInfoRec));
     if (!randrp)
         return FALSE;
 
@@ -393,7 +437,8 @@ xf86RandRInit(ScreenPtr pScreen)
     randrp->mmWidth = pScreen->mmWidth;
     randrp->mmHeight = pScreen->mmHeight;
 
-    dixScreenHookClose(pScreen, xf86RandRCloseScreen);
+    randrp->CloseScreen = pScreen->CloseScreen;
+    pScreen->CloseScreen = xf86RandRCloseScreen;
 
     randrp->rotation = RR_Rotate_0;
 

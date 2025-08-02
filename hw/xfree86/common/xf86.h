@@ -49,7 +49,13 @@
 #include <X11/extensions/randr.h>
 #endif
 
+#include "propertyst.h"
+
 /* General parameters */
+extern _X_EXPORT int xf86DoConfigure;
+extern _X_EXPORT int xf86DoShowOptions;
+extern _X_EXPORT Bool xf86DoConfigurePass1;
+extern _X_EXPORT Bool xf86ProbeIgnorePrimary;
 extern _X_EXPORT Bool xorgHWAccess;
 
 extern _X_EXPORT DevPrivateKeyRec xf86ScreenKeyRec;
@@ -58,22 +64,51 @@ extern _X_EXPORT DevPrivateKeyRec xf86ScreenKeyRec;
 
 extern _X_EXPORT ScrnInfoPtr *xf86Screens;      /* List of pointers to ScrnInfoRecs */
 extern _X_EXPORT const unsigned char byte_reversed[256];
+extern _X_EXPORT Bool fbSlotClaimed;
+
+#if (defined(__sparc__) || defined(__sparc)) && !defined(__OpenBSD__)
+extern _X_EXPORT Bool sbusSlotClaimed;
+#endif
+
+#if defined(XSERVER_PLATFORM_BUS)
+extern _X_EXPORT int platformSlotClaimed;
+#endif
+
+extern _X_EXPORT confDRIRec xf86ConfigDRI;
+extern _X_EXPORT Bool xf86DRI2Enabled(void);
 
 #define XF86SCRNINFO(p) xf86ScreenToScrn(p)
+
+#define XF86FLIP_PIXELS() \
+	do { \
+	    if (xf86GetFlipPixels()) { \
+		pScreen->whitePixel = (pScreen->whitePixel) ? 0 : 1; \
+		pScreen->blackPixel = (pScreen->blackPixel) ? 0 : 1; \
+	   } \
+	while (0)
+
+#define BOOLTOSTRING(b) ((b) ? "TRUE" : "FALSE")
 
 /* Compatibility functions for pre-input-thread drivers */
 static inline _X_DEPRECATED int xf86BlockSIGIO(void) { input_lock(); return 0; }
 static inline _X_DEPRECATED void xf86UnblockSIGIO(int wasset) { input_unlock(); }
 
+/* Function Prototypes */
+#ifndef _NO_XF86_PROTOTYPES
+
 /* PCI related */
 #ifdef XSERVER_LIBPCIACCESS
 #include <pciaccess.h>
+extern _X_EXPORT int pciSlotClaimed;
+
 extern _X_EXPORT Bool xf86CheckPciSlot(const struct pci_device *);
 extern _X_EXPORT int xf86ClaimPciSlot(struct pci_device *, DriverPtr drvp,
                                       int chipset, GDevPtr dev, Bool active);
 extern _X_EXPORT void xf86UnclaimPciSlot(struct pci_device *, GDevPtr dev);
 extern _X_EXPORT Bool xf86ParsePciBusString(const char *busID, int *bus,
                                             int *device, int *func);
+extern _X_EXPORT Bool xf86ComparePciBusString(const char *busID, int bus,
+                                              int device, int func);
 extern _X_EXPORT Bool xf86IsPrimaryPci(struct pci_device *pPci);
 extern _X_EXPORT Bool xf86CheckPciMemBase(struct pci_device *pPci,
                                           memType base);
@@ -90,21 +125,29 @@ extern _X_EXPORT ScrnInfoPtr xf86ConfigPciEntity(ScrnInfoPtr pScrn,
                                                  EntityProc enter,
                                                  EntityProc leave,
                                                  void *private);
+#else
+#define xf86VGAarbiterDeviceDecodes() do {} while (0)
 #endif
 
 /* xf86Bus.c */
 
+extern _X_EXPORT int xf86GetFbInfoForScreen(int scrnIndex);
 extern _X_EXPORT int xf86ClaimFbSlot(DriverPtr drvp, int chipset, GDevPtr dev,
                                      Bool active);
 extern _X_EXPORT int xf86ClaimNoSlot(DriverPtr drvp, int chipset, GDevPtr dev,
                                      Bool active);
+extern _X_EXPORT Bool xf86DriverHasEntities(DriverPtr drvp);
 extern _X_EXPORT void xf86AddEntityToScreen(ScrnInfoPtr pScrn, int entityIndex);
 extern _X_EXPORT void xf86SetEntityInstanceForScreen(ScrnInfoPtr pScrn,
                                                      int entityIndex,
                                                      int instance);
 extern _X_EXPORT int xf86GetNumEntityInstances(int entityIndex);
 extern _X_EXPORT GDevPtr xf86GetDevFromEntity(int entityIndex, int instance);
+extern _X_EXPORT void xf86RemoveEntityFromScreen(ScrnInfoPtr pScrn,
+                                                 int entityIndex);
 extern _X_EXPORT EntityInfoPtr xf86GetEntityInfo(int entityIndex);
+extern _X_EXPORT Bool xf86IsEntityPrimary(int entityIndex);
+extern _X_EXPORT ScrnInfoPtr xf86FindScreenForEntity(int entityIndex);
 
 #define xf86SetLastScrnFlag(e, s) do { } while (0)
 
@@ -125,9 +168,13 @@ extern _X_EXPORT GDevPtr xf86AddBusDeviceToConfigure(const char *driver,
 
 /* xf86Cursor.c */
 
+extern _X_EXPORT void xf86LockZoom(ScreenPtr pScreen, int lock);
+extern _X_EXPORT void xf86InitViewport(ScrnInfoPtr pScr);
 extern _X_EXPORT void xf86SetViewport(ScreenPtr pScreen, int x, int y);
+extern _X_EXPORT void xf86ZoomViewport(ScreenPtr pScreen, int zoom);
 extern _X_EXPORT Bool xf86SwitchMode(ScreenPtr pScreen, DisplayModePtr mode);
 extern _X_EXPORT void *xf86GetPointerScreenFuncs(void);
+extern _X_EXPORT void xf86InitOrigins(void);
 extern _X_EXPORT void xf86ReconfigureLayout(void);
 
 /* xf86DPMS.c */
@@ -150,16 +197,36 @@ extern _X_EXPORT xf86SetDGAModeProc xf86SetDGAMode;
 typedef struct _InputInfoRec *InputInfoPtr;
 
 extern _X_EXPORT void SetTimeSinceLastInputEvent(void);
+extern _X_EXPORT void *xf86AddInputHandler(int fd, InputHandlerProc proc,
+                                             void *data);
+extern _X_EXPORT int xf86RemoveInputHandler(void *handler);
+extern _X_EXPORT void xf86DisableInputHandler(void *handler);
+extern _X_EXPORT void xf86EnableInputHandler(void *handler);
 extern _X_EXPORT void *xf86AddGeneralHandler(int fd, InputHandlerProc proc,
                                                void *data);
 extern _X_EXPORT int xf86RemoveGeneralHandler(void *handler);
+extern _X_EXPORT void xf86DisableGeneralHandler(void *handler);
+extern _X_EXPORT void xf86EnableGeneralHandler(void *handler);
+extern _X_EXPORT InputHandlerProc xf86SetConsoleHandler(InputHandlerProc
+                                                        handler, void *data);
+extern _X_EXPORT void xf86ProcessActionEvent(ActionEvent action, void *arg);
+extern _X_EXPORT void xf86PrintBacktrace(void);
+extern _X_EXPORT Bool xf86VTOwner(void);
+extern _X_EXPORT void xf86VTLeave(void);
+extern _X_EXPORT void xf86VTEnter(void);
+extern _X_EXPORT void xf86EnableInputDeviceForVTSwitch(InputInfoPtr pInfo);
+extern _X_EXPORT void xf86DisableInputDeviceForVTSwitch(InputInfoPtr pInfo);
 
 /* xf86Helper.c */
 
 extern _X_EXPORT void xf86AddDriver(DriverPtr driver, void *module,
                                     int flags);
+extern _X_EXPORT void xf86DeleteDriver(int drvIndex);
 extern _X_EXPORT ScrnInfoPtr xf86AllocateScreen(DriverPtr drv, int flags);
+extern _X_EXPORT void xf86DeleteScreen(ScrnInfoPtr pScrn);
 extern _X_EXPORT int xf86AllocateScrnInfoPrivateIndex(void);
+extern _X_EXPORT Bool xf86AddPixFormat(ScrnInfoPtr pScrn, int depth, int bpp,
+                                       int pad);
 extern _X_EXPORT Bool xf86SetDepthBpp(ScrnInfoPtr scrp, int depth, int bpp,
                                       int fbbpp, int depth24flags);
 extern _X_EXPORT void xf86PrintDepthBpp(ScrnInfoPtr scrp);
@@ -200,12 +267,28 @@ extern _X_EXPORT const char *
 xf86GetVisualName(int visual);
 extern _X_EXPORT int
 xf86GetVerbosity(void);
+extern _X_EXPORT int
+xf86GetDepth(void);
+extern _X_EXPORT rgb
+xf86GetWeight(void);
 extern _X_EXPORT Gamma
 xf86GetGamma(void);
 extern _X_EXPORT Bool
+xf86GetFlipPixels(void);
+extern _X_EXPORT Bool
 xf86ServerIsExiting(void);
 extern _X_EXPORT Bool
+xf86ServerIsResetting(void);
+extern _X_EXPORT Bool
 xf86ServerIsOnlyDetecting(void);
+extern _X_EXPORT Bool
+xf86GetVidModeAllowNonLocal(void);
+extern _X_EXPORT Bool
+xf86GetVidModeEnabled(void);
+extern _X_EXPORT Bool
+xf86GetModInDevAllowNonLocal(void);
+extern _X_EXPORT Bool
+xf86GetModInDevEnabled(void);
 extern _X_EXPORT Bool
 xf86GetAllowMouseOpenFail(void);
 extern _X_EXPORT CARD32
@@ -226,11 +309,16 @@ extern _X_EXPORT void
 xf86SetBackingStore(ScreenPtr pScreen);
 extern _X_EXPORT void
 xf86SetSilkenMouse(ScreenPtr pScreen);
+extern _X_EXPORT void *
+xf86FindXvOptions(ScrnInfoPtr pScrn, int adapt_index, const char *port_name,
+                  const char **adaptor_name, void **adaptor_options);
 extern _X_EXPORT ScrnInfoPtr
 xf86ConfigFbEntity(ScrnInfoPtr pScrn, int scrnFlag,
                    int entityIndex, EntityProc init,
                    EntityProc enter, EntityProc leave, void *private);
 
+extern _X_EXPORT Bool
+xf86IsScreenPrimary(ScrnInfoPtr pScrn);
 extern _X_EXPORT Bool
 xf86IsUnblank(int mode);
 
@@ -243,8 +331,12 @@ xf86GetBppFromDepth(ScrnInfoPtr pScrn, int depth);
 
 /* xf86Mode.c */
 
+extern _X_EXPORT const char *
+xf86ModeStatusToString(ModeStatus status);
 extern _X_EXPORT ModeStatus
 xf86CheckModeForMonitor(DisplayModePtr mode, MonPtr monitor);
+extern _X_EXPORT ModeStatus
+xf86CheckModeForDriver(ScrnInfoPtr scrp, DisplayModePtr mode, int flags);
 extern _X_EXPORT int
 xf86ValidateModes(ScrnInfoPtr scrp, DisplayModePtr availModes,
                   const char **modeNames, ClockRangePtr clockRanges,
@@ -260,16 +352,36 @@ extern _X_EXPORT void
 xf86SetCrtcForModes(ScrnInfoPtr scrp, int adjustFlags);
 extern _X_EXPORT void
 xf86PrintModes(ScrnInfoPtr scrp);
+extern _X_EXPORT void
+xf86ShowClockRanges(ScrnInfoPtr scrp, ClockRangePtr clockRanges);
 
 /* xf86Option.c */
 
 extern _X_EXPORT void
 xf86CollectOptions(ScrnInfoPtr pScrn, XF86OptionPtr extraOpts);
 
+/* xf86RandR.c */
+#ifdef RANDR
+extern _X_EXPORT Bool
+xf86RandRInit(ScreenPtr pScreen);
+extern _X_EXPORT Rotation
+xf86GetRotation(ScreenPtr pScreen);
+extern _X_EXPORT Bool
+xf86RandRSetNewVirtualAndDimensions(ScreenPtr pScreen,
+                                    int newvirtX, int newvirtY,
+                                    int newmmWidth, int newmmHeight,
+                                    Bool resetMode);
+#endif
+
+/* xf86Extensions.c */
+extern void xf86ExtensionInit(void);
+
 /* convert ScreenPtr to ScrnInfoPtr */
 extern _X_EXPORT ScrnInfoPtr xf86ScreenToScrn(ScreenPtr pScreen);
 /* convert ScrnInfoPtr to ScreenPtr */
 extern _X_EXPORT ScreenPtr xf86ScrnToScreen(ScrnInfoPtr pScrn);
+
+#endif                          /* _NO_XF86_PROTOTYPES */
 
 #define XF86_HAS_SCRN_CONV 1 /* define for drivers to use in api compat */
 
@@ -277,6 +389,10 @@ extern _X_EXPORT ScreenPtr xf86ScrnToScreen(ScrnInfoPtr pScrn);
 
 /* flags passed to xf86 allocate screen */
 #define XF86_ALLOCATE_GPU_SCREEN 1
+
+/* Update the internal total dimensions of all ScreenRecs together */
+extern _X_EXPORT void
+xf86UpdateDesktopDimensions(void);
 
 /* only for backwards (source) compatibility */
 #define xf86MsgVerb LogMessageVerb

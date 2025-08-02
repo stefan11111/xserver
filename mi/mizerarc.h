@@ -24,9 +24,6 @@ in this Software without prior written authorization from The Open Group.
 
 ********************************************************/
 
-#ifndef XSERVER_MIZERARC_H
-#define XSERVER_MIZERARC_H
-
 typedef struct {
     int x;
     int y;
@@ -125,5 +122,3 @@ extern _X_EXPORT Bool miZeroArcSetup(xArc * /*arc */ ,
                                      miZeroArcRec * /*info */ ,
                                      Bool       /*ok360 */
     );
-
-#endif /* XSERVER_MIZERARC_H */

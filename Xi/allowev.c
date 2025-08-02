@@ -61,6 +61,7 @@ SOFTWARE.
 
 #include "exglobals.h"
 #include "allowev.h"
+#include "dixevents.h"
 
 /***********************************************************************
  *

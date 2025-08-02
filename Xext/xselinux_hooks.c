@@ -32,13 +32,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <X11/Xatom.h>
 #include <X11/Xfuncproto.h>
 
-#include "dix/dix_priv.h"
-#include "dix/input_priv.h"
 #include "dix/registry_priv.h"
-#include "dix/resource_priv.h"
-#include "dix/selection_priv.h"
 #include "os/client_priv.h"
 
+#include "selection.h"
 #include "inputstr.h"
 #include "scrnintstr.h"
 #include "windowstr.h"
@@ -115,7 +112,7 @@ SELinuxDoCheck(SELinuxSubjectRec * subj, SELinuxObjectRec * obj,
 static void
 SELinuxLabelClient(ClientPtr client)
 {
-    int fd = GetClientFd(client);
+    int fd = XaceGetConnectionNumber(client);
     SELinuxSubjectRec *subj;
     SELinuxObjectRec *obj;
     char *ctx;
@@ -130,7 +127,7 @@ SELinuxLabelClient(ClientPtr client)
     }
 
     /* For local clients, try and determine the executable name */
-    if (ClientIsLocal(client)) {
+    if (XaceIsLocal(client)) {
         /* Get cached command name if CLIENTIDS is enabled. */
         const char *cmdname = GetClientCmdName(client);
         Bool cached = (cmdname != NULL);
@@ -633,10 +630,7 @@ SELinuxResource(CallbackListPtr *pcbl, void *unused, void *calldata)
     if (offset < 0) {
         /* No: use the SID of the owning client */
         class = SECCLASS_X_RESOURCE;
-        ClientPtr owner = dixClientForXID(rec->id);
-        if (!owner)
-            return;
-        privatePtr = &owner->devPrivates;
+        privatePtr = &clients[CLIENT_ID(rec->id)]->devPrivates;
         obj = dixLookupPrivate(privatePtr, objectKey);
     }
     else {
@@ -777,7 +771,7 @@ SELinuxResourceState(CallbackListPtr *pcbl, void *unused, void *calldata)
         return;
 
     pWin = (WindowPtr) rec->value;
-    subj = dixLookupPrivate(&dixClientForWindow(pWin)->devPrivates, subjectKey);
+    subj = dixLookupPrivate(&wClient(pWin)->devPrivates, subjectKey);
 
     if (subj->sid) {
         char *ctx;
@@ -909,10 +903,10 @@ SELinuxFlaskInit(void)
         FatalError("SELinux: Failed to allocate private storage.\n");
 
     /* Create atoms for doing window labeling */
-    atom_ctx = dixAddAtom("_SELINUX_CONTEXT");
+    atom_ctx = MakeAtom("_SELINUX_CONTEXT", 16, TRUE);
     if (atom_ctx == BAD_RESOURCE)
         FatalError("SELinux: Failed to create atom\n");
-    atom_client_ctx = dixAddAtom("_SELINUX_CLIENT_CONTEXT");
+    atom_client_ctx = MakeAtom("_SELINUX_CLIENT_CONTEXT", 23, TRUE);
     if (atom_client_ctx == BAD_RESOURCE)
         FatalError("SELinux: Failed to create atom\n");
 

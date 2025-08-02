@@ -39,16 +39,14 @@
 
 #include "config/hotplug_priv.h"
 #include "dix/screenint_priv.h"
-#include "randr/randrstr_priv.h"
 
 #include "os.h"
-#include "../os-support/linux/systemd-logind.h"
+#include "systemd-logind.h"
 
 #include "loaderProcs.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86_os_support.h"
 #include "xf86_OSproc.h"
-#include "xf86Opt_priv.h"
 #include "xf86Priv.h"
 #include "xf86str.h"
 #include "xf86Bus.h"
@@ -57,6 +55,7 @@
 #include "xf86Config.h"
 #include "xf86Crtc.h"
 
+#include "randrstr.h"
 int platformSlotClaimed;
 
 int xf86_num_platform_devices;
@@ -685,7 +684,7 @@ xf86platformAddDevice(const char *driver_name, int index)
         }
     }
 
-    if (!drvp) {
+    if (i == xf86NumDrivers) {
         ErrorF("can't find driver %s for hotplugged device\n", driver_name);
         return -1;
     }
@@ -725,7 +724,8 @@ xf86platformAddDevice(const char *driver_name, int index)
 
    PixmapScreenInit(xf86GPUScreens[i]->pScreen);
 
-   if (dixScreenRaiseCreateResources(xf86GPUScreens[i]->pScreen)) {
+   if (xf86GPUScreens[i]->pScreen->CreateScreenResources &&
+       !(*xf86GPUScreens[i]->pScreen->CreateScreenResources) (xf86GPUScreens[i]->pScreen)) {
        RemoveGPUScreen(xf86GPUScreens[i]->pScreen);
        xf86DeleteScreen(xf86GPUScreens[i]);
        xf86UnclaimPlatformSlot(&xf86_platform_devices[index], NULL);
@@ -778,7 +778,7 @@ xf86platformRemoveDevice(int index)
 
     scrnum = xf86GPUScreens[i]->confScreen->screennum;
 
-    dixScreenRaiseClose(xf86GPUScreens[i]->pScreen);
+    xf86GPUScreens[i]->pScreen->CloseScreen(xf86GPUScreens[i]->pScreen);
 
     RemoveGPUScreen(xf86GPUScreens[i]->pScreen);
     xf86DeleteScreen(xf86GPUScreens[i]);

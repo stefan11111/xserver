@@ -443,8 +443,8 @@ miFillUniqueSpanGroup(DrawablePtr pDraw, GCPtr pGC, SpanGroup * spanGroup)
         ylength = spanGroup->ymax - ymin + 1;
 
         /* Allocate Spans for y buckets */
-        yspans = calloc(ylength, sizeof(Spans));
-        ysizes = calloc(ylength, sizeof(int));
+        yspans = xallocarray(ylength, sizeof(Spans));
+        ysizes = xallocarray(ylength, sizeof(int));
 
         if (!yspans || !ysizes) {
             free(yspans);
@@ -511,8 +511,8 @@ miFillUniqueSpanGroup(DrawablePtr pDraw, GCPtr pGC, SpanGroup * spanGroup)
         }                       /* for i thorough Spans */
 
         /* Now sort by x and uniquify each bucket into the final array */
-        points = calloc(count, sizeof(DDXPointRec));
-        widths = calloc(count, sizeof(int));
+        points = xallocarray(count, sizeof(DDXPointRec));
+        widths = xallocarray(count, sizeof(int));
         if (!points || !widths) {
             for (i = 0; i < ylength; i++) {
                 free(yspans[i].points);
@@ -559,10 +559,10 @@ miFillUniqueSpanGroup(DrawablePtr pDraw, GCPtr pGC, SpanGroup * spanGroup)
 static Bool
 InitSpans(Spans * spans, size_t nspans)
 {
-    spans->points = calloc(nspans, sizeof(*spans->points));
+    spans->points = xallocarray(nspans, sizeof(*spans->points));
     if (!spans->points)
         return FALSE;
-    spans->widths = calloc(nspans, sizeof(*spans->widths));
+    spans->widths = xallocarray(nspans, sizeof(*spans->widths));
     if (!spans->widths) {
         free(spans->points);
         return FALSE;
@@ -616,7 +616,7 @@ fillSpans(DrawablePtr pDrawable, GCPtr pGC, unsigned long pixel, Spans * spans,
         oldPixel.val = pGC->fgPixel;
         if (pixel != oldPixel.val) {
             tmpPixel.val = (XID) pixel;
-            ChangeGC(NULL, pGC, GCForeground, &tmpPixel);
+            ChangeGC(NullClient, pGC, GCForeground, &tmpPixel);
             ValidateGC(pDrawable, pGC);
         }
         (*pGC->ops->FillSpans) (pDrawable, pGC, spans->count, spans->points,
@@ -624,7 +624,7 @@ fillSpans(DrawablePtr pDrawable, GCPtr pGC, unsigned long pixel, Spans * spans,
         free(spans->widths);
         free(spans->points);
         if (pixel != oldPixel.val) {
-            ChangeGC(NULL, pGC, GCForeground, &oldPixel);
+            ChangeGC(NullClient, pGC, GCForeground, &oldPixel);
             ValidateGC(pDrawable, pGC);
         }
     }
@@ -746,12 +746,12 @@ miFillRectPolyHelper(DrawablePtr pDrawable,
         oldPixel.val = pGC->fgPixel;
         if (pixel != oldPixel.val) {
             tmpPixel.val = (XID) pixel;
-            ChangeGC(NULL, pGC, GCForeground, &tmpPixel);
+            ChangeGC(NullClient, pGC, GCForeground, &tmpPixel);
             ValidateGC(pDrawable, pGC);
         }
         (*pGC->ops->PolyFillRect) (pDrawable, pGC, 1, &rect);
         if (pixel != oldPixel.val) {
-            ChangeGC(NULL, pGC, GCForeground, &oldPixel);
+            ChangeGC(NullClient, pGC, GCForeground, &oldPixel);
             ValidateGC(pDrawable, pGC);
         }
     }
@@ -1870,13 +1870,13 @@ miCleanupSpanData(DrawablePtr pDrawable, GCPtr pGC, SpanDataPtr spanData)
         pixel.val = pGC->bgPixel;
         oldPixel.val = pGC->fgPixel;
         if (pixel.val != oldPixel.val) {
-            ChangeGC(NULL, pGC, GCForeground, &pixel);
+            ChangeGC(NullClient, pGC, GCForeground, &pixel);
             ValidateGC(pDrawable, pGC);
         }
         miFillUniqueSpanGroup(pDrawable, pGC, &spanData->bgGroup);
         miFreeSpanGroup(&spanData->bgGroup);
         if (pixel.val != oldPixel.val) {
-            ChangeGC(NULL, pGC, GCForeground, &oldPixel);
+            ChangeGC(NullClient, pGC, GCForeground, &oldPixel);
             ValidateGC(pDrawable, pGC);
         }
     }
@@ -1893,7 +1893,7 @@ miWideLine(DrawablePtr pDrawable, GCPtr pGC,
     SpanDataPtr spanData;
     long pixel;
     Bool projectLeft, projectRight;
-    LineFaceRec leftFace = { 0 }, rightFace = { 0 }, prevRightFace;
+    LineFaceRec leftFace, rightFace, prevRightFace;
     LineFaceRec firstFace;
     int first;
     Bool somethingDrawn = FALSE;

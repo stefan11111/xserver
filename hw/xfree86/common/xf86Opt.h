@@ -84,6 +84,8 @@ extern _X_EXPORT double xf86SetPercentOption(XF86OptionPtr list,
                                              const char *name, double deflt);
 extern _X_EXPORT int xf86CheckIntOption(XF86OptionPtr optlist, const char *name,
                                         int deflt);
+extern _X_EXPORT double xf86CheckRealOption(XF86OptionPtr optlist,
+                                            const char *name, double deflt);
 extern _X_EXPORT char *xf86CheckStrOption(XF86OptionPtr optlist,
                                           const char *name, const char *deflt);
 extern _X_EXPORT int xf86CheckBoolOption(XF86OptionPtr list, const char *name,
@@ -93,6 +95,7 @@ extern _X_EXPORT double xf86CheckPercentOption(XF86OptionPtr list,
 extern _X_EXPORT XF86OptionPtr xf86AddNewOption(XF86OptionPtr head,
                                                 const char *name,
                                                 const char *val);
+extern _X_EXPORT XF86OptionPtr xf86NewOption(char *name, char *value);
 extern _X_EXPORT XF86OptionPtr xf86NextOption(XF86OptionPtr list);
 extern _X_EXPORT XF86OptionPtr xf86OptionListCreate(const char **options,
                                                     int count, int used);
@@ -102,12 +105,17 @@ extern _X_EXPORT XF86OptionPtr xf86OptionListDuplicate(XF86OptionPtr list);
 extern _X_EXPORT void xf86OptionListFree(XF86OptionPtr opt);
 extern _X_EXPORT char *xf86OptionName(XF86OptionPtr opt);
 extern _X_EXPORT char *xf86OptionValue(XF86OptionPtr opt);
+extern _X_EXPORT void xf86OptionListReport(XF86OptionPtr parm);
 extern _X_EXPORT XF86OptionPtr xf86FindOption(XF86OptionPtr options,
                                               const char *name);
 extern _X_EXPORT const char *xf86FindOptionValue(XF86OptionPtr options,
                                                  const char *name);
+extern _X_EXPORT void xf86MarkOptionUsed(XF86OptionPtr option);
 extern _X_EXPORT void xf86MarkOptionUsedByName(XF86OptionPtr options,
                                                const char *name);
+extern _X_EXPORT Bool xf86CheckIfOptionUsed(XF86OptionPtr option);
+extern _X_EXPORT Bool xf86CheckIfOptionUsedByName(XF86OptionPtr options,
+                                                  const char *name);
 extern _X_EXPORT void xf86ShowUnusedOptions(int scrnIndex,
                                             XF86OptionPtr options);
 extern _X_EXPORT void xf86ProcessOptions(int scrnIndex, XF86OptionPtr options,
@@ -123,6 +131,8 @@ extern _X_EXPORT Bool xf86GetOptValInteger(const OptionInfoRec * table,
                                            int token, int *value);
 extern _X_EXPORT Bool xf86GetOptValULong(const OptionInfoRec * table, int token,
                                          unsigned long *value);
+extern _X_EXPORT Bool xf86GetOptValReal(const OptionInfoRec * table, int token,
+                                        double *value);
 extern _X_EXPORT Bool xf86GetOptValFreq(const OptionInfoRec * table, int token,
                                         OptFreqUnits expectedUnits,
                                         double *value);
@@ -135,9 +145,15 @@ extern _X_EXPORT char *xf86NormalizeName(const char *s);
 extern _X_EXPORT XF86OptionPtr xf86ReplaceIntOption(XF86OptionPtr optlist,
                                                     const char *name,
                                                     const int val);
+extern _X_EXPORT XF86OptionPtr xf86ReplaceRealOption(XF86OptionPtr optlist,
+                                                     const char *name,
+                                                     const double val);
 extern _X_EXPORT XF86OptionPtr xf86ReplaceBoolOption(XF86OptionPtr optlist,
                                                      const char *name,
                                                      const Bool val);
+extern _X_EXPORT XF86OptionPtr xf86ReplacePercentOption(XF86OptionPtr optlist,
+                                                        const char *name,
+                                                        const double val);
 extern _X_EXPORT XF86OptionPtr xf86ReplaceStrOption(XF86OptionPtr optlist,
                                                     const char *name,
                                                     const char *val);

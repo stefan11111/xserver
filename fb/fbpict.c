@@ -27,12 +27,11 @@
 
 #include <string.h>
 
-#include "fb/fbpict_priv.h"
-
 #include "fb.h"
 #include "glyphstr_priv.h"
 #include "picturestr.h"
 #include "mipict.h"
+#include "fbpict.h"
 
 void
 fbComposite(CARD8 op,
@@ -89,7 +88,7 @@ fbUnrealizeGlyph(ScreenPtr pScreen,
 	pixman_glyph_cache_remove (glyphCache, pGlyph, NULL);
 }
 
-static void
+void
 fbGlyphs(CARD8 op,
 	 PicturePtr pSrc,
 	 PicturePtr pDst,
@@ -123,7 +122,7 @@ fbGlyphs(CARD8 op,
     pixman_glyph_cache_freeze (glyphCache);
 
     if (n_glyphs > N_STACK_GLYPHS) {
-	if (!(pglyphs = calloc(n_glyphs, sizeof(pixman_glyph_t))))
+	if (!(pglyphs = xallocarray(n_glyphs, sizeof(pixman_glyph_t))))
 	    goto out;
     }
 

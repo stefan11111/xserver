@@ -3,13 +3,12 @@
 #include <xorg-config.h>
 #endif
 
-#include "dix/colormap_priv.h"
 #include "dix/cursor_priv.h"
-#include "dix/screen_hooks_priv.h"
 #include "mi/mipointer_priv.h"
 
 #include "xf86.h"
 #include "xf86CursorPriv.h"
+#include "colormapst.h"
 #include "cursorstr.h"
 
 /* FIXME: This was added with the ABI change of the miPointerSpriteFuncs for
@@ -47,7 +46,7 @@ static miPointerSpriteFuncRec xf86CursorSpriteFuncs = {
 static void xf86CursorInstallColormap(ColormapPtr);
 static void xf86CursorRecolorCursor(DeviceIntPtr pDev, ScreenPtr, CursorPtr,
                                     Bool);
-static void xf86CursorCloseScreen(CallbackListPtr *, ScreenPtr, void *);
+static Bool xf86CursorCloseScreen(ScreenPtr);
 static void xf86CursorQueryBestSize(int, unsigned short *, unsigned short *,
                                     ScreenPtr);
 
@@ -86,7 +85,8 @@ xf86InitCursor(ScreenPtr pScreen, xf86CursorInfoPtr infoPtr)
     ScreenPriv->PalettedCursor = FALSE;
     ScreenPriv->pInstalledMap = NULL;
 
-    dixScreenHookClose(pScreen, xf86CursorCloseScreen);
+    ScreenPriv->CloseScreen = pScreen->CloseScreen;
+    pScreen->CloseScreen = xf86CursorCloseScreen;
     ScreenPriv->QueryBestSize = pScreen->QueryBestSize;
     pScreen->QueryBestSize = xf86CursorQueryBestSize;
     ScreenPriv->RecolorCursor = pScreen->RecolorCursor;
@@ -124,15 +124,10 @@ xf86InitCursor(ScreenPtr pScreen, xf86CursorInfoPtr infoPtr)
 
 /***** Screen functions *****/
 
-static void xf86CursorCloseScreen(CallbackListPtr *pcbl,
-                                  ScreenPtr pScreen, void *unused)
+static Bool
+xf86CursorCloseScreen(ScreenPtr pScreen)
 {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
-    if (!pScrn)
-        return;
-
-    dixScreenUnhookClose(pScreen, xf86CursorCloseScreen);
-
     miPointerScreenPtr PointPriv =
         (miPointerScreenPtr) dixLookupPrivate(&pScreen->devPrivates,
                                               miPointerScreenKey);
@@ -146,6 +141,7 @@ static void xf86CursorCloseScreen(CallbackListPtr *pcbl,
     if (ScreenPriv->CurrentCursor)
         FreeCursor(ScreenPriv->CurrentCursor, None);
 
+    pScreen->CloseScreen = ScreenPriv->CloseScreen;
     pScreen->QueryBestSize = ScreenPriv->QueryBestSize;
     pScreen->RecolorCursor = ScreenPriv->RecolorCursor;
     if (ScreenPriv->InstallColormap)
@@ -159,7 +155,8 @@ static void xf86CursorCloseScreen(CallbackListPtr *pcbl,
 
     free(ScreenPriv->transparentData);
     free(ScreenPriv);
-    dixSetPrivate(&pScreen->devPrivates, xf86CursorScreenKey, NULL);
+
+    return (*pScreen->CloseScreen) (pScreen);
 }
 
 static void

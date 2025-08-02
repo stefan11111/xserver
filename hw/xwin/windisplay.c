@@ -35,7 +35,9 @@
 #include "windisplay.h"
 #include "winmsg.h"
 
-#include "os/Xtrans.h"
+#define XSERV_t
+#define TRANS_SERVER
+#include <X11/Xtrans/Xtrans.h>
 
 /*
   Generate a display name string referring to the display of this server,

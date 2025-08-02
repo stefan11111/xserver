@@ -151,8 +151,10 @@ Bool
 /*** These are DDX layer privates ***/
 
 typedef struct {
+    DestroyWindowProcPtr DestroyWindow;
     ClipNotifyProcPtr ClipNotify;
     WindowExposuresProcPtr WindowExposures;
+    CloseScreenProcPtr CloseScreen;
 } KdXVScreenRec, *KdXVScreenPtr;
 
 typedef struct {

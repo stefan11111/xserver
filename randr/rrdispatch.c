@@ -23,7 +23,6 @@
 
 #include "dix/dix_priv.h"
 #include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
 #include "os/fmt.h"
 
 #include "protocol-versions.h"
@@ -113,7 +112,7 @@ ProcRRSelectInput(ClientPtr client)
 
         if (!pRREvent) {
             /* build the entry */
-            pRREvent = calloc(1, sizeof(RREventRec));
+            pRREvent = (RREventPtr) malloc(sizeof(RREventRec));
             if (!pRREvent)
                 return BadAlloc;
             pRREvent->next = 0;
@@ -135,7 +134,7 @@ ProcRRSelectInput(ClientPtr client)
              * done through the resource database.
              */
             if (!pHead) {
-                pHead = calloc(1, sizeof(RREventPtr));
+                pHead = (RREventPtr *) malloc(sizeof(RREventPtr));
                 if (!pHead ||
                     !AddResource(pWin->drawable.id, RREventType,
                                  (void *) pHead)) {

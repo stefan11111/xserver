@@ -47,11 +47,11 @@ SOFTWARE.
 #include <dix-config.h>
 
 #include "dix/dix_priv.h"
-#include "dix/selection_priv.h"
 
 #include "windowstr.h"
 #include "dixstruct.h"
 #include "dispatch.h"
+#include "selection.h"
 #include "xace.h"
 
 /*****************************************************************
@@ -66,7 +66,6 @@ SOFTWARE.
 
 Selection *CurrentSelections;
 CallbackListPtr SelectionCallback;
-CallbackListPtr SelectionFilterCallback = NULL;
 
 int
 dixLookupSelection(Selection ** result, Atom selectionName,
@@ -126,26 +125,30 @@ CallSelectionCallback(Selection * pSel, ClientPtr client,
 void
 DeleteWindowFromAnySelections(WindowPtr pWin)
 {
-    for (Selection *pSel = CurrentSelections; pSel; pSel = pSel->next)
+    Selection *pSel;
+
+    for (pSel = CurrentSelections; pSel; pSel = pSel->next)
         if (pSel->pWin == pWin) {
             CallSelectionCallback(pSel, NULL, SelectionWindowDestroy);
 
             pSel->pWin = (WindowPtr) NULL;
             pSel->window = None;
-            pSel->client = NULL;
+            pSel->client = NullClient;
         }
 }
 
 void
 DeleteClientFromAnySelections(ClientPtr client)
 {
-    for (Selection *pSel = CurrentSelections; pSel; pSel = pSel->next)
+    Selection *pSel;
+
+    for (pSel = CurrentSelections; pSel; pSel = pSel->next)
         if (pSel->client == client) {
             CallSelectionCallback(pSel, NULL, SelectionClientClose);
 
             pSel->pWin = (WindowPtr) NULL;
             pSel->window = None;
-            pSel->client = NULL;
+            pSel->client = NullClient;
         }
 }
 
@@ -168,27 +171,12 @@ ProcSetSelectionOwner(ClientPtr client)
     if (CompareTimeStamps(time, currentTime) == LATER)
         return Success;
 
-    /* allow extensions to intercept */
-    SelectionFilterParamRec param = {
-        .client = client,
-        .selection = stuff->selection,
-        .owner = stuff->window,
-        .op = SELECTION_FILTER_SETOWNER,
-    };
-    CallCallbacks(&SelectionFilterCallback, &param);
-    if (param.skip) {
-        if (param.status != Success)
-            client->errorValue = stuff->selection;
-        return param.status;
-    }
-
-    if (param.owner != None) {
-        rc = dixLookupWindow(&pWin, param.owner, client, DixSetAttrAccess);
+    if (stuff->window != None) {
+        rc = dixLookupWindow(&pWin, stuff->window, client, DixSetAttrAccess);
         if (rc != Success)
             return rc;
     }
-
-    if (!ValidAtom(param.selection)) {
+    if (!ValidAtom(stuff->selection)) {
         client->errorValue = stuff->selection;
         return BadAtom;
     }
@@ -196,11 +184,10 @@ ProcSetSelectionOwner(ClientPtr client)
     /*
      * First, see if the selection is already set...
      */
-    rc = dixLookupSelection(&pSel, param.selection, client, DixSetAttrAccess);
-    if (rc != Success) {
-        client->errorValue = stuff->selection;
+    rc = dixLookupSelection(&pSel, stuff->selection, client, DixSetAttrAccess);
+
+    if (rc != Success)
         return rc;
-    }
 
     /* If the timestamp in client's request is in the past relative
        to the time stamp indicating the last time the owner of the
@@ -209,29 +196,19 @@ ProcSetSelectionOwner(ClientPtr client)
     if (CompareTimeStamps(time, pSel->lastTimeChanged) == EARLIER)
         return Success;
     if (pSel->client && (!pWin || (pSel->client != client))) {
-        SelectionFilterParamRec eventParam = {
-            .client = client,
-            .recvClient = pSel->client,
-            .owner = pSel->window,
-            .selection = stuff->selection,
-            .op = SELECTION_FILTER_EV_CLEAR,
+        xEvent event = {
+            .u.selectionClear.time = time.milliseconds,
+            .u.selectionClear.window = pSel->window,
+            .u.selectionClear.atom = pSel->selection
         };
-        CallCallbacks(&SelectionFilterCallback, &eventParam);
-        if (!param.skip) {
-            xEvent event = {
-                .u.selectionClear.time = time.milliseconds,
-                .u.selectionClear.window = eventParam.owner,
-                .u.selectionClear.atom = eventParam.selection,
-            };
-            event.u.u.type = SelectionClear;
-            WriteEventsToClient(eventParam.recvClient, 1, &event);
-        }
+        event.u.u.type = SelectionClear;
+        WriteEventsToClient(pSel->client, 1, &event);
     }
 
     pSel->lastTimeChanged = time;
-    pSel->window = param.owner;
+    pSel->window = stuff->window;
     pSel->pWin = pWin;
-    pSel->client = (pWin ? client : NULL);
+    pSel->client = (pWin ? client : NullClient);
 
     CallSelectionCallback(pSel, client, SelectionSetOwner);
     return Success;
@@ -240,53 +217,34 @@ ProcSetSelectionOwner(ClientPtr client)
 int
 ProcGetSelectionOwner(ClientPtr client)
 {
+    int rc;
     Selection *pSel;
+    xGetSelectionOwnerReply reply;
 
     REQUEST(xResourceReq);
     REQUEST_SIZE_MATCH(xResourceReq);
 
-    /* allow extensions to intercept */
-    SelectionFilterParamRec param = {
-        .client = client,
-        .selection = stuff->id,
-        .op = SELECTION_FILTER_GETOWNER,
-    };
-    CallCallbacks(&SelectionFilterCallback, &param);
-    if (param.skip) {
-        goto out;
+    if (!ValidAtom(stuff->id)) {
+        client->errorValue = stuff->id;
+        return BadAtom;
     }
 
-    if (!ValidAtom(param.selection)) {
-        param.status = BadAtom;
-        goto out;
-    }
-
-    xGetSelectionOwnerReply rep = {
+    reply = (xGetSelectionOwnerReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
         .length = 0,
     };
 
-    param.status = dixLookupSelection(&pSel, param.selection, param.client, DixGetAttrAccess);
-    if (param.status == Success)
-        rep.owner = pSel->window;
-    else if (param.status == BadMatch)
-        rep.owner = None;
+    rc = dixLookupSelection(&pSel, stuff->id, client, DixGetAttrAccess);
+    if (rc == Success)
+        reply.owner = pSel->window;
+    else if (rc == BadMatch)
+        reply.owner = None;
     else
-        goto out;
+        return rc;
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.owner);
-    }
-
-    WriteToClient(client, sizeof(rep), &rep);
+    WriteReplyToClient(client, sizeof(xGetSelectionOwnerReply), &reply);
     return Success;
-
-out:
-    if (param.status != Success)
-        client->errorValue = stuff->id;
-    return param.status;
 }
 
 int
@@ -301,29 +259,12 @@ ProcConvertSelection(ClientPtr client)
     REQUEST(xConvertSelectionReq);
     REQUEST_SIZE_MATCH(xConvertSelectionReq);
 
-    /* allow extensions to intercept */
-    SelectionFilterParamRec param = {
-        .client = client,
-        .selection = stuff->selection,
-        .op = SELECTION_FILTER_CONVERT,
-        .requestor = stuff->requestor,
-        .property = stuff->property,
-        .target = stuff->target,
-        .time = stuff->time,
-    };
-    CallCallbacks(&SelectionFilterCallback, &param);
-    if (param.skip) {
-        if (param.status != Success)
-            client->errorValue = stuff->selection;
-        return param.status;
-    }
-
-    rc = dixLookupWindow(&pWin, param.requestor, client, DixSetAttrAccess);
+    rc = dixLookupWindow(&pWin, stuff->requestor, client, DixSetAttrAccess);
     if (rc != Success)
         return rc;
 
-    paramsOkay = ValidAtom(param.selection) && ValidAtom(param.target);
-    paramsOkay &= (param.property == None) || ValidAtom(param.property);
+    paramsOkay = ValidAtom(stuff->selection) && ValidAtom(stuff->target);
+    paramsOkay &= (stuff->property == None) || ValidAtom(stuff->property);
     if (!paramsOkay) {
         client->errorValue = stuff->property;
         return BadAtom;
@@ -332,63 +273,32 @@ ProcConvertSelection(ClientPtr client)
     if (stuff->time == CurrentTime)
         UpdateCurrentTime();
 
-    rc = dixLookupSelection(&pSel, param.selection, client, DixReadAccess);
+    rc = dixLookupSelection(&pSel, stuff->selection, client, DixReadAccess);
 
     memset(&event, 0, sizeof(xEvent));
     if (rc != Success && rc != BadMatch)
         return rc;
-
-    /* If the specified selection has an owner, the X server sends
-       SelectionRequest event to that owner */
-    if (rc == Success && pSel->window != None && pSel->client &&
-        pSel->client != serverClient && !pSel->client->clientGone)
-    {
-        SelectionFilterParamRec evParam = {
-            .client = client,
-            .selection = stuff->selection,
-            .op = SELECTION_FILTER_EV_REQUEST,
-            .owner = pSel->window,
-            .requestor = stuff->requestor,
-            .property = stuff->property,
-            .target = stuff->target,
-            .time = stuff->time,
-            .recvClient = pSel->client,
-        };
-
-        CallCallbacks(&SelectionFilterCallback, &evParam);
-        if (evParam.skip) {
-            if (evParam.status != Success)
-                client->errorValue = stuff->selection;
-            return evParam.status;
-        }
-
+    else if (rc == Success && pSel->window != None) {
         event.u.u.type = SelectionRequest;
-        event.u.selectionRequest.owner = evParam.owner;
-        event.u.selectionRequest.time = evParam.time;
-        event.u.selectionRequest.requestor = evParam.requestor;
-        event.u.selectionRequest.selection = evParam.selection;
-        event.u.selectionRequest.target = evParam.target;
-        event.u.selectionRequest.property = evParam.property;
-        WriteEventsToClient(evParam.recvClient, 1, &event);
-        return Success;
-    }
-
-    /* If no owner for the specified selection exists, the X server generates
-       a SelectionNotify event to the requestor with property None. */
-    param.property = None;
-    CallCallbacks(&SelectionFilterCallback, &param);
-    if (param.skip) {
-        if (param.status != Success)
-            client->errorValue = stuff->selection;
-        return param.status;
+        event.u.selectionRequest.owner = pSel->window;
+        event.u.selectionRequest.time = stuff->time;
+        event.u.selectionRequest.requestor = stuff->requestor;
+        event.u.selectionRequest.selection = stuff->selection;
+        event.u.selectionRequest.target = stuff->target;
+        event.u.selectionRequest.property = stuff->property;
+        if (pSel->client && pSel->client != serverClient &&
+            !pSel->client->clientGone) {
+            WriteEventsToClient(pSel->client, 1, &event);
+            return Success;
+        }
     }
 
     event.u.u.type = SelectionNotify;
-    event.u.selectionNotify.time = param.time;
-    event.u.selectionNotify.requestor = param.requestor;
-    event.u.selectionNotify.selection = param.selection;
-    event.u.selectionNotify.target = param.target;
-    event.u.selectionNotify.property = param.property;
+    event.u.selectionNotify.time = stuff->time;
+    event.u.selectionNotify.requestor = stuff->requestor;
+    event.u.selectionNotify.selection = stuff->selection;
+    event.u.selectionNotify.target = stuff->target;
+    event.u.selectionNotify.property = None;
     WriteEventsToClient(client, 1, &event);
     return Success;
 }

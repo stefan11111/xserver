@@ -74,7 +74,7 @@ ProcXISetClientPointer(ClientPtr client)
         return rc;
     }
 
-    if (!InputDevIsMaster(pDev)) {
+    if (!IsMaster(pDev)) {
         client->errorValue = stuff->deviceid;
         return BadDevice;
     }
@@ -82,7 +82,7 @@ ProcXISetClientPointer(ClientPtr client)
     pDev = GetMaster(pDev, MASTER_POINTER);
 
     if (stuff->win != None) {
-        rc = dixLookupResourceOwner(&targetClient, stuff->win, client,
+        rc = dixLookupClient(&targetClient, stuff->win, client,
                              DixManageAccess);
 
         if (rc != Success)

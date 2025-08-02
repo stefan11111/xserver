@@ -236,6 +236,23 @@ CopySwapBellFeedback(ClientPtr client, BellFeedbackPtr b, char **buf)
 
 /***********************************************************************
  *
+ * This procedure writes the reply for the xGetFeedbackControl function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXGetFeedbackControl(ClientPtr client, int size,
+                        xGetFeedbackControlReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    swaps(&rep->num_feedbacks);
+    WriteToClient(client, size, rep);
+}
+
+/***********************************************************************
+ *
  * Get the feedback control state.
  *
  */
@@ -244,7 +261,7 @@ int
 ProcXGetFeedbackControl(ClientPtr client)
 {
     int rc, total_length = 0;
-    char *savbuf;
+    char *buf, *savbuf;
     DeviceIntPtr dev;
     KbdFeedbackPtr k;
     PtrFeedbackPtr p;
@@ -252,6 +269,7 @@ ProcXGetFeedbackControl(ClientPtr client)
     StringFeedbackPtr s;
     BellFeedbackPtr b;
     LedFeedbackPtr l;
+    xGetFeedbackControlReply rep;
 
     REQUEST(xGetFeedbackControlReq);
     REQUEST_SIZE_MATCH(xGetFeedbackControlReq);
@@ -260,10 +278,12 @@ ProcXGetFeedbackControl(ClientPtr client)
     if (rc != Success)
         return rc;
 
-    xGetFeedbackControlReply rep = {
+    rep = (xGetFeedbackControlReply) {
         .repType = X_Reply,
         .RepType = X_GetFeedbackControl,
         .sequenceNumber = client->sequence,
+        .length = 0,
+        .num_feedbacks = 0
     };
 
     for (k = dev->kbdfeed; k; k = k->next) {
@@ -295,7 +315,7 @@ ProcXGetFeedbackControl(ClientPtr client)
     if (total_length == 0)
         return BadMatch;
 
-    char *buf = (char *) calloc(1, total_length);
+    buf = (char *) malloc(total_length);
     if (!buf)
         return BadAlloc;
     savbuf = buf;
@@ -314,13 +334,7 @@ ProcXGetFeedbackControl(ClientPtr client)
         CopySwapBellFeedback(client, b, &buf);
 
     rep.length = bytes_to_int32(total_length);
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.num_feedbacks);
-    }
-    WriteToClient(client, sizeof(xGetFeedbackControlReply), &rep);
+    WriteReplyToClient(client, sizeof(xGetFeedbackControlReply), &rep);
     WriteToClient(client, total_length, savbuf);
     free(savbuf);
     return Success;

@@ -26,11 +26,11 @@
 
 #include <math.h>
 
-#include "dix/exevents_priv.h"
 #include "dix/ptrveloc_priv.h"
 #include "os/bug_priv.h"
 
 #include <ptrveloc.h>
+#include <exevents.h>
 #include <X11/Xatom.h>
 #include <os.h>
 
@@ -397,6 +397,7 @@ DeletePredictableAccelerationProperties(DeviceIntPtr dev,
 {
     DeviceVelocityPtr vel;
     Atom prop;
+    int i;
 
     prop = XIGetKnownProperty(ACCEL_PROP_VELOCITY_SCALING);
     XIDeleteDeviceProperty(dev, prop, FALSE);
@@ -409,7 +410,7 @@ DeletePredictableAccelerationProperties(DeviceIntPtr dev,
 
     vel = GetDevicePredictableAccelData(dev);
     if (vel) {
-        for (int i = 0; i < scheme->num_prop_handlers; i++)
+        for (i = 0; i < scheme->num_prop_handlers; i++)
             if (scheme->prop_handlers[i])
                 XIUnregisterPropertyHandler(dev, scheme->prop_handlers[i]);
     }

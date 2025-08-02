@@ -52,12 +52,9 @@ SOFTWARE.
 
 #include <dix-config.h>
 
+#include "inputstr.h"           /* DeviceIntPtr      */
 #include <X11/extensions/XI.h>
 #include <X11/extensions/XIproto.h>
-
-#include "dix/input_priv.h"
-
-#include "inputstr.h"           /* DeviceIntPtr      */
 #include "XIstubs.h"
 #include "windowstr.h"          /* window structure  */
 #include "exglobals.h"
@@ -79,6 +76,7 @@ ProcXOpenDevice(ClientPtr client)
     xInputClassInfo evbase[numInputClasses];
     int j = 0;
     int status = Success;
+    xOpenDeviceReply rep;
     DeviceIntPtr dev;
 
     REQUEST(xOpenDeviceReq);
@@ -96,7 +94,7 @@ ProcXOpenDevice(ClientPtr client)
     else if (status != Success)
         return status;
 
-    if (InputDevIsMaster(dev))
+    if (IsMaster(dev))
         return BadDevice;
 
     if (status != Success)
@@ -129,21 +127,29 @@ ProcXOpenDevice(ClientPtr client)
     }
     evbase[j].class = OtherClass;
     evbase[j++].event_type_base = event_base[OtherClass];
-
-    xOpenDeviceReply rep = {
+    rep = (xOpenDeviceReply) {
         .repType = X_Reply,
         .RepType = X_OpenDevice,
         .sequenceNumber = client->sequence,
         .length = bytes_to_int32(j * sizeof(xInputClassInfo)),
         .num_classes = j
     };
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-    }
-
-    WriteToClient(client, sizeof(xOpenDeviceReply), &rep);
+    WriteReplyToClient(client, sizeof(xOpenDeviceReply), &rep);
     WriteToClient(client, j * sizeof(xInputClassInfo), evbase);
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XOpenDevice function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXOpenDevice(ClientPtr client, int size, xOpenDeviceReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

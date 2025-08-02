@@ -142,7 +142,7 @@ InitPathList(const char *path)
                 free(fullpath);
                 return NULL;
             }
-            list[n] = calloc(1, len + 1);
+            list[n] = malloc(len + 1);
             if (!list[n]) {
                 FreeStringList(list);
                 free(fullpath);
@@ -175,12 +175,6 @@ LoaderSetPath(const char *path)
 
 /* Standard set of module subdirectories to search, in order of preference */
 static const char *stdSubdirs[] = {
-    // first try loading from per-ABI subdir
-    XORG_MODULE_ABI_TAG "/",
-    XORG_MODULE_ABI_TAG "/input/",
-    XORG_MODULE_ABI_TAG "/drivers/",
-    XORG_MODULE_ABI_TAG "/extensions/",
-    // now try loading from legacy / unversioned directories
     "",
     "input/",
     "drivers/",
@@ -197,9 +191,15 @@ static const char *stdSubdirs[] = {
  * to port this DDX to, say, Darwin, we'll need to fix this.
  */
 static PatternRec stdPatterns[] = {
+#ifdef __CYGWIN__
+    {"^cyg(.*)\\.dll$",},
+    {"(.*)_drv\\.dll$",},
+    {"(.*)\\.dll$",},
+#else
     {"^lib(.*)\\.so$",},
     {"(.*)_drv\\.so$",},
     {"(.*)\\.so$",},
+#endif
     {NULL,}
 };
 
@@ -228,7 +228,7 @@ InitPatterns(const char **patternlist)
         for (i = 0, s = patternlist; *s; i++, s++)
             if (*s == DEFAULT_LIST)
                 i += ARRAY_SIZE(stdPatterns) - 1 - 1;
-        patterns = calloc(i + 1, sizeof(PatternRec));
+        patterns = xallocarray(i + 1, sizeof(PatternRec));
         if (!patterns) {
             return NULL;
         }
@@ -288,21 +288,33 @@ FindModuleInSubdir(const char *dirpath, const char *module)
             continue;
         }
 
+#ifdef __CYGWIN__
+        snprintf(tmpBuf, PATH_MAX, "cyg%s.dll", module);
+#else
         snprintf(tmpBuf, PATH_MAX, "lib%s.so", module);
+#endif
         if (strcmp(direntry->d_name, tmpBuf) == 0) {
             if (asprintf(&ret, "%s%s", dirpath, tmpBuf) == -1)
                 ret = NULL;
             break;
         }
 
+#ifdef __CYGWIN__
+        snprintf(tmpBuf, PATH_MAX, "%s_drv.dll", module);
+#else
         snprintf(tmpBuf, PATH_MAX, "%s_drv.so", module);
+#endif
         if (strcmp(direntry->d_name, tmpBuf) == 0) {
             if (asprintf(&ret, "%s%s", dirpath, tmpBuf) == -1)
                 ret = NULL;
             break;
         }
 
+#ifdef __CYGWIN__
+        snprintf(tmpBuf, PATH_MAX, "%s.dll", module);
+#else
         snprintf(tmpBuf, PATH_MAX, "%s.so", module);
+#endif
         if (strcmp(direntry->d_name, tmpBuf) == 0) {
             if (asprintf(&ret, "%s%s", dirpath, tmpBuf) == -1)
                 ret = NULL;
@@ -386,7 +398,7 @@ LoaderListDir(const char *subdir, const char **patternlist)
                             closedir(d);
                             goto bail;
                         }
-                        listing[n] = calloc(1, len + 1);
+                        listing[n] = malloc(len + 1);
                         if (!listing[n]) {
                             FreeStringList(listing);
                             closedir(d);
@@ -417,6 +429,7 @@ CheckVersion(const char *module, XF86ModuleVersionInfo * data,
 {
     int vercode[4];
     long ver = data->xf86version;
+    MessageType errtype;
 
     LogMessage(X_INFO, "Module %s: vendor=\"%s\"\n",
                data->modname ? data->modname : "UNKNOWN!",
@@ -457,19 +470,25 @@ CheckVersion(const char *module, XF86ModuleVersionInfo * data,
             vermaj = GET_ABI_MAJOR(ver);
             vermin = GET_ABI_MINOR(ver);
             if (abimaj != vermaj) {
-                LogMessageVerb(LoaderIgnoreAbi ? X_WARNING : X_ERROR, 0,
-                               "%s: module ABI major version (%d) "
+                if (LoaderOptions & LDR_OPT_ABI_MISMATCH_NONFATAL)
+                    errtype = X_WARNING;
+                else
+                    errtype = X_ERROR;
+                LogMessageVerb(errtype, 0, "%s: module ABI major version (%d) "
                                "doesn't match the server's version (%d)\n",
                                module, abimaj, vermaj);
-                if (!LoaderIgnoreAbi)
+                if (!(LoaderOptions & LDR_OPT_ABI_MISMATCH_NONFATAL))
                     return FALSE;
             }
             else if (abimin > vermin) {
-                LogMessageVerb(LoaderIgnoreAbi ? X_WARNING : X_ERROR, 0,
-                               "%s: module ABI minor version (%d) "
+                if (LoaderOptions & LDR_OPT_ABI_MISMATCH_NONFATAL)
+                    errtype = X_WARNING;
+                else
+                    errtype = X_ERROR;
+                LogMessageVerb(errtype, 0, "%s: module ABI minor version (%d) "
                                "is newer than the server's version (%d)\n",
                                module, abimin, vermin);
-                if (!LoaderIgnoreAbi)
+                if (!(LoaderOptions & LDR_OPT_ABI_MISMATCH_NONFATAL))
                     return FALSE;
             }
         }
@@ -664,9 +683,6 @@ LoadModule(const char *module, void *options, const XF86ModReqInfo *modreq,
 
     LogMessageVerb(X_INFO, 3, "LoadModule: \"%s\"", module);
 
-    /* Ignore abi check for the nvidia proprietary DDX driver */
-    is_nvidia_proprietary = !memcmp(module, "nvidia", sizeof("nvidia"));
-
     patterns = InitPatterns(NULL);
     name = LoaderGetCanonicalName(module, patterns);
     noncanonical = (name && strcmp(module, name) != 0);
@@ -682,17 +698,9 @@ LoadModule(const char *module, void *options, const XF86ModReqInfo *modreq,
         m = (char *) module;
     }
 
-    if (is_nvidia_proprietary && !LoaderIgnoreAbi) {
-        /* warn every time this is hit */
-        LogMessage(X_WARNING, "LoadModule: Implicitly ignoring abi mismatch "
-                   "for the nvidia proprierary DDX driver\n");
-    }
-
     /* Backward compatibility, vbe and int10 are merged into int10 now */
     if (!strcmp(m, "vbe"))
         m = name = strdup("int10");
-
-    assert(m);
 
     for (cim = compiled_in_modules; *cim; cim++)
         if (!strcmp(m, *cim)) {
@@ -715,7 +723,7 @@ LoadModule(const char *module, void *options, const XF86ModReqInfo *modreq,
 
     pathlist = defaultPathList;
     if (!pathlist) {
-        /* This could be a calloc failure too */
+        /* This could be a malloc failure too */
         if (errmaj)
             *errmaj = LDR_BADUSAGE;
         goto LoadModule_fail;
@@ -954,6 +962,7 @@ LoaderErrorMsg(const char *name, const char *modname, int errmaj, int errmin)
 static char *
 LoaderGetCanonicalName(const char *modname, PatternPtr patterns)
 {
+    char *str;
     const char *s;
     int len;
     PatternPtr p;
@@ -970,7 +979,7 @@ LoaderGetCanonicalName(const char *modname, PatternPtr patterns)
     for (p = patterns; p->pattern; p++)
         if (regexec(&p->rex, s, 2, match, 0) == 0 && match[1].rm_so != -1) {
             len = match[1].rm_eo - match[1].rm_so;
-            char *str = calloc(1, len + 1);
+            str = malloc(len + 1);
             if (!str)
                 return NULL;
             strncpy(str, s + match[1].rm_so, len);

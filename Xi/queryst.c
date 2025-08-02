@@ -66,6 +66,7 @@ ProcXQueryDeviceState(ClientPtr client)
     xButtonState *tb;
     ValuatorClassPtr v;
     xValuatorState *tv;
+    xQueryDeviceStateReply rep;
     DeviceIntPtr dev;
     double *values;
 
@@ -143,20 +144,31 @@ ProcXQueryDeviceState(ClientPtr client)
         }
     }
 
-    xQueryDeviceStateReply rep = {
+    rep = (xQueryDeviceStateReply) {
         .repType = X_Reply,
         .RepType = X_QueryDeviceState,
         .sequenceNumber = client->sequence,
         .length = bytes_to_int32(total_length),
         .num_classes = num_classes
     };
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-    }
-    WriteToClient(client, sizeof(xQueryDeviceStateReply), &rep);
-    WriteToClient(client, total_length, savbuf);
+    WriteReplyToClient(client, sizeof(xQueryDeviceStateReply), &rep);
+    if (total_length > 0)
+        WriteToClient(client, total_length, savbuf);
     free(savbuf);
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XQueryDeviceState function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXQueryDeviceState(ClientPtr client, int size, xQueryDeviceStateReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

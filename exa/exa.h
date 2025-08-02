@@ -774,6 +774,9 @@ extern _X_EXPORT unsigned long
 extern _X_EXPORT unsigned long
  exaGetPixmapPitch(PixmapPtr pPix);
 
+extern _X_EXPORT unsigned long
+ exaGetPixmapSize(PixmapPtr pPix);
+
 extern _X_EXPORT void *exaGetPixmapDriverPrivate(PixmapPtr p);
 
 /* in exa_offscreen.c */
@@ -787,6 +790,9 @@ extern _X_EXPORT ExaOffscreenArea *exaOffscreenFree(ScreenPtr pScreen,
                                                     ExaOffscreenArea * area);
 
 extern _X_EXPORT void
+ ExaOffscreenMarkUsed(PixmapPtr pPixmap);
+
+extern _X_EXPORT void
  exaEnableDisableFBAccess(ScreenPtr pScreen, Bool enable);
 
 extern _X_EXPORT Bool
@@ -795,6 +801,9 @@ extern _X_EXPORT Bool
 /* in exa.c */
 extern _X_EXPORT void
  exaMoveInPixmap(PixmapPtr pPixmap);
+
+extern _X_EXPORT void
+ exaMoveOutPixmap(PixmapPtr pPixmap);
 
 /* in exa_unaccel.c */
 extern _X_EXPORT CARD32

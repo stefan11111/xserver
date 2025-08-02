@@ -24,15 +24,12 @@
  */
 
 #include <dix-config.h>
-
-#include <X11/extensions/ge.h>
-#include <X11/extensions/geproto.h>
-
-#include "miext/extinit_priv.h"
-#include "Xext/geext_priv.h"
-
 #include "windowstr.h"
+#include <X11/extensions/ge.h>
+
+#include "geext.h"
 #include "protocol-versions.h"
+#include "extinit_priv.h"
 
 #define MAXEXTENSIONS   128
 
@@ -136,6 +133,7 @@ static int _X_COLD
 SProcGEDispatch(ClientPtr client)
 {
     REQUEST(xReq);
+    swaps(&stuff->length);
 
     switch (stuff->data) {
     case X_GEQueryVersion:

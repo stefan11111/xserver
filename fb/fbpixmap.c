@@ -24,13 +24,7 @@
 
 #include <stdlib.h>
 
-#include "fb/fb_priv.h"
-
-#ifdef FB_DEBUG
-static void fbInitializeDrawable(DrawablePtr pDrawable);
-#else
-static inline void fbInitializeDrawable(DrawablePtr pDrawable) {}
-#endif
+#include "fb.h"
 
 PixmapPtr
 fbCreatePixmap(ScreenPtr pScreen, int width, int height, int depth,
@@ -80,8 +74,10 @@ fbCreatePixmap(ScreenPtr pScreen, int width, int height, int depth,
     fbInitializeDrawable(&pPixmap->drawable);
 #endif
 
+#if defined(COMPOSITE) || defined(ROOTLESS)
     pPixmap->screen_x = 0;
     pPixmap->screen_y = 0;
+#endif
 
     pPixmap->usage_hint = usage_hint;
 

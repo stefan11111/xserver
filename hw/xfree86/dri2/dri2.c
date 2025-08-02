@@ -36,7 +36,6 @@
 
 #include <errno.h>
 
-#include "dix/dix_priv.h"
 #include "os/client_priv.h"
 
 #ifdef WITH_LIBDRM
@@ -236,11 +235,12 @@ static DRI2DrawablePtr
 DRI2AllocateDrawable(DrawablePtr pDraw)
 {
     DRI2ScreenPtr ds = DRI2GetScreen(pDraw->pScreen);
+    DRI2DrawablePtr pPriv;
     CARD64 ust;
     WindowPtr pWin;
     PixmapPtr pPixmap;
 
-    DRI2DrawablePtr pPriv = calloc(1, sizeof *pPriv);
+    pPriv = malloc(sizeof *pPriv);
     if (pPriv == NULL)
         return NULL;
 
@@ -327,7 +327,9 @@ static int
 DRI2AddDrawableRef(DRI2DrawablePtr pPriv, XID id, XID dri2_id,
                    DRI2InvalidateProcPtr invalidate, void *priv)
 {
-    DRI2DrawableRefPtr ref = calloc(1, sizeof *ref);
+    DRI2DrawableRefPtr ref;
+
+    ref = malloc(sizeof *ref);
     if (ref == NULL)
         return BadAlloc;
 
@@ -878,8 +880,10 @@ DrawablePtr DRI2UpdatePrime(DrawablePtr pDraw, DRI2BufferPtr pDest)
         return NULL;
 
     pPriv->prime_secondary_pixmap = spix;
+#ifdef COMPOSITE
     spix->screen_x = mpix->screen_x;
     spix->screen_y = mpix->screen_y;
+#endif
 
     DRI2InvalidateDrawableAll(pDraw);
     return &spix->drawable;
@@ -967,7 +971,9 @@ DRI2CanFlip(DrawablePtr pDraw)
 
     /* Does the window match the pixmap exactly? */
     if (pDraw->x != 0 || pDraw->y != 0 ||
+#ifdef COMPOSITE
         pDraw->x != pWinPixmap->screen_x || pDraw->y != pWinPixmap->screen_y ||
+#endif
         pDraw->width != pWinPixmap->drawable.width ||
         pDraw->height != pWinPixmap->drawable.height)
         return FALSE;
@@ -1602,7 +1608,7 @@ DRI2ScreenInit(ScreenPtr pScreen, DRI2InfoPtr info)
     if (info->version == 3 || info->numDrivers == 0) {
         /* Driver too old: use the old-style driverName field */
         ds->numDrivers = info->driverName ? 1 : 2;
-        ds->driverNames = calloc(ds->numDrivers, sizeof(*ds->driverNames));
+        ds->driverNames = xallocarray(ds->numDrivers, sizeof(*ds->driverNames));
         if (!ds->driverNames)
             goto err_out;
 
@@ -1623,7 +1629,7 @@ DRI2ScreenInit(ScreenPtr pScreen, DRI2InfoPtr info)
     }
     else {
         ds->numDrivers = info->numDrivers;
-        ds->driverNames = calloc(info->numDrivers, sizeof(*ds->driverNames));
+        ds->driverNames = xallocarray(info->numDrivers, sizeof(*ds->driverNames));
         if (!ds->driverNames)
             goto err_out;
         memcpy(ds->driverNames, info->driverNames,

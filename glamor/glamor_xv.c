@@ -31,12 +31,8 @@
  *
  * Xv acceleration implementation
  */
+
 #include <dix-config.h>
-
-#include <assert.h>
-
-#include "dix/dix_priv.h"
-#include "os/bug_priv.h"
 
 #include "glamor_priv.h"
 #include "glamor_transform.h"
@@ -177,6 +173,8 @@ static const glamor_facet glamor_facet_xv_rgb_raw = {
                 "        frag_color = texture2D(sampler, tcs);\n"
                 ),
 };
+
+#define MAKE_ATOM(a) MakeAtom(a, sizeof(a) - 1, TRUE)
 
 XvAttributeRec glamor_xv_attributes[] = {
     {XvSettable | XvGettable, -1000, 1000, (char *)"XV_BRIGHTNESS"},
@@ -582,7 +580,6 @@ glamor_xv_render(glamor_port_private *port_priv, int id)
     glamor_put_vbo_space(screen);
 
     /* Now draw our big triangle, clipped to each of the clip boxes. */
-    BUG_RETURN(!pixmap_priv);
     glamor_pixmap_loop(pixmap_priv, dst_box_index) {
         int dst_off_x, dst_off_y;
 
@@ -864,10 +861,10 @@ glamor_xv_init_port(glamor_port_private *port_priv)
 void
 glamor_xv_core_init(ScreenPtr screen)
 {
-    glamorBrightness = dixAddAtom("XV_BRIGHTNESS");
-    glamorContrast = dixAddAtom("XV_CONTRAST");
-    glamorSaturation = dixAddAtom("XV_SATURATION");
-    glamorHue = dixAddAtom("XV_HUE");
-    glamorGamma = dixAddAtom("XV_GAMMA");
-    glamorColorspace = dixAddAtom("XV_COLORSPACE");
+    glamorBrightness = MAKE_ATOM("XV_BRIGHTNESS");
+    glamorContrast = MAKE_ATOM("XV_CONTRAST");
+    glamorSaturation = MAKE_ATOM("XV_SATURATION");
+    glamorHue = MAKE_ATOM("XV_HUE");
+    glamorGamma = MAKE_ATOM("XV_GAMMA");
+    glamorColorspace = MAKE_ATOM("XV_COLORSPACE");
 }

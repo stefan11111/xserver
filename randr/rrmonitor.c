@@ -23,7 +23,6 @@
 
 #include "dix/dix_priv.h"
 #include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
 
 #include "swaprep.h"
 
@@ -37,7 +36,7 @@ RRMonitorCrtcName(RRCrtcPtr crtc)
         return MakeAtom(output->name, output->nameLength, TRUE);
     }
     sprintf(name, "Monitor-%08lx", (unsigned long int)crtc->id);
-    return dixAddAtom(name);
+    return MakeAtom(name, strlen(name), TRUE);
 }
 
 static Bool
@@ -502,7 +501,7 @@ RRMonitorAdd(ClientPtr client, ScreenPtr screen, RRMonitorPtr monitor)
                                 pScrPriv->numMonitors + 1,
                                 sizeof (RRMonitorPtr));
     else
-        monitors = calloc(1, sizeof(RRMonitorPtr));
+        monitors = malloc(sizeof (RRMonitorPtr));
 
     if (!monitors)
         return BadAlloc;

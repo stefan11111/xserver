@@ -28,7 +28,6 @@
 #include <xcb/xcb_keysyms.h>
 #include <X11/keysym.h>
 
-#include "fb/fb_priv.h"
 #include "mi/mipointer_priv.h"
 #include "os/client_priv.h"
 #include "os/osdep.h"
@@ -61,19 +60,12 @@ typedef struct _EphyrInputPrivate {
 
 Bool EphyrWantGrayScale = 0;
 Bool EphyrWantResize = 0;
-
-static xcb_mod_mask_t EphyrKeybindToggleHostGrabModMask;
-static uint32_t EphyrKeybindToggleHostGrabKey;
-static char const* EphyrTitleHostGrabKeyComboHint;
-static uint8_t EphyrTitleHostGrabKeyComboHintLen;
-static Bool EphyrHostGrabSet = FALSE;
+Bool EphyrWantNoHostGrab = 0;
 
 Bool
 ephyrInitialize(KdCardInfo * card, EphyrPriv * priv)
 {
-#ifndef WIN32
     OsSignal(SIGUSR1, hostx_handle_signal);
-#endif
 
     priv->base = 0;
     priv->bytes_per_line = 0;
@@ -83,7 +75,9 @@ ephyrInitialize(KdCardInfo * card, EphyrPriv * priv)
 Bool
 ephyrCardInit(KdCardInfo * card)
 {
-    EphyrPriv *priv = calloc(1, sizeof(EphyrPriv));
+    EphyrPriv *priv;
+
+    priv = (EphyrPriv *) malloc(sizeof(EphyrPriv));
     if (!priv)
         return FALSE;
 
@@ -657,114 +651,6 @@ ephyrCreateColormap(ColormapPtr pmap)
 }
 
 Bool
-ephyrSetGrabShortcut(char const* const desc)
-{
-    if (desc == NULL || !strcmp(desc, "NULL")) {
-        EphyrKeybindToggleHostGrabModMask = 0;
-        EphyrKeybindToggleHostGrabKey = 0;
-        EphyrTitleHostGrabKeyComboHint = NULL;
-        EphyrTitleHostGrabKeyComboHintLen = 0;
-    }
-    else {
-        const uint8_t fixed_bound = 255;
-        char buf[16];
-        uint8_t j = 0;
-        for (uint8_t i = 0;; ++i) {
-            assert(i < fixed_bound);
-            char const c = desc[i];
-            if (c == 0 || (j != 0 && c == '+')) {
-                buf[j] = 0;
-                if (j == 1) {
-                    EphyrKeybindToggleHostGrabKey = buf[0];
-                }
-                else if (!strcmp(buf, "ctrl")) {
-                    EphyrKeybindToggleHostGrabModMask |= XCB_MOD_MASK_CONTROL;
-                }
-                else if (!strcmp(buf, "shift")) {
-                    EphyrKeybindToggleHostGrabModMask |= XCB_MOD_MASK_SHIFT;
-                }
-                else if (!strcmp(buf, "lock")) {
-                    EphyrKeybindToggleHostGrabModMask |= XCB_MOD_MASK_LOCK;
-                }
-                else if (!strcmp(buf, "mod1")) {
-                    EphyrKeybindToggleHostGrabModMask |= XCB_MOD_MASK_1;
-                }
-                else if (!strcmp(buf, "mod2")) {
-                    EphyrKeybindToggleHostGrabModMask |= XCB_MOD_MASK_2;
-                }
-                else if (!strcmp(buf, "mod3")) {
-                    EphyrKeybindToggleHostGrabModMask |= XCB_MOD_MASK_3;
-                }
-                else if (!strcmp(buf, "mod4")) {
-                    EphyrKeybindToggleHostGrabModMask |= XCB_MOD_MASK_4;
-                }
-                else if (!strcmp(buf, "mod5")) {
-                    EphyrKeybindToggleHostGrabModMask |= XCB_MOD_MASK_5;
-                }
-                else {
-                    ErrorF("ephyr: -host-grab: "
-                        "Unrecognized key: '%s'\n", buf);
-                    return FALSE;
-                }
-                if (c == 0) break;
-                j = 0;
-            }
-            else {
-                buf[j] = c;
-                ++j;
-                assert(j < sizeof(buf));
-            }
-        }
-
-        EphyrTitleHostGrabKeyComboHint = desc;
-        EphyrTitleHostGrabKeyComboHintLen = strlen(desc);
-    }
-
-    EphyrHostGrabSet = TRUE;
-    return TRUE;
-}
-
-static void
-ephyrPrintGrabShortcut(char* const out, size_t const out_size,
-                      Bool const currently_grabbed)
-{
-    if (
-        (
-            EphyrKeybindToggleHostGrabModMask == 0 &&
-            EphyrKeybindToggleHostGrabKey == 0
-        ) || (
-            EphyrTitleHostGrabKeyComboHint == 0 ||
-            EphyrTitleHostGrabKeyComboHintLen == 0
-        )
-    ) {
-        /* grabbing disabled */
-        out[0] = '\0';
-        return;
-    }
-
-    char const* const suffix = currently_grabbed
-        ? " releases mouse and keyboard)"
-        : " grabs mouse and keyboard)";
-    size_t const suffix_len = strlen(suffix);
-
-    assert(out_size > 1 + EphyrTitleHostGrabKeyComboHintLen + suffix_len + 1);
-    assert(out != NULL);
-
-    out[0] = '(';
-    memcpy(out + 1, EphyrTitleHostGrabKeyComboHint, EphyrTitleHostGrabKeyComboHintLen);
-
-    memcpy(out + EphyrTitleHostGrabKeyComboHintLen + 1, suffix, suffix_len + 1);
-}
-
-static void
-ephyrUpdateWindowTitle(KdScreenInfo* const screen, Bool const currently_grabbed)
-{
-    char title_buf[128];
-    ephyrPrintGrabShortcut(title_buf, sizeof(title_buf), currently_grabbed);
-    hostx_set_win_title(screen, title_buf);
-}
-
-Bool
 ephyrInitScreen(ScreenPtr pScreen)
 {
     KdScreenPriv(pScreen);
@@ -772,10 +658,11 @@ ephyrInitScreen(ScreenPtr pScreen)
 
     EPHYR_LOG("pScreen->myNum:%d\n", pScreen->myNum);
     hostx_set_screen_number(screen, pScreen->myNum);
-    if (!EphyrHostGrabSet) {
-        ephyrSetGrabShortcut("ctrl+shift");
+    if (EphyrWantNoHostGrab) {
+        hostx_set_win_title(screen, "xephyr");
+    } else {
+        hostx_set_win_title(screen, "(ctrl+shift grabs mouse and keyboard)");
     }
-    ephyrUpdateWindowTitle(screen, FALSE);
     pScreen->CreateColormap = ephyrCreateColormap;
 
 #ifdef XV
@@ -934,7 +821,7 @@ ephyrCrossScreen(ScreenPtr pScreen, Bool entering)
 {
 }
 
-ScreenPtr ephyrCursorScreen = NULL; /* screen containing the cursor */
+ScreenPtr ephyrCursorScreen; /* screen containing the cursor */
 
 static void
 ephyrWarpCursor(DeviceIntPtr pDev, ScreenPtr pScreen, int x, int y)
@@ -994,8 +881,6 @@ ephyrProcessExpose(xcb_generic_event_t *xev)
 {
     xcb_expose_event_t *expose = (xcb_expose_event_t *)xev;
     KdScreenInfo *screen = screen_from_window(expose->window);
-    if (!screen)
-        return;
     EphyrScrPriv *scrpriv = screen->driver;
 
     /* Wait for the last expose event in a series of cliprects
@@ -1020,9 +905,6 @@ ephyrProcessMouseMotion(xcb_generic_event_t *xev)
     xcb_motion_notify_event_t *motion = (xcb_motion_notify_event_t *)xev;
     KdScreenInfo *screen = screen_from_window(motion->event);
 
-    if (!screen)
-        return;
-
     if (!ephyrMouse ||
         !((EphyrPointerPrivate *) ephyrMouse->driverPrivate)->enabled) {
         EPHYR_LOG("skipping mouse motion:%d\n", screen->pScreen->myNum);
@@ -1032,7 +914,7 @@ ephyrProcessMouseMotion(xcb_generic_event_t *xev)
     if (ephyrCursorScreen != screen->pScreen) {
         EPHYR_LOG("warping mouse cursor. "
                   "cur_screen:%d, motion_screen:%d\n",
-                  ephyrCursorScreen ? ephyrCursorScreen->myNum : -1, screen->pScreen->myNum);
+                  ephyrCursorScreen->myNum, screen->pScreen->myNum);
         ephyrWarpCursor(inputInfo.pointer, screen->pScreen,
                         motion->event_x, motion->event_y);
     }
@@ -1133,78 +1015,70 @@ ephyrProcessKeyPress(xcb_generic_event_t *xev)
 static void
 ephyrProcessKeyRelease(xcb_generic_event_t *xev)
 {
+    xcb_connection_t *conn = hostx_get_xcbconn();
     xcb_key_release_event_t *key = (xcb_key_release_event_t *)xev;
-    if (EphyrKeybindToggleHostGrabModMask != 0 ||
-        EphyrKeybindToggleHostGrabKey != 0) {
+    static xcb_key_symbols_t *keysyms;
+    static int grabbed_screen = -1;
+    int mod1_down = ephyrUpdateGrabModifierState(key->state);
 
-        xcb_connection_t *conn = hostx_get_xcbconn();
-        static xcb_key_symbols_t *keysyms;
-        static int grabbed_screen = -1;
+    if (!keysyms)
+        keysyms = xcb_key_symbols_alloc(conn);
 
-        if (!keysyms)
-            keysyms = xcb_key_symbols_alloc(conn);
+    if (!EphyrWantNoHostGrab &&
+        (((xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Shift_L
+          || xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Shift_R)
+         && (key->state & XCB_MOD_MASK_CONTROL)) ||
+        ((xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Control_L
+          || xcb_key_symbols_get_keysym(keysyms, key->detail, 0) == XK_Control_R)
+         && (key->state & XCB_MOD_MASK_SHIFT)))) {
+        KdScreenInfo *screen = screen_from_window(key->event);
+        EphyrScrPriv *scrpriv = screen->driver;
 
-        int const keysym =
-            xcb_key_symbols_get_keysym(keysyms, key->detail, 0);
-
-        if (
-            (
-                (key->state & EphyrKeybindToggleHostGrabModMask) ==
-                    EphyrKeybindToggleHostGrabModMask
-            ) && (
-                /* NOTE: mod-key keysyms are > 0xfe00. We do this so when the
-                   shortcut is only mod-keys (e.g. ctrl+shift) and the user
-                   releases any other key, input doesn't get grabbed */
-                (EphyrKeybindToggleHostGrabKey == 0 && keysym > 0xfe00) ||
-                keysym == EphyrKeybindToggleHostGrabKey
-            )
-        ) {
-            KdScreenInfo *screen = screen_from_window(key->event);
-            assert(screen);
-            EphyrScrPriv *scrpriv = screen->driver;
-
-            if (grabbed_screen != -1) {
-                xcb_ungrab_keyboard(conn, XCB_TIME_CURRENT_TIME);
+        if (grabbed_screen != -1) {
+            xcb_ungrab_keyboard(conn, XCB_TIME_CURRENT_TIME);
+            xcb_ungrab_pointer(conn, XCB_TIME_CURRENT_TIME);
+            grabbed_screen = -1;
+            hostx_set_win_title(screen,
+                                "(ctrl+shift grabs mouse and keyboard)");
+        }
+        else if (!mod1_down) {
+            /* Attempt grab */
+            xcb_grab_keyboard_cookie_t kbgrabc =
+                xcb_grab_keyboard(conn,
+                                  TRUE,
+                                  scrpriv->win,
+                                  XCB_TIME_CURRENT_TIME,
+                                  XCB_GRAB_MODE_ASYNC,
+                                  XCB_GRAB_MODE_ASYNC);
+            xcb_grab_keyboard_reply_t *kbgrabr;
+            xcb_grab_pointer_cookie_t pgrabc =
+                xcb_grab_pointer(conn,
+                                 TRUE,
+                                 scrpriv->win,
+                                 0,
+                                 XCB_GRAB_MODE_ASYNC,
+                                 XCB_GRAB_MODE_ASYNC,
+                                 scrpriv->win,
+                                 XCB_NONE,
+                                 XCB_TIME_CURRENT_TIME);
+            xcb_grab_pointer_reply_t *pgrabr;
+            kbgrabr = xcb_grab_keyboard_reply(conn, kbgrabc, NULL);
+            if (!kbgrabr || kbgrabr->status != XCB_GRAB_STATUS_SUCCESS) {
+                xcb_discard_reply(conn, pgrabc.sequence);
                 xcb_ungrab_pointer(conn, XCB_TIME_CURRENT_TIME);
-                grabbed_screen = -1;
-            }
-            else {
-                /* Attempt grab */
-                xcb_grab_keyboard_cookie_t kbgrabc =
-                    xcb_grab_keyboard(conn,
-                                      TRUE,
-                                      scrpriv->win,
-                                      XCB_TIME_CURRENT_TIME,
-                                      XCB_GRAB_MODE_ASYNC,
-                                      XCB_GRAB_MODE_ASYNC);
-                xcb_grab_keyboard_reply_t *kbgrabr;
-                xcb_grab_pointer_cookie_t pgrabc =
-                    xcb_grab_pointer(conn,
-                                     TRUE,
-                                     scrpriv->win,
-                                     0,
-                                     XCB_GRAB_MODE_ASYNC,
-                                     XCB_GRAB_MODE_ASYNC,
-                                     scrpriv->win,
-                                     XCB_NONE,
-                                     XCB_TIME_CURRENT_TIME);
-                xcb_grab_pointer_reply_t *pgrabr;
-                kbgrabr = xcb_grab_keyboard_reply(conn, kbgrabc, NULL);
-                if (!kbgrabr || kbgrabr->status != XCB_GRAB_STATUS_SUCCESS) {
-                    xcb_discard_reply(conn, pgrabc.sequence);
-                    xcb_ungrab_pointer(conn, XCB_TIME_CURRENT_TIME);
-                } else {
-                    pgrabr = xcb_grab_pointer_reply(conn, pgrabc, NULL);
-                    if (!pgrabr || pgrabr->status != XCB_GRAB_STATUS_SUCCESS)
-                        {
-                            xcb_ungrab_keyboard(conn,
-                                                XCB_TIME_CURRENT_TIME);
-                        } else {
-                        grabbed_screen = scrpriv->mynum;
-                    }
+            } else {
+                pgrabr = xcb_grab_pointer_reply(conn, pgrabc, NULL);
+                if (!pgrabr || pgrabr->status != XCB_GRAB_STATUS_SUCCESS)
+                    {
+                        xcb_ungrab_keyboard(conn,
+                                            XCB_TIME_CURRENT_TIME);
+                    } else {
+                    grabbed_screen = scrpriv->mynum;
+                    hostx_set_win_title
+                        (screen,
+                         "(ctrl+shift releases mouse and keyboard)");
                 }
             }
-            ephyrUpdateWindowTitle(screen, grabbed_screen != -1);
         }
     }
 
@@ -1392,9 +1266,6 @@ MouseInit(KdPointerInfo * pi)
 {
     pi->driverPrivate = (EphyrPointerPrivate *)
         calloc(1, sizeof(EphyrPointerPrivate));
-    if (!pi->driverPrivate)
-        return BadAlloc;
-
     ((EphyrPointerPrivate *) pi->driverPrivate)->enabled = FALSE;
     pi->nAxes = 3;
     pi->nButtons = 32;
@@ -1437,11 +1308,12 @@ MouseFini(KdPointerInfo * pi)
 }
 
 KdPointerDriver EphyrMouseDriver = {
-    .name    = "ephyr",
-    .Init    = MouseInit,
-    .Enable  = MouseEnable,
-    .Disable = MouseDisable,
-    .Fini    = MouseFini,
+    "ephyr",
+    MouseInit,
+    MouseEnable,
+    MouseDisable,
+    MouseFini,
+    NULL,
 };
 
 /* Keyboard */
@@ -1510,11 +1382,12 @@ EphyrKeyboardBell(KdKeyboardInfo * ki, int volume, int frequency, int duration)
 }
 
 KdKeyboardDriver EphyrKeyboardDriver = {
-    .name    = "ephyr",
-    .Init    = EphyrKeyboardInit,
-    .Enable  = EphyrKeyboardEnable,
-    .Leds    = EphyrKeyboardLeds,
-    .Bell    = EphyrKeyboardBell,
-    .Disable = EphyrKeyboardDisable,
-    .Fini    = EphyrKeyboardFini,
+    "ephyr",
+    EphyrKeyboardInit,
+    EphyrKeyboardEnable,
+    EphyrKeyboardLeds,
+    EphyrKeyboardBell,
+    EphyrKeyboardDisable,
+    EphyrKeyboardFini,
+    NULL,
 };

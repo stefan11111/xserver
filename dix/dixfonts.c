@@ -59,9 +59,7 @@ Equipment Corporation.
 
 #include "dix/dix_priv.h"
 #include "dix/gc_priv.h"
-#include "include/swaprep.h"
 #include "os/auth.h"
-#include "os/log_priv.h"
 
 #include "scrnintstr.h"
 #include "resource.h"
@@ -142,7 +140,7 @@ SetDefaultFont(const char *defaultfontname)
     FontPtr pf;
     XID fid;
 
-    fid = dixAllocServerXID();
+    fid = FakeClientID(0);
     err = OpenFont(serverClient, fid, FontLoadAll | FontOpenSync,
                    (unsigned) strlen(defaultfontname), defaultfontname);
     if (err != Success)
@@ -167,9 +165,10 @@ SetDefaultFont(const char *defaultfontname)
 static void
 QueueFontWakeup(FontPathElementPtr fpe)
 {
+    int i;
     FontPathElementPtr *new;
 
-    for (int i = 0; i < num_slept_fpes; i++) {
+    for (i = 0; i < num_slept_fpes; i++) {
         if (slept_fpes[i] == fpe) {
             return;
         }
@@ -189,9 +188,11 @@ QueueFontWakeup(FontPathElementPtr fpe)
 static void
 RemoveFontWakeup(FontPathElementPtr fpe)
 {
-    for (int i = 0; i < num_slept_fpes; i++) {
+    int i, j;
+
+    for (i = 0; i < num_slept_fpes; i++) {
         if (slept_fpes[i] == fpe) {
-            for (int j = i; j < num_slept_fpes; j++) {
+            for (j = i; j < num_slept_fpes; j++) {
                 slept_fpes[j] = slept_fpes[j + 1];
             }
             num_slept_fpes--;
@@ -203,12 +204,13 @@ RemoveFontWakeup(FontPathElementPtr fpe)
 static void
 FontWakeup(void *data, int count)
 {
+    int i;
     FontPathElementPtr fpe;
 
     if (count < 0)
         return;
     /* wake up any fpe's that may be waiting for information */
-    for (int i = 0; i < num_slept_fpes; i++) {
+    for (i = 0; i < num_slept_fpes; i++) {
         fpe = slept_fpes[i];
         (void) (*fpe_functions[fpe->type]->wakeup_fpe) (fpe);
     }
@@ -239,6 +241,7 @@ doOpenFont(ClientPtr client, OFclosurePtr c)
     FontPathElementPtr fpe = NULL;
     ScreenPtr pScr;
     int err = Successful;
+    int i;
     char *alias, *newname;
     int newlen;
     int aliascount = 20;
@@ -339,7 +342,7 @@ doOpenFont(ClientPtr client, OFclosurePtr c)
     pfont->refcnt++;
     if (pfont->refcnt == 1) {
         UseFPE(pfont->fpe);
-        for (int i = 0; i < screenInfo.numScreens; i++) {
+        for (i = 0; i < screenInfo.numScreens; i++) {
             pScr = screenInfo.screens[i];
             if (pScr->RealizeFont) {
                 if (!(*pScr->RealizeFont) (pScr, pfont)) {
@@ -363,7 +366,7 @@ doOpenFont(ClientPtr client, OFclosurePtr c)
                           c->fontid, FontToXError(err));
     }
     ClientWakeup(c->client);
-    for (int i = 0; i < c->num_fpes; i++) {
+    for (i = 0; i < c->num_fpes; i++) {
         FreeFPE(c->fpe_list[i]);
     }
     free(c->fpe_list);
@@ -376,6 +379,8 @@ int
 OpenFont(ClientPtr client, XID fid, Mask flags, unsigned lenfname,
          const char *pfontname)
 {
+    OFclosurePtr c;
+    int i;
     FontPtr cached = (FontPtr) 0;
 
     if (!lenfname || lenfname > XLFDMAXFONTNAMELEN)
@@ -407,10 +412,10 @@ OpenFont(ClientPtr client, XID fid, Mask flags, unsigned lenfname,
             return Success;
         }
     }
-    OFclosurePtr c = calloc(1, sizeof(OFclosureRec));
+    c = malloc(sizeof(OFclosureRec));
     if (!c)
         return BadAlloc;
-    c->fontname = calloc(1, lenfname);
+    c->fontname = malloc(lenfname);
     c->origFontName = pfontname;
     c->origFontNameLen = lenfname;
     if (!c->fontname) {
@@ -421,14 +426,14 @@ OpenFont(ClientPtr client, XID fid, Mask flags, unsigned lenfname,
      * copy the current FPE list, so that if it gets changed by another client
      * while we're blocking, the request still appears atomic
      */
-    c->fpe_list = calloc(num_fpes, sizeof(FontPathElementPtr));
+    c->fpe_list = xallocarray(num_fpes, sizeof(FontPathElementPtr));
     if (!c->fpe_list) {
         free((void *) c->fontname);
         free(c);
         return BadAlloc;
     }
     memcpy(c->fontname, pfontname, lenfname);
-    for (int i = 0; i < num_fpes; i++) {
+    for (i = 0; i < num_fpes; i++) {
         c->fpe_list[i] = font_path_elements[i];
         UseFPE(c->fpe_list[i]);
     }
@@ -452,6 +457,7 @@ OpenFont(ClientPtr client, XID fid, Mask flags, unsigned lenfname,
 int
 CloseFont(void *value, XID fid)
 {
+    int nscr;
     ScreenPtr pscr;
     FontPathElementPtr fpe;
     FontPtr pfont = (FontPtr) value;
@@ -465,7 +471,7 @@ CloseFont(void *value, XID fid)
          * since the last reference is gone, ask each screen to free any
          * storage it may have allocated locally for it.
          */
-        for (int nscr = 0; nscr < screenInfo.numScreens; nscr++) {
+        for (nscr = 0; nscr < screenInfo.numScreens; nscr++) {
             pscr = screenInfo.screens[nscr];
             if (pscr->UnrealizeFont)
                 (*pscr->UnrealizeFont) (pscr, pfont);
@@ -494,7 +500,7 @@ void
 QueryFont(FontPtr pFont, xQueryFontReply * pReply, int nProtoCCIStructs)
 {
     FontPropPtr pFP;
-    int i;
+    int r, c, i;
     xFontProp *prFP;
     xCharInfo *prCI;
     xCharInfo *charInfos[256];
@@ -529,17 +535,18 @@ QueryFont(FontPtr pFont, xQueryFontReply * pReply, int nProtoCCIStructs)
     ninfos = 0;
     ncols = (unsigned long) (pFont->info.lastCol - pFont->info.firstCol + 1);
     prCI = (xCharInfo *) (prFP);
-    for (int r = pFont->info.firstRow;
+    for (r = pFont->info.firstRow;
          ninfos < nProtoCCIStructs && r <= (int) pFont->info.lastRow; r++) {
         i = 0;
-        for (int c = pFont->info.firstCol; c <= (int) pFont->info.lastCol; c++) {
+        for (c = pFont->info.firstCol; c <= (int) pFont->info.lastCol; c++) {
             chars[i++] = r;
             chars[i++] = c;
         }
         (*pFont->get_metrics) (pFont, ncols, chars,
                                TwoD16Bit, &count, charInfos);
-        for (int j = 0; j < (int) count && ninfos < nProtoCCIStructs; j++) {
-            *prCI = *charInfos[j];
+        i = 0;
+        for (i = 0; i < (int) count && ninfos < nProtoCCIStructs; i++) {
+            *prCI = *charInfos[i];
             prCI++;
             ninfos++;
         }
@@ -557,6 +564,10 @@ doListFontsAndAliases(ClientPtr client, LFclosurePtr c)
     int namelen, resolvedlen;
     int nnames;
     int stringLens;
+    int i;
+    xListFontsReply reply;
+    char *bufptr;
+    char *bufferStart;
     int aliascount = 0;
 
     if (client->clientGone) {
@@ -633,7 +644,7 @@ doListFontsAndAliases(ClientPtr client, LFclosurePtr c)
                 }
                 if (err == FontNameAlias) {
                     free(resolved);
-                    resolved = calloc(1, resolvedlen + 1);
+                    resolved = malloc(resolvedlen + 1);
                     if (resolved)
                         memcpy(resolved, tmpname, resolvedlen + 1);
                 }
@@ -683,7 +694,7 @@ doListFontsAndAliases(ClientPtr client, LFclosurePtr c)
                     c->saved = c->current;
                     c->haveSaved = TRUE;
                     free(c->savedName);
-                    c->savedName = calloc(1, namelen + 1);
+                    c->savedName = malloc(namelen + 1);
                     if (c->savedName)
                         memcpy(c->savedName, name, namelen + 1);
                     c->savedNameLen = namelen;
@@ -735,20 +746,19 @@ doListFontsAndAliases(ClientPtr client, LFclosurePtr c)
     nnames = names->nnames;
     client = c->client;
     stringLens = 0;
-    for (int i = 0; i < nnames; i++)
+    for (i = 0; i < nnames; i++)
         stringLens += (names->length[i] <= 255) ? names->length[i] : 0;
 
-    xListFontsReply rep = {
+    reply = (xListFontsReply) {
         .type = X_Reply,
         .length = bytes_to_int32(stringLens + nnames),
         .nFonts = nnames,
         .sequenceNumber = client->sequence
     };
 
-    char *bufferStart = calloc(1, rep.length << 2);
-    char *bufptr = bufferStart;
+    bufptr = bufferStart = malloc(reply.length << 2);
 
-    if (!bufptr && rep.length) {
+    if (!bufptr && reply.length) {
         SendErrorToClient(client, X_ListFonts, 0, 0, BadAlloc);
         goto bail;
     }
@@ -756,31 +766,25 @@ doListFontsAndAliases(ClientPtr client, LFclosurePtr c)
      * since WriteToClient long word aligns things, copy to temp buffer and
      * write all at once
      */
-    for (int i = 0; i < nnames; i++) {
+    for (i = 0; i < nnames; i++) {
         if (names->length[i] > 255)
-            rep.nFonts--;
+            reply.nFonts--;
         else {
             *bufptr++ = names->length[i];
             memcpy(bufptr, names->names[i], names->length[i]);
             bufptr += names->length[i];
         }
     }
-    nnames = rep.nFonts;
-    rep.length = bytes_to_int32(stringLens + nnames);
-
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-        swaps(&rep.nFonts);
-    }
-
-    WriteToClient(client, sizeof(rep), &rep);
+    nnames = reply.nFonts;
+    reply.length = bytes_to_int32(stringLens + nnames);
+    client->pSwapReplyFunc = ReplySwapVector[X_ListFonts];
+    WriteSwappedDataToClient(client, sizeof(xListFontsReply), &reply);
     WriteToClient(client, stringLens + nnames, bufferStart);
     free(bufferStart);
 
  bail:
     ClientWakeup(client);
-    for (int i = 0; i < c->num_fpes; i++)
+    for (i = 0; i < c->num_fpes; i++)
         FreeFPE(c->fpe_list[i]);
     free(c->fpe_list);
     free(c->savedName);
@@ -794,7 +798,7 @@ int
 ListFonts(ClientPtr client, unsigned char *pattern, unsigned length,
           unsigned max_names)
 {
-    int access;
+    int i;
     LFclosurePtr c;
 
     /*
@@ -806,13 +810,13 @@ ListFonts(ClientPtr client, unsigned char *pattern, unsigned length,
     if (length > XLFDMAXFONTNAMELEN)
         return BadAlloc;
 
-    access = XaceHookServerAccess(client, DixGetAttrAccess);
-    if (access != Success)
-        return access;
+    i = XaceHookServerAccess(client, DixGetAttrAccess);
+    if (i != Success)
+        return i;
 
-    if (!(c = calloc(1, sizeof *c)))
+    if (!(c = malloc(sizeof *c)))
         return BadAlloc;
-    c->fpe_list = calloc(num_fpes, sizeof(FontPathElementPtr));
+    c->fpe_list = xallocarray(num_fpes, sizeof(FontPathElementPtr));
     if (!c->fpe_list) {
         free(c);
         return BadAlloc;
@@ -824,7 +828,7 @@ ListFonts(ClientPtr client, unsigned char *pattern, unsigned length,
         return BadAlloc;
     }
     memmove(c->current.pattern, pattern, length);
-    for (int i = 0; i < num_fpes; i++) {
+    for (i = 0; i < num_fpes; i++) {
         c->fpe_list[i] = font_path_elements[i];
         UseFPE(c->fpe_list[i]);
     }
@@ -853,7 +857,9 @@ doListFontsWithInfo(ClientPtr client, LFWIclosurePtr c)
     xListFontsWithInfoReply *reply;
     int length;
     xFontProp *pFP;
+    int i;
     int aliascount = 0;
+    xListFontsWithInfoReply finalReply;
 
     if (client->clientGone) {
         if (c->current.current_fpe < c->num_fpes) {
@@ -863,6 +869,7 @@ doListFontsWithInfo(ClientPtr client, LFWIclosurePtr c)
         err = Successful;
         goto bail;
     }
+    client->pSwapReplyFunc = ReplySwapVector[X_ListFontsWithInfo];
     if (!c->current.patlen)
         goto finish;
     while (c->current.current_fpe < c->num_fpes) {
@@ -927,7 +934,7 @@ doListFontsWithInfo(ClientPtr client, LFWIclosurePtr c)
                 c->haveSaved = TRUE;
                 c->savedNumFonts = numFonts;
                 free(c->savedName);
-                c->savedName = calloc(1, namelen + 1);
+                c->savedName = malloc(namelen + 1);
                 if (c->savedName)
                     memcpy(c->savedName, name, namelen + 1);
                 aliascount = 20;
@@ -999,15 +1006,12 @@ doListFontsWithInfo(ClientPtr client, LFWIclosurePtr c)
             reply->fontDescent = pFontInfo->fontDescent;
             reply->nReplies = numFonts;
             pFP = (xFontProp *) (reply + 1);
-            for (int i = 0; i < pFontInfo->nprops; i++) {
+            for (i = 0; i < pFontInfo->nprops; i++) {
                 pFP->name = pFontInfo->props[i].name;
                 pFP->value = pFontInfo->props[i].value;
                 pFP++;
             }
-            if (client->swapped) {
-                SwapFont((xQueryFontReply *) reply, FALSE);
-            }
-            WriteToClient(client, length, reply);
+            WriteSwappedDataToClient(client, length, reply);
             WriteToClient(client, namelen, name);
             if (pFontInfo == &fontInfo) {
                 free(fontInfo.props);
@@ -1018,19 +1022,16 @@ doListFontsWithInfo(ClientPtr client, LFWIclosurePtr c)
     }
  finish:
     length = sizeof(xListFontsWithInfoReply);
-    xListFontsWithInfoReply rep = {
+    finalReply = (xListFontsWithInfoReply) {
         .type = X_Reply,
         .sequenceNumber = client->sequence,
         .length = bytes_to_int32(sizeof(xListFontsWithInfoReply)
                                  - sizeof(xGenericReply))
     };
-    if (client->swapped) {
-        SwapFont((xQueryFontReply *) &rep, FALSE);
-    }
-    WriteToClient(client, length, &rep);
+    WriteSwappedDataToClient(client, length, &finalReply);
  bail:
     ClientWakeup(client);
-    for (int i = 0; i < c->num_fpes; i++)
+    for (i = 0; i < c->num_fpes; i++)
         FreeFPE(c->fpe_list[i]);
     free(c->reply);
     free(c->fpe_list);
@@ -1043,7 +1044,7 @@ int
 StartListFontsWithInfo(ClientPtr client, int length, unsigned char *pattern,
                        int max_names)
 {
-    int access;
+    int i;
     LFWIclosurePtr c;
 
     /*
@@ -1055,19 +1056,19 @@ StartListFontsWithInfo(ClientPtr client, int length, unsigned char *pattern,
     if (length > XLFDMAXFONTNAMELEN)
         return BadAlloc;
 
-    access = XaceHookServerAccess(client, DixGetAttrAccess);
-    if (access != Success)
-        return access;
+    i = XaceHookServerAccess(client, DixGetAttrAccess);
+    if (i != Success)
+        return i;
 
-    if (!(c = calloc(1, sizeof *c)))
+    if (!(c = malloc(sizeof *c)))
         goto badAlloc;
-    c->fpe_list = calloc(num_fpes, sizeof(FontPathElementPtr));
+    c->fpe_list = xallocarray(num_fpes, sizeof(FontPathElementPtr));
     if (!c->fpe_list) {
         free(c);
         goto badAlloc;
     }
     memmove(c->current.pattern, pattern, length);
-    for (int i = 0; i < num_fpes; i++) {
+    for (i = 0; i < num_fpes; i++) {
         c->fpe_list[i] = font_path_elements[i];
         UseFPE(c->fpe_list[i]);
     }
@@ -1102,7 +1103,7 @@ doPolyText(ClientPtr client, PTclosurePtr c)
     int err = Success, lgerr;   /* err is in X error, not font error, space */
     enum { NEVER_SLEPT, START_SLEEP, SLEEPING } client_state = NEVER_SLEPT;
     FontPathElementPtr fpe;
-    GCPtr origGC = NULL;
+    GC *origGC = NULL;
     int itemSize = c->reqType == X_PolyText8 ? 1 : 2;
 
     if (client->clientGone) {
@@ -1179,7 +1180,7 @@ doPolyText(ClientPtr client, PTclosurePtr c)
                     ChangeGCVal val;
 
                     val.ptr = pFont;
-                    ChangeGC(NULL, c->pGC, GCFont, &val);
+                    ChangeGC(NullClient, c->pGC, GCFont, &val);
                     ValidateGC(c->pDraw, c->pGC);
                 }
 
@@ -1212,13 +1213,13 @@ doPolyText(ClientPtr client, PTclosurePtr c)
             if (lgerr == Suspended) {
                 if (!ClientIsAsleep(client)) {
                     int len;
-                    GCPtr pGC;
+                    GC *pGC;
                     PTclosurePtr new_closure;
 
                     /*  We're putting the client to sleep.  We need to do a few things
                        to ensure successful and atomic-appearing execution of the
                        remainder of the request.  First, copy the remainder of the
-                       request into a safe calloc'd area.  Second, create a scratch GC
+                       request into a safe malloc'd area.  Second, create a scratch GC
                        to use for the remainder of the request.  Third, mark all fonts
                        referenced in the remainder of the request to prevent their
                        deallocation.  Fourth, make the original GC look like the
@@ -1230,9 +1231,9 @@ doPolyText(ClientPtr client, PTclosurePtr c)
                        indicated by client_state = START_SLEEP.  */
 
                     /* Step 1 */
-                    /* Allocate a calloc'd closure structure to replace
+                    /* Allocate a malloc'd closure structure to replace
                        the local one we were passed */
-                    new_closure = calloc(1, sizeof(PTclosureRec));
+                    new_closure = malloc(sizeof(PTclosureRec));
                     if (!new_closure) {
                         err = BadAlloc;
                         goto bail;
@@ -1240,7 +1241,7 @@ doPolyText(ClientPtr client, PTclosurePtr c)
                     *new_closure = *c;
 
                     len = new_closure->endReq - new_closure->pElt;
-                    new_closure->data = calloc(1, len);
+                    new_closure->data = malloc(len);
                     if (!new_closure->data) {
                         free(new_closure);
                         err = BadAlloc;
@@ -1316,11 +1317,11 @@ doPolyText(ClientPtr client, PTclosurePtr c)
 
     if (client_state == START_SLEEP) {
         /* Step 4 */
-        if (origGC && (pFont != origGC->font)) {
+        if (pFont != origGC->font) {
             ChangeGCVal val;
 
             val.ptr = pFont;
-            ChangeGC(NULL, origGC, GCFont, &val);
+            ChangeGC(NullClient, origGC, GCFont, &val);
             ValidateGC(c->pDraw, origGC);
         }
 
@@ -1339,7 +1340,7 @@ doPolyText(ClientPtr client, PTclosurePtr c)
     }
     if (ClientIsAsleep(client)) {
         ClientWakeup(c->client);
-        ChangeGC(NULL, c->pGC, clearGCmask, clearGC);
+        ChangeGC(NullClient, c->pGC, clearGCmask, clearGC);
 
         /* Unreference the font from the scratch GC */
         CloseFont(c->pGC->font, (Font) 0);
@@ -1347,17 +1348,13 @@ doPolyText(ClientPtr client, PTclosurePtr c)
 
         FreeScratchGC(c->pGC);
         free(c->data);
-
-        /* if compiler/ananylzer warns here, it's a false alarm:
-           here `c` points to a calloc()ed chunk, not the on-stack struct
-           from PolyText(). */
         free(c);
     }
     return TRUE;
 }
 
 int
-PolyText(ClientPtr client, DrawablePtr pDraw, GCPtr pGC, unsigned char *pElt,
+PolyText(ClientPtr client, DrawablePtr pDraw, GC * pGC, unsigned char *pElt,
          unsigned char *endReq, int xorg, int yorg, int reqType, XID did)
 {
     PTclosureRec local_closure = {
@@ -1412,8 +1409,9 @@ doImageText(ClientPtr client, ITclosurePtr c)
     lgerr = LoadGlyphs(client, c->pGC->font, c->nChars, itemSize, c->data);
     if (lgerr == Suspended) {
         if (!ClientIsAsleep(client)) {
-            GCPtr pGC;
+            GC *pGC;
             unsigned char *data;
+            ITclosurePtr new_closure;
             ITclosurePtr old_closure;
 
             /* We're putting the client to sleep.  We need to
@@ -1421,7 +1419,7 @@ doImageText(ClientPtr client, ITclosurePtr c)
                in doPolyText, but much simpler because the
                request structure is much simpler. */
 
-            ITclosurePtr new_closure = calloc(1, sizeof(ITclosureRec));
+            new_closure = malloc(sizeof(ITclosureRec));
             if (!new_closure) {
                 err = BadAlloc;
                 goto bail;
@@ -1430,7 +1428,7 @@ doImageText(ClientPtr client, ITclosurePtr c)
             *new_closure = *c;
             c = new_closure;
 
-            data = calloc(c->nChars, itemSize);
+            data = xallocarray(c->nChars, itemSize);
             if (!data) {
                 free(c);
                 c = old_closure;
@@ -1488,7 +1486,7 @@ doImageText(ClientPtr client, ITclosurePtr c)
     }
     if (ClientIsAsleep(client)) {
         ClientWakeup(c->client);
-        ChangeGC(NULL, c->pGC, clearGCmask, clearGC);
+        ChangeGC(NullClient, c->pGC, clearGCmask, clearGC);
 
         /* Unreference the font from the scratch GC */
         CloseFont(c->pGC->font, (Font) 0);
@@ -1496,16 +1494,13 @@ doImageText(ClientPtr client, ITclosurePtr c)
 
         FreeScratchGC(c->pGC);
         free(c->data);
-        /* if compiler/ananylzer warns here, it's a false alarm:
-           here `c` points to a calloc()ed chunk, not the on-stack struct
-           from PolyText(). */
         free(c);
     }
     return TRUE;
 }
 
 int
-ImageText(ClientPtr client, DrawablePtr pDraw, GCPtr pGC, int nChars,
+ImageText(ClientPtr client, DrawablePtr pDraw, GC * pGC, int nChars,
           unsigned char *data, int xorg, int yorg, int reqType, XID did)
 {
     ITclosureRec local_closure;
@@ -1528,7 +1523,9 @@ ImageText(ClientPtr client, DrawablePtr pDraw, GCPtr pGC, int nChars,
 static int
 DetermineFPEType(const char *pathname)
 {
-    for (int i = 0; i < num_fpe_types; i++) {
+    int i;
+
+    for (i = 0; i < num_fpe_types; i++) {
         if ((*fpe_functions[i]->name_check) (pathname))
             return i;
     }
@@ -1538,13 +1535,16 @@ DetermineFPEType(const char *pathname)
 static void
 FreeFontPath(FontPathElementPtr * list, int n, Bool force)
 {
-    for (int i = 0; i < n; i++) {
+    int i;
+
+    for (i = 0; i < n; i++) {
         if (force) {
             /* Sanity check that all refcounts will be 0 by the time
                we get to the end of the list. */
             int found = 1;      /* the first reference is us */
+            int j;
 
-            for (int j = i + 1; j < n; j++) {
+            for (j = i + 1; j < n; j++) {
                 if (list[j] == list[i])
                     found++;
             }
@@ -1562,8 +1562,9 @@ find_existing_fpe(FontPathElementPtr * list, int num, unsigned char *name,
                   int len)
 {
     FontPathElementPtr fpe;
+    int i;
 
-    for (int i = 0; i < num; i++) {
+    for (i = 0; i < num; i++) {
         fpe = list[i];
         if (fpe->name_length == len && memcmp(name, fpe->name, len) == 0)
             return fpe;
@@ -1580,7 +1581,7 @@ SetFontPathElements(int npaths, unsigned char *paths, int *bad, Bool persist)
     unsigned char *cp = paths;
     FontPathElementPtr fpe = NULL, *fplist;
 
-    fplist = calloc(npaths, sizeof(FontPathElementPtr));
+    fplist = xallocarray(npaths, sizeof(FontPathElementPtr));
     if (!fplist) {
         *bad = 0;
         return BadAlloc;
@@ -1616,12 +1617,13 @@ SetFontPathElements(int npaths, unsigned char *paths, int *bad, Bool persist)
             }
             /* if error or can't do it, act like it's a new one */
             if (!fpe) {
-                fpe = calloc(1, sizeof(FontPathElementRec));
+                char *name;
+                fpe = malloc(sizeof(FontPathElementRec));
                 if (!fpe) {
                     err = BadAlloc;
                     goto bail;
                 }
-                char *name = calloc(1, len + 1);
+                name = malloc(len + 1);
                 if (!name) {
                     free(fpe);
                     err = BadAlloc;
@@ -1728,7 +1730,7 @@ SetDefaultFontPath(const char *path)
 
     /* get enough for string, plus values -- use up commas */
     len = strlen(temp_path) + 1;
-    nump = cp = newpath = calloc(1, len);
+    nump = cp = newpath = malloc(len);
     if (!newpath) {
         free(temp_path);
         return BadAlloc;
@@ -1761,17 +1763,17 @@ SetDefaultFontPath(const char *path)
 int
 GetFontPath(ClientPtr client, int *count, int *length, unsigned char **result)
 {
-    int access;
+    int i;
     unsigned char *c;
     int len;
     FontPathElementPtr fpe;
 
-    access = XaceHookServerAccess(client, DixGetAttrAccess);
-    if (access != Success)
-        return access;
+    i = XaceHookServerAccess(client, DixGetAttrAccess);
+    if (i != Success)
+        return i;
 
     len = 0;
-    for (int i = 0; i < num_fpes; i++) {
+    for (i = 0; i < num_fpes; i++) {
         fpe = font_path_elements[i];
         len += fpe->name_length + 1;
     }
@@ -1784,7 +1786,7 @@ GetFontPath(ClientPtr client, int *count, int *length, unsigned char **result)
 
     font_path_string = c;
     *length = 0;
-    for (int i = 0; i < num_fpes; i++) {
+    for (i = 0; i < num_fpes; i++) {
         fpe = font_path_elements[i];
         *c = fpe->name_length;
         *length += *c++;
@@ -1799,9 +1801,10 @@ GetFontPath(ClientPtr client, int *count, int *length, unsigned char **result)
 void
 DeleteClientFontStuff(ClientPtr client)
 {
+    int i;
     FontPathElementPtr fpe;
 
-    for (int i = 0; i < num_fpes; i++) {
+    for (i = 0; i < num_fpes; i++) {
         fpe = font_path_elements[i];
         if (fpe_functions[fpe->type]->client_died)
             (*fpe_functions[fpe->type]->client_died) ((void *) client, fpe);
@@ -1897,7 +1900,7 @@ find_old_font(XID id)
 static Font
 get_new_font_client_id(void)
 {
-    return dixAllocServerXID();
+    return FakeClientID(0);
 }
 
 static int
@@ -2032,7 +2035,7 @@ static void verrorf(const char *f, va_list args)
 static const xfont2_client_funcs_rec xfont2_client_funcs = {
     .version = XFONT2_CLIENT_FUNCS_VERSION,
     .client_auth_generation = _client_auth_generation,
-    .client_signal = dixClientSignal,
+    .client_signal = ClientSignal,
     .delete_font_client_id = delete_font_client_id,
     .verrorf = verrorf,
     .find_old_font = find_old_font,

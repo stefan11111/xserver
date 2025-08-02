@@ -36,8 +36,6 @@
 #include <X11/extensions/presenttokens.h>
 
 #include "dix/dix_priv.h"
-#include "dix/resource_priv.h"
-#include "os/bug_priv.h"
 
 #include "glxserver.h"
 #include <unpack.h>
@@ -123,8 +121,6 @@ validGlxFBConfigForWindow(ClientPtr client, __GLXconfig * config,
             break;
         }
     }
-
-    BUG_RETURN_VAL(!pVisual, FALSE);
 
     /* FIXME: What exactly should we check here... */
     if (pVisual->class != glxConvertToXVisualType(config->visualType) ||
@@ -610,6 +606,8 @@ xorgGlxMakeCurrent(ClientPtr client, GLXContextTag tag, XID drawId, XID readId,
 
     /* Look up new context. It must not be current for someone else. */
     if (contextId != None) {
+        int status;
+
         if (!validGlxContext(client, contextId, DixUseAccess, &glxc, &error))
             return error;
 
@@ -617,14 +615,12 @@ xorgGlxMakeCurrent(ClientPtr client, GLXContextTag tag, XID drawId, XID readId,
             return BadAccess;
 
         if (drawId) {
-            int status = 0;
             drawPriv = __glXGetDrawable(glxc, drawId, client, &status);
             if (drawPriv == NULL)
                 return status;
         }
 
         if (readId) {
-            int status = 0;
             readPriv = __glXGetDrawable(glxc, readId, client, &status);
             if (readPriv == NULL)
                 return status;
@@ -2505,9 +2501,7 @@ void
 __glXsendSwapEvent(__GLXdrawable *drawable, int type, CARD64 ust,
                    CARD64 msc, CARD32 sbc)
 {
-    ClientPtr client = dixClientForXID(drawable->drawId);
-    if (!client)
-        return;
+    ClientPtr client = clients[CLIENT_ID(drawable->drawId)];
 
     xGLXBufferSwapComplete2 wire =  {
         .type = __glXEventBase + GLX_BufferSwapComplete

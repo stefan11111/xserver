@@ -40,7 +40,6 @@
 
 #include "dix/dix_priv.h"
 #include "dix/exevents_priv.h"
-#include "dix/extension_priv.h"
 #include "dix/input_priv.h"
 #include "os/bug_priv.h"
 
@@ -76,7 +75,7 @@ XISendDeviceHierarchyEvent(int flags[MAXDEVICES])
     if (!ev)
         return;
     ev->type = GenericEvent;
-    ev->extension = EXTENSION_MAJOR_XINPUT;
+    ev->extension = IReqCode;
     ev->evtype = XI_HierarchyChanged;
     ev->time = GetTimeInMillis();
     ev->flags = 0;
@@ -237,7 +236,7 @@ remove_master(ClientPtr client, xXIRemoveMasterInfo * r, int flags[MAXDEVICES])
     if (rc != Success)
         goto unwind;
 
-    if (!InputDevIsMaster(dev)) {
+    if (!IsMaster(dev)) {
         client->errorValue = r->deviceid;
         rc = BadDevice;
         goto unwind;
@@ -286,7 +285,7 @@ remove_master(ClientPtr client, xXIRemoveMasterInfo * r, int flags[MAXDEVICES])
         if (rc != Success)
             goto unwind;
 
-        if (!InputDevIsMaster(newptr) || !IsPointerDevice(newptr)) {
+        if (!IsMaster(newptr) || !IsPointerDevice(newptr)) {
             client->errorValue = r->return_pointer;
             rc = BadDevice;
             goto unwind;
@@ -297,14 +296,14 @@ remove_master(ClientPtr client, xXIRemoveMasterInfo * r, int flags[MAXDEVICES])
         if (rc != Success)
             goto unwind;
 
-        if (!InputDevIsMaster(newkeybd) || !IsKeyboardDevice(newkeybd)) {
+        if (!IsMaster(newkeybd) || !IsKeyboardDevice(newkeybd)) {
             client->errorValue = r->return_keyboard;
             rc = BadDevice;
             goto unwind;
         }
 
         for (attached = inputInfo.devices; attached; attached = attached->next) {
-            if (!InputDevIsMaster(attached)) {
+            if (!IsMaster(attached)) {
                 if (GetMaster(attached, MASTER_ATTACHED) == ptr) {
                     AttachDevice(client, attached, newptr);
                     flags[attached->id] |= XISlaveAttached;
@@ -355,7 +354,7 @@ detach_slave(ClientPtr client, xXIDetachSlaveInfo * c, int flags[MAXDEVICES])
     if (rc != Success)
         goto unwind;
 
-    if (InputDevIsMaster(dev)) {
+    if (IsMaster(dev)) {
         client->errorValue = c->deviceid;
         rc = BadDevice;
         goto unwind;
@@ -387,7 +386,7 @@ attach_slave(ClientPtr client, xXIAttachSlaveInfo * c, int flags[MAXDEVICES])
     if (rc != Success)
         goto unwind;
 
-    if (InputDevIsMaster(dev)) {
+    if (IsMaster(dev)) {
         client->errorValue = c->deviceid;
         rc = BadDevice;
         goto unwind;
@@ -403,7 +402,7 @@ attach_slave(ClientPtr client, xXIAttachSlaveInfo * c, int flags[MAXDEVICES])
     rc = dixLookupDevice(&newmaster, c->new_master, client, DixAddAccess);
     if (rc != Success)
         goto unwind;
-    if (!InputDevIsMaster(newmaster)) {
+    if (!IsMaster(newmaster)) {
         client->errorValue = c->new_master;
         rc = BadDevice;
         goto unwind;

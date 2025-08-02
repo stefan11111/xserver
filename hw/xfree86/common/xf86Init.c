@@ -58,19 +58,17 @@
 #include "mi/mi_priv.h"
 #include "os/cmdline.h"
 #include "os/ddx_priv.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
-#include "randr/randrstr_priv.h"
 
 #include "servermd.h"
 #include "windowstr.h"
 #include "scrnintstr.h"
-#include "../os-support/linux/systemd-logind.h"
+#include "systemd-logind.h"
 #include "xf86VGAarbiter_priv.h"
 #include "loaderProcs.h"
 
 #include "xf86Module_priv.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
 #include "xf86Config.h"
 #include "xf86_os_support.h"
@@ -84,7 +82,11 @@
 #include "xf86InPriv.h"
 #include "xf86Crtc.h"
 #include "picturestr.h"
+#include "randrstr.h"
 #include "xf86Bus.h"
+#ifdef XSERVER_LIBPCIACCESS
+#include "xf86VGAarbiter.h"
+#endif
 #include "globals.h"
 #include "xserver-properties.h"
 
@@ -97,8 +99,6 @@
 #include <linux/major.h>
 #include <sys/sysmacros.h>
 #endif
-
-Bool xf86DoShowOptions = FALSE;
 
 void (*xf86OSPMClose) (void) = NULL;
 static Bool xorgHWOpenConsole = FALSE;
@@ -122,7 +122,7 @@ static Bool formatsDone = FALSE;
 static void
 xf86PrintBanner(void)
 {
-    xf86ErrorFVerb(0, "\nXLibre X Server %d.%d.%d",
+    xf86ErrorFVerb(0, "\nX.Org X Server %d.%d.%d",
                    XORG_VERSION_MAJOR, XORG_VERSION_MINOR, XORG_VERSION_PATCH);
 #if XORG_VERSION_SNAP > 0
     xf86ErrorFVerb(0, ".%d", XORG_VERSION_SNAP);
@@ -168,14 +168,15 @@ xf86PrintBanner(void)
                            name.version, name.machine);
 #ifdef __linux__
             do {
+                char buf[80];
                 int fd = open("/proc/cmdline", O_RDONLY);
 
                 if (fd != -1) {
-                    char buf[82] = { 0 };
                     xf86ErrorFVerb(0, "Kernel command line: ");
-                    while (read(fd, buf, sizeof(buf)-2) > 0) {
+                    memset(buf, 0, 80);
+                    while (read(fd, buf, 80) > 0) {
                         xf86ErrorFVerb(0, "%.80s", buf);
-                        memset(buf, 0, sizeof(buf));
+                        memset(buf, 0, 80);
                     }
                     close(fd);
                 }
@@ -224,7 +225,7 @@ static void
 AddSeatId(CallbackListPtr *pcbl, void *data, void *screen)
 {
     ScreenPtr pScreen = screen;
-    Atom SeatAtom = dixAddAtom(SEAT_ATOM_NAME);
+    Atom SeatAtom = MakeAtom(SEAT_ATOM_NAME, sizeof(SEAT_ATOM_NAME) - 1, TRUE);
     int err;
 
     err = dixChangeWindowProperty(serverClient, pScreen->root, SeatAtom,
@@ -242,8 +243,9 @@ AddVTAtoms(CallbackListPtr *pcbl, void *data, void *screen)
 #define VT_ATOM_NAME         "XFree86_VT"
     int err, HasVT = 1;
     ScreenPtr pScreen = screen;
-    Atom VTAtom = dixAddAtom(VT_ATOM_NAME);
-    Atom HasVTAtom = dixAddAtom(HAS_VT_ATOM_NAME);
+    Atom VTAtom = MakeAtom(VT_ATOM_NAME, sizeof(VT_ATOM_NAME) - 1, TRUE);
+    Atom HasVTAtom = MakeAtom(HAS_VT_ATOM_NAME, sizeof(HAS_VT_ATOM_NAME) - 1,
+                              TRUE);
 
     err = dixChangeWindowProperty(serverClient, pScreen->root, VTAtom,
                                   XA_INTEGER, 32, PropModeReplace, 1,
@@ -332,7 +334,7 @@ InitOutput(ScreenInfo * pScreenInfo, int argc, char **argv)
         LoaderSetPath(xf86ModulePath);
 
         if (xf86Info.ignoreABI) {
-            LoaderSetIgnoreAbi();
+            LoaderSetOptions(LDR_OPT_ABI_MISMATCH_NONFATAL);
         }
 
         if (xf86DoShowOptions)
@@ -868,14 +870,14 @@ void
 xf86SetVerbosity(int verb)
 {
     xf86Verbose = verb;
-    xorgLogVerbosity = verb;
+    LogSetParameter(XLOG_VERBOSITY, verb);
 }
 
 void
 xf86SetLogVerbosity(int verb)
 {
     xf86LogVerbose = verb;
-    xorgLogFileVerbosity = verb;
+    LogSetParameter(XLOG_FILE_VERBOSITY, verb);
 }
 
 static void
@@ -962,7 +964,7 @@ ddxProcessArgument(int argc, char **argv, int i)
         return 1;
     }
     if (!strcmp(argv[i], "-ignoreABI")) {
-        LoaderSetIgnoreAbi();
+        LoaderSetOptions(LDR_OPT_ABI_MISMATCH_NONFATAL);
         return 1;
     }
     if (!strcmp(argv[i], "-verbose")) {
@@ -1022,6 +1024,11 @@ ddxProcessArgument(int argc, char **argv, int i)
     /* Notice the +bs flag, but allow it to pass to the dix layer */
     if (!strcmp(argv[i], "+bs")) {
         xf86bsEnableFlag = TRUE;
+        return 0;
+    }
+    /* Notice the -s flag, but allow it to pass to the dix layer */
+    if (!strcmp(argv[i], "-s")) {
+        xf86sFlag = TRUE;
         return 0;
     }
     if (!strcmp(argv[i], "-pixmap32") || !strcmp(argv[i], "-pixmap24")) {

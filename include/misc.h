@@ -87,6 +87,8 @@ OF THIS SOFTWARE.
 #ifndef MAXGPUSCREENS
 #define MAXGPUSCREENS	16
 #endif
+#define MAXCLIENTS	2048
+#define LIMITCLIENTS	256     /* Must be a power of 2 and <= MAXCLIENTS */
 #define MAXFORMATS	8
 #ifndef MAXDEVICES
 #define MAXDEVICES	256      /* input devices */
@@ -99,16 +101,6 @@ OF THIS SOFTWARE.
 #define EXTENSION_BASE 128
 
 typedef uint32_t ATOM;
-
-/* @brief generic X return code
- *
- * this type is should be used instead of plain int for all functions
- * returning and X error code (that's possibly sent to the client),
- * in order to make return value semantics clear to the humen reader.
- *
- * part of public SDK / driver API.
- */
-typedef int XRetCode;
 
 #ifndef TRUE
 #define TRUE 1
@@ -129,6 +121,13 @@ typedef struct _xReq *xReqPtr;
 #define NullBox ((BoxPtr)0)
 #define MILLI_PER_MIN (1000 * 60)
 #define MILLI_PER_SECOND (1000)
+
+    /* this next is used with None and ParentRelative to tell
+       PaintWin() what to use to paint the background. Also used
+       in the macro IS_VALID_PIXMAP */
+
+#define USE_BACKGROUND_PIXEL 3
+#define USE_BORDER_PIXEL 3
 
 #undef min
 #undef max
@@ -222,6 +221,8 @@ padding_for_int32(const int bytes)
 {
     return ((-bytes) & 3);
 }
+
+extern _X_EXPORT char **xstrtokenize(const char *str, const char *separators);
 
 /* some macros to help swap requests, replies, and events */
 

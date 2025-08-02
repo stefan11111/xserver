@@ -67,8 +67,11 @@ SOFTWARE.
 #endif
 #include <X11/X.h>
 #include <X11/Xproto.h>
-#include "os/Xtrans.h"
-#include "os/Xtransint.h"
+#define XSERV_t
+#define TRANS_SERVER
+#define TRANS_REOPEN
+#include <X11/Xtrans/Xtrans.h>
+#include <X11/Xtrans/Xtransint.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -95,9 +98,7 @@ SOFTWARE.
 #include "os/audit.h"
 #include "os/auth.h"
 #include "os/client_priv.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
-#include "os/probes_priv.h"
 
 #include "misc.h"               /* for typedef of pointer */
 #include "dixstruct_priv.h"
@@ -115,9 +116,8 @@ SOFTWARE.
 #include <systemd/sd-daemon.h>
 #endif
 
+#include "probes.h"
 #include "xdmcp.h"
-
-#define MAX_CONNECTIONS (1<<16)
 
 struct ospoll   *server_poll;
 
@@ -144,7 +144,7 @@ set_poll_clients(void);
 
 static XtransConnInfo *ListenTransConns = NULL;
 static int *ListenTransFds = NULL;
-static uint32_t ListenTransCount = 0;
+static int ListenTransCount;
 
 static void ErrorConnMax(XtransConnInfo /* trans_conn */ );
 
@@ -266,12 +266,7 @@ CreateWellKnownSockets(void)
         LogSetDisplay();
     }
 
-    if (ListenTransCount >= MAX_CONNECTIONS) {
-        FatalError ("Tried to clear too many listening sockets - OOM");
-        return; // mostly to keep GCC from complaining about too large alloc
-    }
-
-    ListenTransFds = calloc(ListenTransCount, sizeof(int));
+    ListenTransFds = xallocarray(ListenTransCount, sizeof (int));
     if (ListenTransFds == NULL)
         FatalError ("Failed to create listening socket array");
 
@@ -619,11 +614,12 @@ ClientReady(int fd, int xevents, void *data)
 static ClientPtr
 AllocNewConnection(XtransConnInfo trans_conn, int fd, CARD32 conn_time)
 {
+    OsCommPtr oc;
     ClientPtr client;
 
-    OsCommPtr oc = calloc(1, sizeof(OsCommRec));
+    oc = malloc(sizeof(OsCommRec));
     if (!oc)
-        return NULL;
+        return NullClient;
     oc->trans_conn = trans_conn;
     oc->fd = fd;
     oc->input = (ConnectionInputPtr) NULL;
@@ -633,7 +629,7 @@ AllocNewConnection(XtransConnInfo trans_conn, int fd, CARD32 conn_time)
     oc->flags = 0;
     if (!(client = NextAvailableClient((void *) oc))) {
         free(oc);
-        return NULL;
+        return NullClient;
     }
     client->local = ComputeLocalClient(client);
     ospoll_add(server_poll, fd,
@@ -690,7 +686,7 @@ EstablishNewConnections(int curconn, int ready, void *data)
 
     newconn = _XSERVTransGetConnectionNumber(new_trans_conn);
 
-    _XSERVTransNonBlock(new_trans_conn);
+    _XSERVTransSetOption(new_trans_conn, TRANS_NONBLOCKING, 1);
 
     if (trans_conn->flags & TRANS_NOXAUTH)
         new_trans_conn->flags = new_trans_conn->flags | TRANS_NOXAUTH;
@@ -1058,7 +1054,7 @@ ListenOnOpenFD(int fd, int noxauth)
     ListenTransCount++;
 }
 
-/* based on _XSERVTransSocketUNIXAccept (XtransConnInfo ciptr, int *status) */
+/* based on TRANS(SocketUNIXAccept) (XtransConnInfo ciptr, int *status) */
 Bool
 AddClientOnOpenFD(int fd)
 {
@@ -1071,7 +1067,7 @@ AddClientOnOpenFD(int fd)
     if (ciptr == NULL)
         return FALSE;
 
-    _XSERVTransNonBlock(ciptr);
+    _XSERVTransSetOption(ciptr, TRANS_NONBLOCKING, 1);
     ciptr->flags |= TRANS_NOXAUTH;
 
     connect_time = GetTimeInMillis();

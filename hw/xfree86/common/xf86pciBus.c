@@ -35,14 +35,11 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <pciaccess.h>
 #include <X11/X.h>
-
-#include "os/log_priv.h"
-
+#include <pciaccess.h>
 #include "os.h"
 #include "Pci.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 #include "xf86Priv.h"
 #include "dirent.h"             /* DIR, FILE type definitions */
 
@@ -1361,7 +1358,7 @@ xf86MatchDriverFromFiles(uint16_t match_vendor, uint16_t match_chip,
                     }
                     if (vendor == match_vendor && chip == match_chip) {
                         tmpMatch =
-                            (char *) calloc(1, sizeof(char) *
+                            (char *) malloc(sizeof(char) *
                                             strlen(direntry->d_name) - 3);
                         if (!tmpMatch) {
                             LogMessageVerb(X_ERROR, 1,

@@ -82,15 +82,11 @@ OR PERFORMANCE OF THIS SOFTWARE.
 #include <errno.h>
 #include <stdio.h>
 #include <stdarg.h>
-#include <stdlib.h>             /* for calloc() */
+#include <stdlib.h>             /* for malloc() */
 #include <sys/stat.h>
 #include <time.h>
 #include <X11/Xfuncproto.h>
 #include <X11/Xos.h>
-
-#ifdef CONFIG_SYSLOG
-#include <syslog.h>
-#endif
 
 #include "dix/dix_priv.h"
 #include "dix/input_priv.h"
@@ -98,7 +94,6 @@ OR PERFORMANCE OF THIS SOFTWARE.
 #include "os/bug_priv.h"
 #include "os/ddx_priv.h"
 #include "os/fmt.h"
-#include "os/log_priv.h"
 #include "os/osdep.h"
 
 #include "opaque.h"
@@ -114,16 +109,13 @@ OR PERFORMANCE OF THIS SOFTWARE.
 /* Default logging parameters. */
 #define DEFAULT_LOG_VERBOSITY		0
 #define DEFAULT_LOG_FILE_VERBOSITY	3
-#define DEFAULT_SYSLOG_VERBOSITY	0
 
+static FILE *logFile = NULL;
 static int logFileFd = -1;
-Bool xorgLogSync = FALSE;
-int xorgLogVerbosity = DEFAULT_LOG_VERBOSITY;
-int xorgLogFileVerbosity = DEFAULT_LOG_FILE_VERBOSITY;
-#ifdef CONFIG_SYSLOG
-int xorgSyslogVerbosity = DEFAULT_SYSLOG_VERBOSITY;
-const char *xorgSyslogIdent = "X";
-#endif
+static Bool logFlush = FALSE;
+static Bool logSync = FALSE;
+static int logVerbosity = DEFAULT_LOG_VERBOSITY;
+static int logFileVerbosity = DEFAULT_LOG_FILE_VERBOSITY;
 
 /* Buffer to information logged before the log file is opened. */
 static char *saveBuffer = NULL;
@@ -209,24 +201,6 @@ LogFilePrep(const char *fname, const char *backup, const char *idstring)
 }
 #pragma GCC diagnostic pop
 
-static inline void doLogSync(void) {
-#ifndef WIN32
-    fsync(logFileFd);
-#endif
-}
-
-static void initSyslog(void) {
-#ifdef CONFIG_SYSLOG
-    char buffer[4096];
-    strcpy(buffer, xorgSyslogIdent);
-
-    snprintf(buffer, sizeof(buffer), "%s :%s", xorgSyslogIdent, (display ? display : "<>"));
-
-    /* initialize syslog */
-    openlog(buffer, LOG_PID, LOG_LOCAL1);
-#endif
-}
-
 /*
  * LogInit is called to start logging to a file.  It is also called (with
  * NULL arguments) when logging to a file is not wanted.  It must always be
@@ -262,14 +236,19 @@ LogInit(const char *fname, const char *backup)
                 saved_log_backup = strdup(backup);
         } else
             logFileName = LogFilePrep(fname, backup, display);
+        if ((logFile = fopen(logFileName, "w")) == NULL)
+            FatalError("Cannot open log file \"%s\"\n", logFileName);
+        setvbuf(logFile, NULL, _IONBF, 0);
 
-        if ((logFileFd = open(logFileName, O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP)) == -1)
-            FatalError("Cannot open log file \"%s\": %s\n", logFileName, strerror(errno));
+        logFileFd = fileno(logFile);
 
         /* Flush saved log information. */
         if (saveBuffer && bufferSize > 0) {
-            write(logFileFd, saveBuffer, bufferPos);
-            doLogSync();
+            fwrite(saveBuffer, bufferPos, 1, logFile);
+            fflush(logFile);
+#ifndef WIN32
+            fsync(fileno(logFile));
+#endif
         }
     }
 
@@ -284,7 +263,6 @@ LogInit(const char *fname, const char *backup)
     }
     needBuffer = FALSE;
 
-    initSyslog();
     return logFileName;
 }
 
@@ -316,20 +294,41 @@ LogSetDisplay(void)
         free(saved_log_fname);
         free(saved_log_backup);
     }
-    initSyslog();
 }
 
 void
 LogClose(enum ExitCode error)
 {
-    if (logFileFd != -1) {
+    if (logFile) {
         int msgtype = (error == EXIT_NO_ERROR) ? X_INFO : X_ERROR;
         LogMessageVerb(msgtype, -1,
                 "Server terminated %s (%d). Closing log file.\n",
                 (error == EXIT_NO_ERROR) ? "successfully" : "with error",
                 error);
-        close(logFileFd);
+        fclose(logFile);
+        logFile = NULL;
         logFileFd = -1;
+    }
+}
+
+Bool
+LogSetParameter(LogParameter param, int value)
+{
+    switch (param) {
+    case XLOG_FLUSH:
+        logFlush = value ? TRUE : FALSE;
+        return TRUE;
+    case XLOG_SYNC:
+        logSync = value ? TRUE : FALSE;
+        return TRUE;
+    case XLOG_VERBOSITY:
+        logVerbosity = value;
+        return TRUE;
+    case XLOG_FILE_VERBOSITY:
+        logFileVerbosity = value;
+        return TRUE;
+    default:
+        return FALSE;
     }
 }
 
@@ -410,14 +409,6 @@ vpnprintf(char *string, int size_in, const char *f, va_list args)
 
         f_idx++;
 
-        if (f[f_idx] == '#')
-        /* silently ignore alternate form */
-            f_idx++;
-
-        /* silently ignore reverse justification */
-        if (f[f_idx] == '-')
-            f_idx++;
-
         /* silently swallow minimum field width */
         if (f[f_idx] == '*') {
             f_idx++;
@@ -457,10 +448,8 @@ vpnprintf(char *string, int size_in, const char *f, va_list args)
         case 's':
             string_arg = va_arg(args, char*);
 
-            if (string_arg) {
-                for (i = 0; string_arg[i] != 0 && s_idx < size - 1 && s_idx < precision; i++)
-                    string[s_idx++] = string_arg[i];
-            }
+            for (i = 0; string_arg[i] != 0 && s_idx < size - 1 && s_idx < precision; i++)
+                string[s_idx++] = string_arg[i];
             break;
 
         case 'u':
@@ -561,19 +550,6 @@ vpnprintf(char *string, int size_in, const char *f, va_list args)
     return s_idx;
 }
 
-static void
-LogSyslogWrite(int verb, const char *buf, size_t len, Bool end_line) {
-#ifdef CONFIG_SYSLOG
-    if (inSignalContext) // syslog() ins't signal-safe yet :(
-        return;          // shall we try syslog(2) syscall instead ?
-
-    if (verb >= 0 && xorgSyslogVerbosity < verb)
-        return;
-
-    syslog(LOG_PID, "%.*s", (int)len, buf);
-#endif
-}
-
 /* This function does the actual log message writes. It must be signal safe.
  * When attempting to call non-signal-safe functions, guard them with a check
  * of the inSignalContext global variable. */
@@ -583,31 +559,37 @@ LogSWrite(int verb, const char *buf, size_t len, Bool end_line)
     static Bool newline = TRUE;
     int ret;
 
-    LogSyslogWrite(verb, buf, len, end_line);
-
-    if (verb < 0 || xorgLogVerbosity >= verb)
+    if (verb < 0 || logVerbosity >= verb)
         ret = write(2, buf, len);
 
-    if (verb < 0 || xorgLogFileVerbosity >= verb) {
+    if (verb < 0 || logFileVerbosity >= verb) {
         if (inSignalContext && logFileFd >= 0) {
             ret = write(logFileFd, buf, len);
-            if (xorgLogSync)
-                doLogSync();
+#ifndef WIN32
+            if (logFlush && logSync)
+                fsync(logFileFd);
+#endif
         }
-        else if (!inSignalContext && logFileFd != -1) {
+        else if (!inSignalContext && logFile) {
             if (newline) {
                 time_t t = time(NULL);
                 struct tm tm;
                 char fmt_tm[32];
 
                 localtime_r(&t, &tm);
-                strftime(fmt_tm, sizeof(fmt_tm) - 1, "[%Y-%m-%d %H:%M:%S] ", &tm);
-                write(logFileFd, fmt_tm, strlen(fmt_tm));
+                strftime(fmt_tm, sizeof(fmt_tm) - 1, "%Y-%m-%d %H:%M:%S", &tm);
+
+                fprintf(logFile, "[%s] ", fmt_tm);
             }
             newline = end_line;
-            write(logFileFd, buf, len);
-            if (xorgLogSync)
-                doLogSync();
+            fwrite(buf, len, 1, logFile);
+            if (logFlush) {
+                fflush(logFile);
+#ifndef WIN32
+                if (logSync)
+                    fsync(fileno(logFile));
+#endif
+            }
         }
         else if (!inSignalContext && needBuffer) {
             if (len > bufferUnused) {
@@ -637,7 +619,7 @@ LogMessageTypeVerbString(MessageType type, int verb)
     if (type == X_ERROR)
         verb = 0;
 
-    if (xorgLogVerbosity < verb && xorgLogFileVerbosity < verb)
+    if (logVerbosity < verb && logFileVerbosity < verb)
         return NULL;
 
     switch (type) {
@@ -791,6 +773,7 @@ AuditPrefix(void)
 {
     time_t tm;
     char *autime, *s;
+    char *tmpBuf;
     int len;
 
     time(&tm);
@@ -798,7 +781,7 @@ AuditPrefix(void)
     if ((s = strchr(autime, '\n')))
         *s = '\0';
     len = strlen(AUDIT_PREFIX) + strlen(autime) + 10 + 1;
-    char *tmpBuf = calloc(1, len);
+    tmpBuf = malloc(len);
     if (!tmpBuf)
         return NULL;
     snprintf(tmpBuf, len, AUDIT_PREFIX, autime, (unsigned long) getpid());

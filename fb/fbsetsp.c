@@ -22,7 +22,7 @@
 
 #include <dix-config.h>
 
-#include "fb/fb_priv.h"
+#include "fb.h"
 
 void
 fbSetSpans(DrawablePtr pDrawable,

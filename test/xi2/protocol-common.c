@@ -30,15 +30,15 @@
 #include <stdint.h>
 #include <X11/extensions/XI2.h>
 
-#include "dix/atom_priv.h"
 #include "dix/dix_priv.h"
 #include "dix/exevents_priv.h"
-#include "miext/extinit_priv.h"
-#include "xkb/xkbsrv_priv.h"    /* for XkbInitPrivates */
 
+#include "extinit_priv.h"
 #include "exglobals.h"
+#include "xkbsrv.h"             /* for XkbInitPrivates */
 #include "xserver-properties.h"
 #include "syncsrv.h"
+
 #include "protocol-common.h"
 
 struct devices devices;
@@ -56,7 +56,6 @@ fake_init_sprite(DeviceIntPtr dev)
 
     sprite->spriteTraceSize = 10;
     sprite->spriteTrace = calloc(sprite->spriteTraceSize, sizeof(WindowPtr));
-    assert(sprite->spriteTrace);
     sprite->spriteTraceGood = 1;
     sprite->spriteTrace[0] = &root;
     sprite->hot.x = SPRITE_X;
@@ -331,7 +330,7 @@ WRAP_FUNCTION(dixLookupWindow, int,
 
 extern ClientRec client_window;
 
-WRAP_FUNCTION(dixLookupResourceOwner, int,
+WRAP_FUNCTION(dixLookupClient, int,
               ClientPtr *pClient, XID rid, ClientPtr client, Mask access)
 {
     if (rid == ROOT_WINDOW_ID)
@@ -342,5 +341,5 @@ WRAP_FUNCTION(dixLookupResourceOwner, int,
         return Success;
     }
 
-    return __real_dixLookupResourceOwner(pClient, rid, client, access);
+    return __real_dixLookupClient(pClient, rid, client, access);
 }

@@ -22,12 +22,20 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ********************************************************/
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef SETBMAP_H
 #define SETBMAP_H 1
 
-#include <dix-config.h>
-
 int ProcXSetDeviceButtonMapping(ClientPtr       /* client */
+    );
+
+void SRepXSetDeviceButtonMapping(ClientPtr /* client */ ,
+                                 int /* size */ ,
+                                 xSetDeviceButtonMappingReply * /* rep */
     );
 
 #endif                          /* SETBMAP_H */

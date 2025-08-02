@@ -84,7 +84,10 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "os/Xtrans.h"
+#define XSERV_t
+#define TRANS_SERVER
+#define TRANS_REOPEN
+#include <X11/Xtrans/Xtrans.h>
 #include <X11/Xauth.h>
 #include <X11/X.h>
 #include <X11/Xproto.h>
@@ -163,7 +166,7 @@ SOFTWARE.
 
 #endif                          /* WIN32 */
 
-#if !defined(WIN32)
+#if !defined(WIN32) || defined(__CYGWIN__)
 #include <libgen.h>
 #endif
 
@@ -214,7 +217,7 @@ typedef struct _host {
     int requested;
 } HOST;
 
-#define MakeHost(h,l)	(h)=calloc(1, sizeof *(h)+(l));\
+#define MakeHost(h,l)	(h)=malloc(sizeof *(h)+(l));\
 			if (h) { \
 			   (h)->addr=(unsigned char *) ((h) + 1);\
 			   (h)->requested = FALSE; \
@@ -587,7 +590,7 @@ DefineSelf(int fd)
         ErrorF("Getting interface count: %s\n", strerror(errno));
     if (len < (ifn.lifn_count * sizeof(struct lifreq))) {
         len = ifn.lifn_count * sizeof(struct lifreq);
-        bufptr = calloc(1, len);
+        bufptr = malloc(len);
     }
 #endif
 
@@ -1081,7 +1084,7 @@ ComputeLocalClient(ClientPtr client)
          */
         char *tok = strtok(cmd, ":");
 
-#if !defined(WIN32)
+#if !defined(WIN32) || defined(__CYGWIN__)
         ret = strcmp(basename(tok), "ssh") != 0;
 #else
         ret = strcmp(tok, "ssh") != 0;
@@ -1412,7 +1415,7 @@ GetHosts(void **data, int *pnHosts, int *pLen, BOOL * pEnabled)
             break;
     }
     if (n) {
-        *data = ptr = calloc(1, n);
+        *data = ptr = malloc(n);
         if (!ptr) {
             return BadAlloc;
         }
@@ -1635,7 +1638,7 @@ siTypeAdd(const char *typeName, siAddrMatchFunc addrMatch,
         }
     }
 
-    s = calloc(1, sizeof(struct siType));
+    s = malloc(sizeof(struct siType));
     if (s == NULL)
         return BadAlloc;
 
@@ -1994,7 +1997,7 @@ static Bool
 siLocalCredGetId(const char *addr, int len, siLocalCredPrivPtr lcPriv, int *id)
 {
     Bool parsedOK = FALSE;
-    char *addrbuf = calloc(1, len + 1);
+    char *addrbuf = malloc(len + 1);
 
     if (addrbuf == NULL) {
         return FALSE;

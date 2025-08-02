@@ -69,6 +69,7 @@ int
 ProcXGetDeviceModifierMapping(ClientPtr client)
 {
     DeviceIntPtr dev;
+    xGetDeviceModifierMappingReply rep;
     KeyCode *modkeymap = NULL;
     int ret, max_keys_per_mod;
 
@@ -83,23 +84,35 @@ ProcXGetDeviceModifierMapping(ClientPtr client)
     if (ret != Success)
         return ret;
 
-    xGetDeviceModifierMappingReply rep = {
+    rep = (xGetDeviceModifierMappingReply) {
         .repType = X_Reply,
         .RepType = X_GetDeviceModifierMapping,
         .sequenceNumber = client->sequence,
         .numKeyPerModifier = max_keys_per_mod,
-        /* length counts 4 byte quantities - there are 8 modifiers 1 byte big */
+    /* length counts 4 byte quantities - there are 8 modifiers 1 byte big */
         .length = max_keys_per_mod << 1
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-        swapl(&rep.length);
-    }
-    WriteToClient(client, sizeof(xGetDeviceModifierMappingReply), &rep);
+    WriteReplyToClient(client, sizeof(xGetDeviceModifierMappingReply), &rep);
     WriteToClient(client, max_keys_per_mod * 8, modkeymap);
 
     free(modkeymap);
 
     return Success;
+}
+
+/***********************************************************************
+ *
+ * This procedure writes the reply for the XGetDeviceModifierMapping function,
+ * if the client and server have a different byte ordering.
+ *
+ */
+
+void _X_COLD
+SRepXGetDeviceModifierMapping(ClientPtr client, int size,
+                              xGetDeviceModifierMappingReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

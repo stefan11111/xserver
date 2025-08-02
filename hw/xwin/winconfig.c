@@ -294,9 +294,10 @@ winConfigKeyboard(DeviceIntPtr pDevice)
             HKEY regkey = NULL;
             const char regtempl[] =
                 "SYSTEM\\CurrentControlSet\\Control\\Keyboard Layouts\\";
+            char *regpath;
             DWORD namesize = sizeof(layoutFriendlyName);
 
-            char *regpath = calloc(1, sizeof(regtempl) + KL_NAMELENGTH + 1);
+            regpath = malloc(sizeof(regtempl) + KL_NAMELENGTH + 1);
             strcpy(regpath, regtempl);
             strcat(regpath, layoutName);
 
@@ -906,7 +907,7 @@ ParseOptionValue(int scrnIndex, void *options, OptionInfoPtr p)
         }
         else {
             free(n);
-            n = calloc(1, strlen(p->name) + 2 + 1);
+            n = malloc(strlen(p->name) + 2 + 1);
             if (!n) {
                 p->found = FALSE;
                 return FALSE;
@@ -994,13 +995,13 @@ GetBoolValue(OptionInfoPtr p, const char *s)
 char *
 winNormalizeName(const char *s)
 {
-    char *q;
+    char *ret, *q;
     const char *p;
 
     if (s == NULL)
         return NULL;
 
-    char *ret = calloc(1, strlen(s) + 1);
+    ret = malloc(strlen(s) + 1);
     for (p = s, q = ret; *p != 0; p++) {
         switch (*p) {
         case '_':

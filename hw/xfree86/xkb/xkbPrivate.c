@@ -7,12 +7,11 @@
 
 #include <stdio.h>
 #include <X11/X.h>
-
-#include "xkb/xkbsrv_priv.h"
-
 #include "windowstr.h"
+#include <xkbsrv.h>
+
 #include "os.h"
-#include "xf86_priv.h"
+#include "xf86.h"
 
 int
 XkbDDXPrivate(DeviceIntPtr dev, KeyCode key, XkbAction *act)

@@ -22,9 +22,8 @@
 #include <dix-config.h>
 
 #include "dix/dix_priv.h"
-#include "randr/randrstr_priv.h"
-#include "randr/rrdispatch_priv.h"
 
+#include "randrstr_priv.h"
 #include "propertyst.h"
 #include "swaprep.h"
 
@@ -83,6 +82,17 @@ RRDeleteProperty(RRProviderRec * provider, RRPropertyRec * prop)
     RRDestroyProviderProperty(prop);
 }
 
+void
+RRDeleteAllProviderProperties(RRProviderPtr provider)
+{
+    RRPropertyPtr prop, next;
+
+    for (prop = provider->properties; prop; prop = next) {
+        next = prop->next;
+        RRDeleteProperty(provider, prop);
+    }
+}
+
 static void
 RRInitProviderPropertyValue(RRPropertyValuePtr property_value)
 {
@@ -117,12 +127,6 @@ RRDeleteProviderProperty(RRProviderPtr provider, Atom property)
             RRDeleteProperty(provider, prop);
             return;
         }
-}
-
-/* shortcut for cleaning up property when failed to add */
-static inline void cleanupProperty(RRPropertyPtr prop, Bool added) {
-    if ((prop != NULL) && added)
-        RRDestroyProviderProperty(prop);
 }
 
 int
@@ -172,14 +176,12 @@ RRChangeProviderProperty(RRProviderPtr provider, Atom property, Atom type,
 
     if (mode == PropModeReplace || len > 0) {
         void *new_data = NULL, *old_data = NULL;
-        if (total_len > MAXINT / size_in_bytes) {
-            cleanupProperty(prop, add);
-            return BadValue;
-        }
+
         total_size = total_len * size_in_bytes;
-        new_value.data = calloc(1, total_size);
+        new_value.data = (void *) malloc(total_size);
         if (!new_value.data && total_size) {
-            cleanupProperty(prop, add);
+            if (add)
+                RRDestroyProviderProperty(prop);
             return BadAlloc;
         }
         new_value.size = len;
@@ -211,7 +213,8 @@ RRChangeProviderProperty(RRProviderPtr provider, Atom property, Atom type,
         if (pending && pScrPriv->rrProviderSetProperty &&
             !pScrPriv->rrProviderSetProperty(provider->pScreen, provider,
                                            prop->propertyName, &new_value)) {
-            cleanupProperty(prop, add);
+            if (add)
+                RRDestroyProviderProperty(prop);
             free(new_value.data);
             return BadValue;
         }
@@ -243,6 +246,46 @@ RRChangeProviderProperty(RRProviderPtr provider, Atom property, Atom type,
         RRDeliverPropertyEvent(provider->pScreen, (xEvent *) &event);
     }
     return Success;
+}
+
+Bool
+RRPostProviderPendingProperties(RRProviderPtr provider)
+{
+    RRPropertyValuePtr pending_value;
+    RRPropertyValuePtr current_value;
+    RRPropertyPtr property;
+    Bool ret = TRUE;
+
+    if (!provider->pendingProperties)
+        return TRUE;
+
+    provider->pendingProperties = FALSE;
+    for (property = provider->properties; property; property = property->next) {
+        /* Skip non-pending properties */
+        if (!property->is_pending)
+            continue;
+
+        pending_value = &property->pending;
+        current_value = &property->current;
+
+        /*
+         * If the pending and current values are equal, don't mark it
+         * as changed (which would deliver an event)
+         */
+        if (pending_value->type == current_value->type &&
+            pending_value->format == current_value->format &&
+            pending_value->size == current_value->size &&
+            !memcmp(pending_value->data, current_value->data,
+                    pending_value->size * (pending_value->format / 8)))
+            continue;
+
+        if (RRChangeProviderProperty(provider, property->propertyName,
+                                   pending_value->type, pending_value->format,
+                                   PropModeReplace, pending_value->size,
+                                   pending_value->data, TRUE, FALSE) != Success)
+            ret = FALSE;
+    }
+    return ret;
 }
 
 RRPropertyPtr
@@ -284,6 +327,7 @@ RRConfigureProviderProperty(RRProviderPtr provider, Atom property,
 {
     RRPropertyPtr prop = RRQueryProviderProperty(provider, property);
     Bool add = FALSE;
+    INT32 *new_values;
 
     if (!prop) {
         prop = RRCreateProviderProperty(property);
@@ -298,19 +342,19 @@ RRConfigureProviderProperty(RRProviderPtr provider, Atom property,
      * ranges must have even number of values
      */
     if (range && (num_values & 1)) {
-        cleanupProperty(prop, add);
+        if (add)
+            RRDestroyProviderProperty(prop);
         return BadMatch;
     }
 
-    INT32 *new_values = NULL;
-    if (num_values) {
-        new_values = calloc(num_values, sizeof(INT32));
-        if (!new_values) {
-            cleanupProperty(prop, add);
-            return BadAlloc;
-        }
-        memcpy(new_values, values, num_values * sizeof(INT32));
+    new_values = xallocarray(num_values, sizeof(INT32));
+    if (!new_values && num_values) {
+        if (add)
+            RRDestroyProviderProperty(prop);
+        return BadAlloc;
     }
+    if (num_values)
+        memcpy(new_values, values, num_values * sizeof(INT32));
 
     /*
      * Property moving from pending to non-pending
@@ -340,7 +384,7 @@ int
 ProcRRListProviderProperties(ClientPtr client)
 {
     REQUEST(xRRListProviderPropertiesReq);
-    Atom *pAtoms = NULL;
+    Atom *pAtoms = NULL, *temppAtoms;
     int numProps = 0;
     RRProviderPtr provider;
     RRPropertyPtr prop;
@@ -351,20 +395,9 @@ ProcRRListProviderProperties(ClientPtr client)
 
     for (prop = provider->properties; prop; prop = prop->next)
         numProps++;
-
-    const Bool swapped = client->swapped;
-
-    if (numProps) {
-        if (!(pAtoms = calloc(numProps, sizeof(Atom))))
+    if (numProps)
+        if (!(pAtoms = xallocarray(numProps, sizeof(Atom))))
             return BadAlloc;
-        Atom *temppAtoms = pAtoms;
-        for (prop = provider->properties; prop; prop = prop->next) {
-            *temppAtoms = prop->propertyName;
-            if (swapped)
-                swapl(temppAtoms);
-            temppAtoms++;
-        }
-    }
 
     xRRListProviderPropertiesReply rep = {
         .type = X_Reply,
@@ -372,16 +405,21 @@ ProcRRListProviderProperties(ClientPtr client)
         .length = bytes_to_int32(numProps * sizeof(Atom)),
         .nAtoms = numProps
     };
-    if (swapped) {
+    if (client->swapped) {
         swaps(&rep.sequenceNumber);
         swapl(&rep.length);
         swaps(&rep.nAtoms);
     }
+    temppAtoms = pAtoms;
+    for (prop = provider->properties; prop; prop = prop->next)
+        *temppAtoms++ = prop->propertyName;
 
     WriteToClient(client, sizeof(xRRListProviderPropertiesReply), (char *) &rep);
-    WriteToClient(client, numProps * sizeof(Atom), pAtoms);
-
-    free(pAtoms);
+    if (numProps) {
+        client->pSwapReplyFunc = (ReplySwapPtr) Swap32Write;
+        WriteSwappedDataToClient(client, numProps * sizeof(Atom), pAtoms);
+        free(pAtoms);
+    }
     return Success;
 }
 
@@ -391,6 +429,7 @@ ProcRRQueryProviderProperty(ClientPtr client)
     REQUEST(xRRQueryProviderPropertyReq);
     RRProviderPtr provider;
     RRPropertyPtr prop;
+    char *extra = NULL;
 
     REQUEST_SIZE_MATCH(xRRQueryProviderPropertyReq);
 
@@ -399,6 +438,12 @@ ProcRRQueryProviderProperty(ClientPtr client)
     prop = RRQueryProviderProperty(provider, stuff->property);
     if (!prop)
         return BadName;
+
+    if (prop->num_valid) {
+        extra = xallocarray(prop->num_valid, sizeof(INT32));
+        if (!extra)
+            return BadAlloc;
+    }
 
     xRRQueryProviderPropertyReply rep = {
         .type = X_Reply,
@@ -414,10 +459,11 @@ ProcRRQueryProviderProperty(ClientPtr client)
     }
     WriteToClient(client, sizeof(xRRQueryProviderPropertyReply), (char *) &rep);
     if (prop->num_valid) {
-        if (client->swapped)
-            CopySwap32Write(client, prop->num_valid * sizeof(INT32), (CARD32*)prop->valid_values);
-        else
-            WriteToClient(client, prop->num_valid * sizeof(INT32), prop->valid_values);
+        memcpy(extra, prop->valid_values, prop->num_valid * sizeof(INT32));
+        client->pSwapReplyFunc = (ReplySwapPtr) Swap32Write;
+        WriteSwappedDataToClient(client, prop->num_valid * sizeof(INT32),
+                                 extra);
+        free(extra);
     }
     return Success;
 }
@@ -609,7 +655,7 @@ ProcRRGetProviderProperty(ClientPtr client)
     len = min(n - ind, 4 * stuff->longLength);
 
     if (len) {
-        extra = calloc(1, len);
+        extra = malloc(len);
         if (!extra)
             return BadAlloc;
     }

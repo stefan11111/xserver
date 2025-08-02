@@ -42,9 +42,6 @@ in this Software without prior written authorization from The Open Group.
 #include   <X11/extensions/geproto.h>
 
 #include   "dix/cursor_priv.h"
-#include   "dix/dix_priv.h"
-#include   "dix/input_priv.h"
-#include   "dix/inpututils_priv.h"
 #include   "mi/mi_priv.h"
 #include   "mi/mipointer_priv.h"
 #include   "os/bug_priv.h"
@@ -54,8 +51,10 @@ in this Software without prior written authorization from The Open Group.
 #include   "windowstr.h"
 #include   "pixmapstr.h"
 #include   "inputstr.h"
+#include   "inpututils.h"
 #include   "mipointer.h"
 #include   "scrnintstr.h"
+#include   "extinit.h"
 #include   "exglobals.h"
 #include   "eventstr.h"
 
@@ -239,8 +238,8 @@ mieqEnqueue(DeviceIntPtr pDev, InternalEvent *e)
             else if (miEventQueue.dropped % QUEUE_DROP_BACKTRACE_FREQUENCY == 0 &&
                      miEventQueue.dropped / QUEUE_DROP_BACKTRACE_FREQUENCY <=
                      QUEUE_DROP_BACKTRACE_MAX) {
-                ErrorF("[mi] EQ overflow continuing. %lu events have been "
-                       "dropped.\n", (unsigned long)miEventQueue.dropped);
+                ErrorF("[mi] EQ overflow continuing.  %zu events have been "
+                       "dropped.\n", miEventQueue.dropped);
                 if (miEventQueue.dropped / QUEUE_DROP_BACKTRACE_FREQUENCY ==
                     QUEUE_DROP_BACKTRACE_MAX) {
                     ErrorF("[mi] No further overflow reports will be "
@@ -399,7 +398,7 @@ CopyGetMasterEvent(DeviceIntPtr sdev,
     verify_internal_event(original);
 
     /* ET_XQuartz has sdev == NULL */
-    if (!sdev || InputDevIsMaster(sdev) || InputDevIsFloating(sdev))
+    if (!sdev || IsMaster(sdev) || IsFloating(sdev))
         return NULL;
 
 #ifdef XFreeXDGA
@@ -500,7 +499,7 @@ mieqProcessDeviceEvent(DeviceIntPtr dev, InternalEvent *event, ScreenPtr screen)
         handler(screenNum, event, dev);
         /* Check for the SD's master in case the device got detached
          * during event processing */
-        if (master && !InputDevIsFloating(dev))
+        if (master && !IsFloating(dev))
             handler(screenNum, &mevent, master);
     }
     else {
@@ -509,7 +508,7 @@ mieqProcessDeviceEvent(DeviceIntPtr dev, InternalEvent *event, ScreenPtr screen)
 
         /* Check for the SD's master in case the device got detached
          * during event processing */
-        if (master && !InputDevIsFloating(dev))
+        if (master && !IsFloating(dev))
             master->public.processInputProc(&mevent, master);
     }
 }

@@ -36,13 +36,12 @@
 
 #include "dix/dix_priv.h"
 #include "dix/exevents_priv.h"
-#include "dix/inpututils_priv.h"
-#include "dix/resource_priv.h"
 
 #include "inputstr.h"           /* DeviceIntPtr      */
 #include "windowstr.h"          /* window structure  */
 #include "exglobals.h"          /* BadDevice */
 #include "xigrabdev.h"
+#include "inpututils.h"
 
 int _X_COLD
 SProcXIGrabDevice(ClientPtr client)
@@ -67,6 +66,7 @@ int
 ProcXIGrabDevice(ClientPtr client)
 {
     DeviceIntPtr dev;
+    xXIGrabDeviceReply rep;
     int ret = Success;
     uint8_t status;
     GrabMask mask = { 0 };
@@ -84,7 +84,7 @@ ProcXIGrabDevice(ClientPtr client)
     if (!dev->enabled)
         return AlreadyGrabbed;
 
-    if (!InputDevIsMaster(dev))
+    if (!IsMaster(dev))
         stuff->paired_device_mode = GrabModeAsync;
 
     if (IsKeyboardDevice(dev)) {
@@ -122,17 +122,15 @@ ProcXIGrabDevice(ClientPtr client)
     if (ret != Success)
         return ret;
 
-    xXIGrabDeviceReply rep = {
+    rep = (xXIGrabDeviceReply) {
         .repType = X_Reply,
         .RepType = X_XIGrabDevice,
         .sequenceNumber = client->sequence,
+        .length = 0,
         .status = status
     };
 
-    if (client->swapped) {
-        swaps(&rep.sequenceNumber);
-    }
-    WriteToClient(client, sizeof(rep), &rep);
+    WriteReplyToClient(client, sizeof(rep), &rep);
     return ret;
 }
 
@@ -172,4 +170,12 @@ ProcXIUngrabDevice(ClientPtr client)
         (*dev->deviceGrab.DeactivateGrab) (dev);
 
     return Success;
+}
+
+void _X_COLD
+SRepXIGrabDevice(ClientPtr client, int size, xXIGrabDeviceReply * rep)
+{
+    swaps(&rep->sequenceNumber);
+    swapl(&rep->length);
+    WriteToClient(client, size, rep);
 }

@@ -347,7 +347,7 @@ __glXTypeSize(GLenum enm)
     case GL_INT:
         return sizeof(GLint);
     case GL_UNSIGNED_INT:
-        return sizeof(GLuint);
+        return sizeof(GLint);
     case GL_FLOAT:
         return sizeof(GLfloat);
     case GL_DOUBLE:

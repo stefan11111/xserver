@@ -35,8 +35,6 @@
 
 extern DevPrivateKeyRec dri3_screen_private_key;
 
-extern RESTYPE dri3_syncobj_type;
-
 typedef struct dri3_dmabuf_format {
     uint32_t                    format;
     uint32_t                    num_modifiers;
@@ -44,7 +42,9 @@ typedef struct dri3_dmabuf_format {
 } dri3_dmabuf_format_rec, *dri3_dmabuf_format_ptr;
 
 typedef struct dri3_screen_priv {
+    CloseScreenProcPtr          CloseScreen;
     ConfigNotifyProcPtr         ConfigNotify;
+    DestroyWindowProcPtr        DestroyWindow;
 
     Bool                        formats_cached;
     CARD32                      num_formats;
@@ -61,16 +61,6 @@ typedef struct dri3_screen_priv {
 #define unwrap(priv,real,mem) {\
     real->mem = priv->mem; \
 }
-
-#define VERIFY_DRI3_SYNCOBJ(id, ptr, a)\
-    do {\
-        int rc = dixLookupResourceByType((void **)&(ptr), id,\
-                                         dri3_syncobj_type, client, a);\
-        if (rc != Success) {\
-            client->errorValue = id;\
-            return rc;\
-        }\
-    } while (0);
 
 static inline dri3_screen_priv_ptr
 dri3_screen_priv(ScreenPtr screen)
@@ -114,11 +104,5 @@ dri3_get_supported_modifiers(ScreenPtr screen, DrawablePtr drawable,
 
 int
 dri3_import_syncobj(ClientPtr client, ScreenPtr screen, XID id, int fd);
-
-int
-dri3_send_open_reply(ClientPtr client, int fd);
-
-uint32_t
-drm_format_for_depth(uint32_t depth, uint32_t bpp);
 
 #endif /* _DRI3PRIV_H_ */

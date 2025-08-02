@@ -85,6 +85,7 @@ typedef struct _WindowOpt {
     Mask otherEventMasks;       /* default: 0 */
     struct _OtherClients *otherClients; /* default: NULL */
     struct _GrabRec *passiveGrabs;      /* default: NULL */
+    PropertyPtr userProps;      /* default: NULL */
     CARD32 backingBitPlanes;    /* default: ~0L */
     CARD32 backingPixel;        /* default: 0 */
     RegionPtr boundingShape;    /* default: NULL */
@@ -160,10 +161,10 @@ typedef struct _Window {
     unsigned redirectDraw:2;    /* COMPOSITE rendering redirect */
     unsigned forcedBG:1;        /* must have an opaque background */
     unsigned unhittable:1;      /* doesn't hit-test, for rootless */
+#ifdef COMPOSITE
     unsigned damagedDescendants:1;      /* some descendants are damaged */
     unsigned inhibitBGPaint:1;  /* paint the background? */
-
-    PropertyPtr properties;     /* default: NULL */
+#endif
 } WindowRec;
 
 /*
@@ -188,14 +189,14 @@ extern _X_EXPORT Mask DontPropagateMasks[];
 #define wOtherClients(w)	wUseDefault(w, otherClients, NULL)
 #define wOtherInputMasks(w)	wUseDefault(w, inputMasks, NULL)
 #define wPassiveGrabs(w)	wUseDefault(w, passiveGrabs, NULL)
+#define wUserProps(w)		wUseDefault(w, userProps, NULL)
 #define wBackingBitPlanes(w)	wUseDefault(w, backingBitPlanes, ~0L)
 #define wBackingPixel(w)	wUseDefault(w, backingPixel, 0)
 #define wBoundingShape(w)	wUseDefault(w, boundingShape, NULL)
 #define wClipShape(w)		wUseDefault(w, clipShape, NULL)
 #define wInputShape(w)          wUseDefault(w, inputShape, NULL)
+#define wClient(w)		(clients[CLIENT_ID((w)->drawable.id)])
 #define wBorderWidth(w)		((int) (w)->borderWidth)
-
-static inline PropertyPtr wUserProps(WindowPtr pWin) { return pWin->properties; }
 
 /* true when w needs a border drawn. */
 

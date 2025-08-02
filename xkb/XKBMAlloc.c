@@ -29,17 +29,14 @@ THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <stdio.h>
 #include <X11/X.h>
 #include <X11/Xproto.h>
-#include <X11/keysym.h>
-
-#include "os/log_priv.h"
-#include "xkb/xkbsrv_priv.h"
-
 #include "misc.h"
 #include "inputstr.h"
+#include <X11/keysym.h>
+#include <xkbsrv.h>
 
 /***====================================================================***/
 
-int
+Status
 XkbAllocClientMap(XkbDescPtr xkb, unsigned which, unsigned nTotalTypes)
 {
     XkbClientMapPtr map;
@@ -122,7 +119,7 @@ XkbAllocClientMap(XkbDescPtr xkb, unsigned which, unsigned nTotalTypes)
     return Success;
 }
 
-int
+Status
 XkbAllocServerMap(XkbDescPtr xkb, unsigned which, unsigned nNewActions)
 {
     register int i;
@@ -250,7 +247,7 @@ XkbCopyKeyType(XkbKeyTypePtr from, XkbKeyTypePtr into)
     return Success;
 }
 
-int
+Status
 XkbCopyKeyTypes(XkbKeyTypePtr from, XkbKeyTypePtr into, int num_types)
 {
     register int i, rtrn;
@@ -264,7 +261,7 @@ XkbCopyKeyTypes(XkbKeyTypePtr from, XkbKeyTypePtr into, int num_types)
     return Success;
 }
 
-int
+Status
 XkbResizeKeyType(XkbDescPtr xkb,
                  int type_ndx,
                  int map_count, Bool want_preserve, int new_num_lvls)
@@ -549,7 +546,7 @@ _ExtendRange(unsigned int old_flags,
     return old_flags;
 }
 
-int
+Status
 XkbChangeKeycodeRange(XkbDescPtr xkb,
                       int minKC, int maxKC, XkbChangesPtr changes)
 {
@@ -777,7 +774,7 @@ XkbResizeKeyActions(XkbDescPtr xkb, int key, int needed)
     free(xkb->server->acts);
     xkb->server->acts = newActs;
     xkb->server->num_acts = nActs;
-    return &newActs[xkb->server->key_acts[key]];
+    return &xkb->server->acts[xkb->server->key_acts[key]];
 }
 
 void

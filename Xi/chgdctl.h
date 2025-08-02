@@ -22,15 +22,23 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ********************************************************/
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef CHGDCTL_H
 #define CHGDCTL_H 1
-
-#include <dix-config.h>
 
 int SProcXChangeDeviceControl(ClientPtr /* client */
     );
 
 int ProcXChangeDeviceControl(ClientPtr  /* client */
+    );
+
+void SRepXChangeDeviceControl(ClientPtr /* client */ ,
+                              int /* size */ ,
+                              xChangeDeviceControlReply *       /* rep */
     );
 
 #endif                          /* CHGDCTL_H */

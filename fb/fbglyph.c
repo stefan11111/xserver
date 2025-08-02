@@ -23,10 +23,9 @@
 
 #include <dix-config.h>
 
-#include <X11/fonts/fontstruct.h>
-
-#include "fb/fb_priv.h"
-#include "include/dixfontstr.h"
+#include "fb.h"
+#include	<X11/fonts/fontstruct.h>
+#include	"dixfontstr.h"
 
 static Bool
 fbGlyphIn(RegionPtr pRegion, int x, int y, int width, int height)

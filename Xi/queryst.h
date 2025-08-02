@@ -22,12 +22,20 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ********************************************************/
+
+#ifdef HAVE_DIX_CONFIG_H
+#include <dix-config.h>
+#endif
+
 #ifndef QUERYST_H
 #define QUERYST_H 1
 
-#include <dix-config.h>
-
 int ProcXQueryDeviceState(ClientPtr     /* client */
+    );
+
+void SRepXQueryDeviceState(ClientPtr /* client */ ,
+                           int /* size */ ,
+                           xQueryDeviceStateReply *     /* rep */
     );
 
 #endif                          /* QUERYST_H */

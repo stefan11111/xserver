@@ -59,7 +59,6 @@ PERFORMANCE OF THIS SOFTWARE.
 #include <X11/extensions/syncproto.h>
 
 #include "dix/dix_priv.h"
-#include "miext/extinit_priv.h"
 #include "os/bug_priv.h"
 #include "os/osdep.h"
 
@@ -74,6 +73,12 @@ PERFORMANCE OF THIS SOFTWARE.
 #include "protocol-versions.h"
 #include "inputstr.h"
 #include "misync_priv.h"
+
+#if !defined(WIN32)
+#include <sys/time.h>
+#endif
+
+#include "extinit_priv.h"
 
 /*
  * Local Global Variables
@@ -645,7 +650,7 @@ SyncAwaitTriggerFired(SyncTrigger * pTrigger)
 
     pAwaitUnion = (SyncAwaitUnion *) pAwait->pHeader;
     numwaits = pAwaitUnion->header.num_waitconditions;
-    ppAwait = calloc(numwaits, sizeof(SyncAwait *));
+    ppAwait = xallocarray(numwaits, sizeof(SyncAwait *));
     if (!ppAwait)
         goto bail;
 
@@ -759,6 +764,8 @@ SyncChangeCounter(SyncCounter * pCounter, int64_t newval)
 static Bool
 SyncEventSelectForAlarm(SyncAlarm * pAlarm, ClientPtr client, Bool wantevents)
 {
+    SyncAlarmClientList *pClients;
+
     if (client == pAlarm->client) {     /* alarm owner */
         pAlarm->events = wantevents;
         return Success;
@@ -766,8 +773,7 @@ SyncEventSelectForAlarm(SyncAlarm * pAlarm, ClientPtr client, Bool wantevents)
 
     /* see if the client is already on the list (has events selected) */
 
-    for (SyncAlarmClientList *pClients = pClients = pAlarm->pEventClients;
-         pClients; pClients = pClients->next) {
+    for (pClients = pAlarm->pEventClients; pClients; pClients = pClients->next) {
         if (pClients->client == client) {
             /* client's presence on the list indicates desire for
              * events.  If the client doesn't want events, remove it
@@ -793,7 +799,7 @@ SyncEventSelectForAlarm(SyncAlarm * pAlarm, ClientPtr client, Bool wantevents)
 
     /* add new client to pAlarm->pEventClients */
 
-    SyncAlarmClientList *pClients = calloc(1, sizeof(SyncAlarmClientList));
+    pClients = malloc(sizeof(SyncAlarmClientList));
     if (!pClients)
         return BadAlloc;
 
@@ -928,7 +934,7 @@ SyncCreate(ClientPtr client, XID id, unsigned char type)
 
     switch (type) {
     case SYNC_COUNTER:
-        pSync = calloc(1, sizeof(SyncCounter));
+        pSync = malloc(sizeof(SyncCounter));
         resType = RTCounter;
         break;
     case SYNC_FENCE:
@@ -1021,10 +1027,12 @@ SyncCreateSystemCounter(const char *name,
                         SyncSystemCounterBracketValues BracketValues
     )
 {
-    SyncCounter *pCounter = SyncCreateCounter(NULL, dixAllocServerXID(), initial);
+    SyncCounter *pCounter = SyncCreateCounter(NULL, FakeClientID(0), initial);
 
     if (pCounter) {
-        SysCounterInfo *psci = calloc(1, sizeof(SysCounterInfo));
+        SysCounterInfo *psci;
+
+        psci = malloc(sizeof(SysCounterInfo));
         if (!psci) {
             FreeResource(pCounter->sync.id, X11_RESTYPE_NONE);
             return pCounter;
@@ -1303,7 +1311,7 @@ ProcSyncListSystemCounters(ClientPtr client)
     }
 
     if (len) {
-        walklist = list = calloc(1, len);
+        walklist = list = malloc(len);
         if (!list)
             return BadAlloc;
     }
@@ -1350,8 +1358,7 @@ ProcSyncListSystemCounters(ClientPtr client)
 }
 
 /*
- * Set the priority of the client owning given resource.
- * If the resource ID is None then set the priority of calling client.
+ * ** Set client Priority
  */
 static int
 ProcSyncSetPriority(ClientPtr client)
@@ -1365,7 +1372,7 @@ ProcSyncSetPriority(ClientPtr client)
     if (stuff->id == None)
         priorityclient = client;
     else {
-        rc = dixLookupResourceOwner(&priorityclient, stuff->id, client,
+        rc = dixLookupClient(&priorityclient, stuff->id, client,
                              DixSetAttrAccess);
         if (rc != Success)
             return rc;
@@ -1385,8 +1392,7 @@ ProcSyncSetPriority(ClientPtr client)
 }
 
 /*
- * Retrieve the priority of the client owning given resource.
- * If the resource ID is None then retrieve the priority of calling client.
+ * ** Get client Priority
  */
 static int
 ProcSyncGetPriority(ClientPtr client)
@@ -1401,7 +1407,7 @@ ProcSyncGetPriority(ClientPtr client)
     if (stuff->id == None)
         priorityclient = client;
     else {
-        rc = dixLookupResourceOwner(&priorityclient, stuff->id, client,
+        rc = dixLookupClient(&priorityclient, stuff->id, client,
                              DixGetAttrAccess);
         if (rc != Success)
             return rc;
@@ -1541,7 +1547,7 @@ SyncAwaitPrologue(ClientPtr client, int items)
     /*  all the memory for the entire await list is allocated
      *  here in one chunk
      */
-    pAwaitUnion = calloc(items + 1, sizeof(SyncAwaitUnion));
+    pAwaitUnion = xallocarray(items + 1, sizeof(SyncAwaitUnion));
     if (!pAwaitUnion)
         return NULL;
 
@@ -1733,7 +1739,7 @@ ProcSyncCreateAlarm(ClientPtr client)
     if (len != (Ones(vmask) + Ones(vmask & (XSyncCAValue | XSyncCADelta))))
         return BadLength;
 
-    if (!(pAlarm = calloc(1, sizeof(SyncAlarm)))) {
+    if (!(pAlarm = malloc(sizeof(SyncAlarm)))) {
         return BadAlloc;
     }
 
@@ -2641,15 +2647,16 @@ typedef struct {
 static void
 IdleTimeQueryValue(void *pCounter, int64_t *pValue_return)
 {
-    int deviceid = XIAllDevices;
+    int deviceid;
     CARD32 idle;
 
     if (pCounter) {
         SyncCounter *counter = pCounter;
         IdleCounterPriv *priv = SysCounterGetPrivate(counter);
-        if (priv)
-            deviceid = priv->deviceid;
+        deviceid = priv->deviceid;
     }
+    else
+        deviceid = XIAllDevices;
     idle = GetTimeInMillis() - LastEventTime(deviceid).milliseconds;
     *pValue_return = idle;
 }
@@ -2659,8 +2666,6 @@ IdleTimeBlockHandler(void *pCounter, void *wt)
 {
     SyncCounter *counter = pCounter;
     IdleCounterPriv *priv = SysCounterGetPrivate(counter);
-    if (!priv)
-        return;
     int64_t *less = priv->value_less;
     int64_t *greater = priv->value_greater;
     int64_t idle, old_idle;
@@ -2751,8 +2756,6 @@ IdleTimeWakeupHandler(void *pCounter, int rc)
 {
     SyncCounter *counter = pCounter;
     IdleCounterPriv *priv = SysCounterGetPrivate(counter);
-    if (!priv)
-        return;
     int64_t *less = priv->value_less;
     int64_t *greater = priv->value_greater;
     int64_t idle;
@@ -2786,8 +2789,6 @@ IdleTimeBracketValues(void *pCounter, int64_t *pbracket_less,
 {
     SyncCounter *counter = pCounter;
     IdleCounterPriv *priv = SysCounterGetPrivate(counter);
-    if (!priv)
-        return;
     int64_t *less = priv->value_less;
     int64_t *greater = priv->value_greater;
     Bool registered = (less || greater);
@@ -2817,24 +2818,20 @@ init_system_idle_counter(const char *name, int deviceid)
 
     IdleTimeQueryValue(NULL, &idle);
 
-    IdleCounterPriv *priv = calloc(1, sizeof(IdleCounterPriv));
-    if (!priv)
-        return NULL;
-
     idle_time_counter = SyncCreateSystemCounter(name, idle, resolution,
                                                 XSyncCounterUnrestricted,
                                                 IdleTimeQueryValue,
                                                 IdleTimeBracketValues);
 
-    if (!idle_time_counter) {
-        free(priv);
-        return NULL;
+    if (idle_time_counter != NULL) {
+        IdleCounterPriv *priv = malloc(sizeof(IdleCounterPriv));
+
+        priv->value_less = priv->value_greater = NULL;
+        priv->deviceid = deviceid;
+
+        idle_time_counter->pSysCounterInfo->private = priv;
     }
 
-    priv->value_less = priv->value_greater = NULL;
-    priv->deviceid = deviceid;
-
-    idle_time_counter->pSysCounterInfo->private = priv;
     return idle_time_counter;
 }
 

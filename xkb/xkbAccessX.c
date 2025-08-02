@@ -37,13 +37,12 @@ THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include <X11/extensions/XIproto.h>
 
 #include "dix/input_priv.h"
-#include "dix/inpututils_priv.h"
-#include "os/log_priv.h"
 #include "xkb/xkbsrv_priv.h"
 
 #include "exglobals.h"
 #include "inputstr.h"
 #include "eventstr.h"
+#include "inpututils.h"
 
 int XkbDfltRepeatDelay = 660;
 int XkbDfltRepeatInterval = 40;
@@ -717,14 +716,14 @@ extern int xkbDevicePrivateIndex;
 void
 ProcessPointerEvent(InternalEvent *ev, DeviceIntPtr mouse)
 {
+    DeviceIntPtr dev;
     XkbSrvInfoPtr xkbi = NULL;
     unsigned changed = 0;
     ProcessInputProc backupproc;
     xkbDeviceInfoPtr xkbPrivPtr = XKBDEVICEINFO(mouse);
     DeviceEvent *event = &ev->device_event;
 
-    DeviceIntPtr dev = InputDevIsFloating(mouse)
-        ? mouse : GetMaster(mouse, MASTER_KEYBOARD);
+    dev = IsFloating(mouse) ? mouse : GetMaster(mouse, MASTER_KEYBOARD);
 
     if (dev && dev->key) {
         xkbi = dev->key->xkbInfo;
@@ -736,7 +735,7 @@ ProcessPointerEvent(InternalEvent *ev, DeviceIntPtr mouse)
         changed |= XkbPointerButtonMask;
     }
     else if (event->type == ET_ButtonRelease) {
-        if (InputDevIsMaster(dev)) {
+        if (IsMaster(dev)) {
             DeviceIntPtr source;
             int rc;
 

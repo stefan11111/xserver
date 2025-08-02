@@ -30,18 +30,18 @@ Equipment Corporation.
 
 #include <X11/X.h>
 #include <X11/Xproto.h>
-#include <X11/extensions/dpmsproto.h>
 
-#include "miext/extinit_priv.h"
 #include "os/screensaver.h"
-#include "Xext/geext_priv.h"
+#include "Xext/geext.h"
 
 #include "misc.h"
 #include "os.h"
 #include "dixstruct.h"
 #include "extnsionst.h"
 #include "opaque.h"
+#include <X11/extensions/dpmsproto.h>
 #include "dpmsproc.h"
+#include "extinit_priv.h"
 #include "scrnintstr.h"
 #include "windowstr.h"
 #include "protocol-versions.h"
@@ -75,7 +75,7 @@ DPMSFreeClient(void *data, XID id)
 
     pEvent = (DPMSEventPtr) data;
     dixLookupResourceByType((void *) &pHead, eventResource, DPMSEventType,
-                            NULL, DixUnknownAccess);
+                            NullClient, DixUnknownAccess);
     if (pHead) {
         pPrev = 0;
         for (pCur = *pHead; pCur && pCur != pEvent; pCur = pCur->next)
@@ -145,9 +145,10 @@ ProcDPMSSelectInput(register ClientPtr client)
         }
 
         /* build the entry */
-        pNewEvent = calloc(1, sizeof(DPMSEventRec));
+        pNewEvent = (DPMSEventPtr)malloc(sizeof(DPMSEventRec));
         if (!pNewEvent)
             return BadAlloc;
+        pNewEvent->next = 0;
         pNewEvent->client = client;
         pNewEvent->mask = stuff->eventMask;
         /*
@@ -163,7 +164,7 @@ ProcDPMSSelectInput(register ClientPtr client)
          * of clients selecting input
          */
         if (i != Success || !pHead) {
-            pHead = calloc(1, sizeof(DPMSEventPtr));
+            pHead = (DPMSEventPtr *)malloc(sizeof(DPMSEventPtr));
             if (!pHead ||
                     !AddResource(eventResource, DPMSEventType, (void *)pHead)) {
                 FreeResource(clientResource, X11_RESTYPE_NONE);
@@ -588,7 +589,7 @@ DPMSExtensionInit(void)
 
     ClientType = CreateNewResourceType(DPMSFreeClient, "DPMSClient");
     DPMSEventType = CreateNewResourceType(DPMSFreeEvents, "DPMSEvent");
-    eventResource = dixAllocServerXID();
+    eventResource = FakeClientID(0);
 
     if (DPMSEnabled && ClientType && DPMSEventType &&
         (extEntry = AddExtension(DPMSExtensionName, 0, 0,

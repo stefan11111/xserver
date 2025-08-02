@@ -22,11 +22,13 @@ int CopyGC(GCPtr pgcSrc, GCPtr pgcDst, BITS32 mask);
 
 int FreeGC(void *pGC, XID gid);
 
-void FreeGCperDepth(ScreenPtr pScreen);
+void FreeGCperDepth(int screenNum);
 
 Bool CreateGCperDepth(int screenNum);
 
 Bool CreateDefaultStipple(int screenNum);
+
+void FreeDefaultStipple(int screenNum);
 
 int SetDashes(GCPtr pGC, unsigned offset, unsigned ndash, unsigned char *pdash);
 

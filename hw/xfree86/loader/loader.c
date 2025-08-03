@@ -172,7 +172,8 @@ LoaderGetABIVersion(const char *abiclass)
         int version;
     } classes[] = {
         {ABI_CLASS_ANSIC, LoaderVersionInfo.ansicVersion},
-        {ABI_CLASS_VIDEODRV, LoaderVersionInfo.videodrvVersion},
+        {ABI_CLASS_VIDEODRV, is_nvidia_proprietary ? ABI_NVIDIA_VERSION :
+                             LoaderVersionInfo.videodrvVersion},
         {ABI_CLASS_XINPUT, LoaderVersionInfo.xinputVersion},
         {ABI_CLASS_EXTENSION, LoaderVersionInfo.extensionVersion},
         {NULL, 0}

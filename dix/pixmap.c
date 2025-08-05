@@ -87,9 +87,8 @@ PixmapScreenInit(ScreenPtr pScreen)
     pScreen->totalPixmapSize =
         BitmapBytePad(pixmap_size * 8);
 
-    /* This field is used by the 470 proprietary nvidia DDX driver, and should always be NULL */
-    /* NULL this out as it is no longer used */
-    pScreen->pScratchPixmap = NULL;
+    /* This field is used by the 470 and 390 proprietary nvidia DDX driver, and should always be NULL */
+    pScreen->reserved_for_nvidia_470_and_390 = NULL;
     return TRUE;
 }
 

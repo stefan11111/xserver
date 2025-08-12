@@ -828,7 +828,7 @@ SProcXFixesExpandRegion(ClientPtr client)
 static int
 PanoramiXFixesSetGCClipRegion(ClientPtr client, xXFixesSetGCClipRegionReq *stuff)
 {
-    int result = Success, j;
+    int result = Success;
     PanoramiXRes *gc;
 
     if ((result = dixLookupResourceByType((void **) &gc, stuff->gc, XRT_GC,
@@ -837,8 +837,9 @@ PanoramiXFixesSetGCClipRegion(ClientPtr client, xXFixesSetGCClipRegionReq *stuff
         return result;
     }
 
-    FOR_NSCREENS_BACKWARD(j) {
-        stuff->gc = gc->info[j].id;
+    int walkScreenIdx;
+    FOR_NSCREENS_BACKWARD(walkScreenIdx) {
+        stuff->gc = gc->info[walkScreenIdx].id;
         result = SingleXFixesSetGCClipRegion(client, stuff);
         if (result != Success)
             break;
@@ -850,7 +851,7 @@ PanoramiXFixesSetGCClipRegion(ClientPtr client, xXFixesSetGCClipRegionReq *stuff
 static int
 PanoramiXFixesSetWindowShapeRegion(ClientPtr client, xXFixesSetWindowShapeRegionReq *stuff)
 {
-    int result = Success, j;
+    int result = Success;
     PanoramiXRes *win;
     RegionPtr reg = NULL;
 
@@ -864,9 +865,10 @@ PanoramiXFixesSetWindowShapeRegion(ClientPtr client, xXFixesSetWindowShapeRegion
     if (win->u.win.root)
         VERIFY_REGION_OR_NONE(reg, stuff->region, client, DixReadAccess);
 
-    FOR_NSCREENS_FORWARD(j) {
-        ScreenPtr walkScreen = screenInfo.screens[j];
-        stuff->dest = win->info[j].id;
+    unsigned int walkScreenIdx;
+    FOR_NSCREENS_FORWARD(walkScreenIdx) {
+        ScreenPtr walkScreen = screenInfo.screens[walkScreenIdx];
+        stuff->dest = win->info[walkScreenIdx].id;
 
         if (reg)
             RegionTranslate(reg, -walkScreen->x, -walkScreen->y);
@@ -886,7 +888,7 @@ PanoramiXFixesSetWindowShapeRegion(ClientPtr client, xXFixesSetWindowShapeRegion
 static int
 PanoramiXFixesSetPictureClipRegion(ClientPtr client, xXFixesSetPictureClipRegionReq *stuff)
 {
-    int result = Success, j;
+    int result = Success;
     PanoramiXRes *pict;
     RegionPtr reg = NULL;
 
@@ -900,9 +902,10 @@ PanoramiXFixesSetPictureClipRegion(ClientPtr client, xXFixesSetPictureClipRegion
     if (pict->u.pict.root)
         VERIFY_REGION_OR_NONE(reg, stuff->region, client, DixReadAccess);
 
-    FOR_NSCREENS_BACKWARD(j) {
-        ScreenPtr walkScreen = screenInfo.screens[j];
-        stuff->picture = pict->info[j].id;
+    int walkScreenIdx;
+    FOR_NSCREENS_BACKWARD(walkScreenIdx) {
+        ScreenPtr walkScreen = screenInfo.screens[walkScreenIdx];
+        stuff->picture = pict->info[walkScreenIdx].id;
 
         if (reg)
             RegionTranslate(reg, -walkScreen->x, -walkScreen->y);

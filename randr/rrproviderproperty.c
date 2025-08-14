@@ -654,7 +654,7 @@ ProcRRGetProviderProperty(ClientPtr client)
     if (rpcbuf.error)
         return BadAlloc;
 
-    WriteToClient(client, sizeof(xGenericReply), &reply);
+    WriteToClient(client, sizeof(reply), &reply);
     WriteRpcbufToClient(client, &rpcbuf);
 
     if (stuff->delete && (reply.bytesAfter == 0)) {     /* delete the Property */

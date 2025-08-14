@@ -739,4 +739,13 @@ static inline Atom dixGetAtomID(const char *name) {
     return MakeAtom(name, (unsigned int)strlen(name), FALSE);
 }
 
+/* compute the amount of extra units a reply header needs.
+ *
+ * all reply header structs are at least the size of xGenericReply
+ * we have to count how many units the header is bigger than xGenericReply
+ *
+ */
+#define X_REPLY_HEADER_UNITS(hdrtype) \
+    (pad_to_int32((sizeof(hdrtype) - sizeof(xGenericReply))))
+
 #endif /* _XSERVER_DIX_PRIV_H */

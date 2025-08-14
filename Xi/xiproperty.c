@@ -1003,7 +1003,7 @@ ProcXGetDeviceProperty(ClientPtr client)
         }
     }
 
-    WriteToClient(client, sizeof(xGenericReply), &rep);
+    WriteToClient(client, sizeof(rep), &rep);
     WriteRpcbufToClient(client, &rpcbuf);
     return Success;
 }

@@ -291,4 +291,28 @@ static inline void x_rpcbuf_write_counted_string_pad(
     }
 }
 
+/*
+ * write contents of an rpcbuf into another one (padded) and clear the source buffer
+ *
+ * @param rpcbuf    pointer to the x_rpcbuf_t to operate on
+ * @param source    pointer to source x_rpcbuf_t
+ */
+static inline void x_rpcbuf_write_rpcbuf_pad(
+        x_rpcbuf_t *rpcbuf, x_rpcbuf_t *source)
+{
+    if (!source)
+        return;
+
+    if (source->error) {
+        rpcbuf->error = TRUE;
+        if (rpcbuf->err_clear) {
+            free(rpcbuf->buffer);
+            rpcbuf->buffer = NULL;
+        }
+    } else {
+        x_rpcbuf_write_binary_pad(rpcbuf, source->buffer, source->wpos);
+    }
+    x_rpcbuf_clear(source);
+}
+
 #endif /* _XSERVER_DIX_RPCBUF_PRIV_H */

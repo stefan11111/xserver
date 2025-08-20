@@ -315,4 +315,22 @@ static inline void x_rpcbuf_write_rpcbuf_pad(
     x_rpcbuf_clear(source);
 }
 
+/*
+ * write an X11 RECTANGLE protocol structure into the buffer
+ *
+ * @param rpcbuf    pointer to the x_rpcbuf_t to operate on
+ * @param x         X value of the rectangle
+ * @param y         Y value of the rectangle
+ * @param width     WIDTH value of the rectangle
+ * @param height    HEIGHT value of the rectangle
+ */
+static inline void x_rpcbuf_write_rect(
+        x_rpcbuf_t *rpcbuf, INT16 x, INT16 y, CARD16 width, CARD16 height)
+{
+    x_rpcbuf_write_INT16(rpcbuf, x);
+    x_rpcbuf_write_INT16(rpcbuf, y);
+    x_rpcbuf_write_CARD16(rpcbuf, width);
+    x_rpcbuf_write_CARD16(rpcbuf, height);
+}
+
 #endif /* _XSERVER_DIX_RPCBUF_PRIV_H */

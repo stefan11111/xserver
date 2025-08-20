@@ -4135,6 +4135,7 @@ drmmode_pre_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int cpp)
         .height = 64,
     };
 
+#if 0 /* We could instead use the largest possible cursor, but that uses more power */
     ret = drmGetCap(drmmode->fd, DRM_CAP_CURSOR_WIDTH, &value);
     if (!ret) {
         fallback.width = value;
@@ -4144,6 +4145,7 @@ drmmode_pre_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int cpp)
     if (!ret) {
         fallback.height = value;
     }
+#endif
 
     xf86CrtcSetSizeRange(pScrn, 320, 200, mode_res->max_width,
                          mode_res->max_height);

@@ -2389,7 +2389,7 @@ populate_format_modifiers(xf86CrtcPtr crtc, const drmModePlane *kplane,
     return TRUE;
 }
 
-#ifdef LIBDRM_PLANE_SIZE_HINTS
+#ifdef LIBDRM_HAS_PLANE_SIZE_HINTS
 static void
 populate_cursor_sizes(drmmode_ptr drmmode, drmmode_crtc_private_ptr drmmode_crtc, int size_hints_blob)
 {
@@ -2414,7 +2414,7 @@ populate_cursor_sizes(drmmode_ptr drmmode, drmmode_crtc_private_ptr drmmode_crtc
 
     if (!size_hints_len)
         goto fail;
-    
+
     drmmode_crtc->cursor.num_dimensions = size_hints_len;
     drmmode_crtc->cursor.dimensions = xnfrealloc(drmmode_crtc->cursor.dimensions, size_hints_len * sizeof(drmmode_cursor_dim_rec));
 
@@ -2772,7 +2772,7 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, drmModeResPtr mode_res
     drmModeFreeObjectProperties(props);
     drmmode_crtc_create_planes(crtc, num);
 
-#ifdef LIBDRM_PLANE_SIZE_HINTS
+#ifdef LIBDRM_HAS_PLANE_SIZE_HINTS
     /* Get the SIZE_HINT dimensions, if supported. */
     drmmode_crtc_probe_size_hint(crtc, num);
 #endif

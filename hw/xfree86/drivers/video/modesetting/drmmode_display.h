@@ -245,6 +245,9 @@ typedef struct {
 
     Bool vrr_enabled;
     Bool use_gamma_lut;
+
+    uint32_t cursor_glyph_width;
+    uint32_t cursor_glyph_height;
 } drmmode_crtc_private_rec, *drmmode_crtc_private_ptr;
 
 typedef struct {

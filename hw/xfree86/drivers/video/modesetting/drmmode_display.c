@@ -1827,9 +1827,6 @@ drmmode_set_cursor(xf86CrtcPtr crtc, int width, int height)
         /* fallback to swcursor */
         return FALSE;
 
-    drmmode_crtc->cursor_width = width;
-    drmmode_crtc->cursor_height = height;
-
     return TRUE;
 }
 
@@ -1896,10 +1893,11 @@ drmmode_load_cursor_argb_check(xf86CrtcPtr crtc, CARD32 *image)
     for (; i < max_width * max_height; i++)
         ptr[i++] = 0;
 
-    if (drmmode_crtc->cursor_up)
-        return drmmode_set_cursor(crtc, width, height);
-    else
-        return TRUE;
+    /* set cursor width and height here for drmmode_show_cursor */
+    drmmode_crtc->cursor_width = width;
+    drmmode_crtc->cursor_height = height;
+
+    return drmmode_crtc->cursor_up ? drmmode_set_cursor(crtc, width, height) : TRUE;
 }
 
 static void

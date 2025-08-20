@@ -1830,6 +1830,64 @@ drmmode_set_cursor(xf86CrtcPtr crtc, int width, int height)
     return TRUE;
 }
 
+static int
+drmmode_cursor_get_pitch(drmmode_ptr drmmode, int width, int height)
+{
+    static int max_size = 0;
+    static int* cached_pitches = NULL;
+
+    /* We assume that the cursor pitch is the same, regardless of crtc */
+    /* If this causes problems, we can make multiple caches for each crtc */
+    if (width > max_size) {
+        int new_size = (width >= 256 ? width : 256);
+        int *tmp;
+        if (cached_pitches) {
+            tmp = realloc(cached_pitches, (new_size + 1) * sizeof(int));
+            memset(cached_pitches + max_size + 1, 0, (new_size - max_size) * sizeof(int));
+        } else {
+            tmp = calloc(new_size + 1, sizeof(int));
+        }
+
+        if (tmp) {
+            max_size = new_size;
+            cached_pitches = tmp;
+        } else {
+            /* we couldn't allocate memory for the cache, so we don't cache the result */
+            int ret;
+            struct dumb_bo *bo = dumb_bo_create(drmmode->fd, width, height, drmmode->kbpp);
+            ret = bo->pitch / drmmode->cpp;
+
+            dumb_bo_destroy(drmmode->fd, bo);
+            return ret;
+        }
+    } else {
+        /* assume pitch depends only on width */
+        if (cached_pitches && cached_pitches[width]) {
+            return cached_pitches[width];
+        }
+    }
+
+    struct dumb_bo *bo = dumb_bo_create(drmmode->fd, width, height, drmmode->kbpp);
+    cached_pitches[width] = bo->pitch / drmmode->cpp;
+
+    dumb_bo_destroy(drmmode->fd, bo);
+    return cached_pitches[width];
+}
+
+static void
+drmmode_paint_cursor(CARD32 * restrict cursor, int cursor_pitch, int cursor_width, int cursor_height,
+                     const CARD32 * restrict image, int image_width, int image_height)
+{
+    if (cursor_width == image_width && cursor_pitch == cursor_width) {
+        /* we can speed things up in this case */
+        memcpy(cursor, image, cursor_width * cursor_height * sizeof(*cursor));
+    } else {
+        for (int i = 0; i < cursor_height; i++) {
+            memcpy(cursor + i * cursor_pitch, image + i * image_width, cursor_width * sizeof(*cursor));    /* cpu_to_le32(image[i]); */
+        }
+    }
+}
+
 static void drmmode_hide_cursor(xf86CrtcPtr crtc);
 
 /*
@@ -1848,10 +1906,6 @@ drmmode_load_cursor_argb_check(xf86CrtcPtr crtc, CARD32 *image)
     drmmode_cursor_rec drmmode_cursor = drmmode_crtc->cursor;
     int width, height, i;
     int max_width, max_height;
-    uint32_t *ptr;
-
-    /* cursor should be mapped already */
-    ptr = (uint32_t *) (drmmode_cursor.bo->ptr);
 
     /* We need to know what our limit is for HW cursors.*/
     max_width  = ms->cursor_image_width;
@@ -1882,16 +1936,11 @@ drmmode_load_cursor_argb_check(xf86CrtcPtr crtc, CARD32 *image)
     width  = drmmode_cursor.dimensions[i].width;
     height = drmmode_cursor.dimensions[i].height;
 
-    /* Copy the cursor image over. */
-    i = 0;
-    for (y = 0; y < height; y++) {
-        for (x = 0; x < width; x++)
-            ptr[i++] = image[y * max_width + x];
-    }
+    const int cursor_pitch = drmmode_cursor_get_pitch(drmmode_crtc->drmmode, width, height);
 
-    /* Clear the remainder for good measure. */
-    for (; i < max_width * max_height; i++)
-        ptr[i++] = 0;
+    /* cursor should be mapped already */
+    drmmode_paint_cursor(drmmode_cursor.bo->ptr, cursor_pitch, width, height,
+                         image, max_width, max_height);
 
     /* set cursor width and height here for drmmode_show_cursor */
     drmmode_crtc->cursor_width = width;

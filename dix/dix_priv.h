@@ -766,6 +766,22 @@ static inline void __write_reply_hdr_and_rpcbuf(
     WriteRpcbufToClient(pClient, rpcbuf);
 }
 
+static inline void __write_reply_hdr_simple(
+    ClientPtr pClient, void *hdrData, size_t hdrLen)
+{
+    xGenericReply *reply = hdrData;
+    reply->type = X_Reply;
+    reply->length = (bytes_to_int32(hdrLen - sizeof(xGenericReply)));
+    reply->sequenceNumber = pClient->sequence;
+
+    if (pClient->swapped) {
+         swaps(&reply->sequenceNumber);
+         swapl(&reply->length);
+    }
+
+    WriteToClient(pClient, hdrLen, hdrData);
+}
+
 /*
  * send reply with header struct (not pointer!) along with rpcbuf payload
  *
@@ -775,5 +791,14 @@ static inline void __write_reply_hdr_and_rpcbuf(
  */
 #define X_SEND_REPLY_WITH_RPCBUF(client, hdrstruct, rpcbuf) \
     __write_reply_hdr_and_rpcbuf(client, &hdrstruct, sizeof(hdrstruct), &rpcbuf);
+
+/*
+ * send reply with header struct (not pointer!) without any payload
+ *
+ * @param client      pointer to the client (ClientPtr)
+ * @param hdrstruct   the header struct (not pointer, the struct itself!)
+ */
+#define X_SEND_REPLY_SIMPLE(client, hdrstruct) \
+    __write_reply_hdr_simple(client, &hdrstruct, sizeof(hdrstruct));
 
 #endif /* _XSERVER_DIX_PRIV_H */

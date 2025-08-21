@@ -201,6 +201,22 @@ Bool x_rpcbuf_write_CARD32(x_rpcbuf_t *rpcbuf, CARD32 value)
     _X_ATTRIBUTE_NONNULL_ARG(1);
 
 /*
+ * write a INT32 and do byte-swapping (when needed).
+ *
+ * allocate a region for INT32, write it into the buffer and do byte-swap
+ * if buffer is configured to do so (`swapped` field is TRUE).
+ *
+ * doesn't do any padding.
+ *
+ * @param rpcbuf    pointer to x_rpcbuf_t to operate on
+ * @param value     the CARD16 value to write
+ * @return          TRUE on success, FALSE on allocation failure
+ */
+static inline Bool x_rpcbuf_write_INT32(x_rpcbuf_t *rpcbuf, INT32 value) {
+    return x_rpcbuf_write_CARD32(rpcbuf, (CARD16)value);
+}
+
+/*
  * write array of CARD8s and do byte-swapping (when needed).
  *
  * allocate a region for CARD8, write them into the buffer.

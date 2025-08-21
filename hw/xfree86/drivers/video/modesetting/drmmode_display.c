@@ -4842,7 +4842,8 @@ drmmode_get_smallest_supported_cursor(ScrnInfoPtr pScrn, uint32_t *owidth, uint3
 {
     xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
 
-    drmmode_cursor_dim_rec max_size = {.width = 0, .height = 0};
+    /* We need the cursor image to be at least 64x64 */
+    drmmode_cursor_dim_rec max_size = {.width = 64, .height = 64};
 
     for (int i = 0; i < xf86_config->num_crtc; i++) {
         xf86CrtcPtr crtc = xf86_config->crtc[i];

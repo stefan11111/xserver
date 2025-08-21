@@ -1831,27 +1831,19 @@ drmmode_set_cursor(xf86CrtcPtr crtc, int width, int height)
 }
 
 static int
-drmmode_cursor_get_pitch(drmmode_ptr drmmode, int width, int height)
+drmmode_cursor_get_pitch(drmmode_crtc_private_ptr drmmode_crtc, int idx)
 {
-    static int max_size = 0;
-    static int* cached_pitches = NULL;
+    drmmode_ptr drmmode = drmmode_crtc->drmmode;
+    drmmode_cursor_ptr drmmode_cursor = &drmmode_crtc->cursor;
 
-    /* We assume that the cursor pitch is the same, regardless of crtc */
-    /* If this causes problems, we can make multiple caches for each crtc */
-    if (width > max_size) {
-        int new_size = (width >= 256 ? width : 256);
-        int *tmp;
-        if (cached_pitches) {
-            tmp = realloc(cached_pitches, (new_size + 1) * sizeof(int));
-            memset(cached_pitches + max_size + 1, 0, (new_size - max_size) * sizeof(int));
-        } else {
-            tmp = calloc(new_size + 1, sizeof(int));
-        }
+    int width  = drmmode_cursor->dimensions[idx].width;
+    int height = drmmode_cursor->dimensions[idx].height;
 
-        if (tmp) {
-            max_size = new_size;
-            cached_pitches = tmp;
-        } else {
+    int num_pitches = drmmode_cursor->num_dimensions;
+
+    if (!drmmode_crtc->cursor_pitches) {
+        drmmode_crtc->cursor_pitches = calloc(num_pitches, sizeof(int));
+        if (!drmmode_crtc->cursor_pitches) {
             /* we couldn't allocate memory for the cache, so we don't cache the result */
             int ret;
             struct dumb_bo *bo = dumb_bo_create(drmmode->fd, width, height, drmmode->kbpp);
@@ -1860,18 +1852,18 @@ drmmode_cursor_get_pitch(drmmode_ptr drmmode, int width, int height)
             dumb_bo_destroy(drmmode->fd, bo);
             return ret;
         }
-    } else {
-        /* assume pitch depends only on width */
-        if (cached_pitches && cached_pitches[width]) {
-            return cached_pitches[width];
-        }
+    }
+
+    if (drmmode_crtc->cursor_pitches[idx]) {
+        /* return the cached pitch */
+        return drmmode_crtc->cursor_pitches[idx];
     }
 
     struct dumb_bo *bo = dumb_bo_create(drmmode->fd, width, height, drmmode->kbpp);
-    cached_pitches[width] = bo->pitch / drmmode->cpp;
+    drmmode_crtc->cursor_pitches[idx] = bo->pitch / drmmode->cpp;
 
     dumb_bo_destroy(drmmode->fd, bo);
-    return cached_pitches[width];
+    return drmmode_crtc->cursor_pitches[idx];
 }
 
 static void
@@ -1957,7 +1949,7 @@ drmmode_load_cursor_argb_check(xf86CrtcPtr crtc, CARD32 *image)
     width  = drmmode_cursor.dimensions[i].width;
     height = drmmode_cursor.dimensions[i].height;
 
-    const int cursor_pitch = drmmode_cursor_get_pitch(drmmode_crtc->drmmode, width, height);
+    const int cursor_pitch = drmmode_cursor_get_pitch(drmmode_crtc, i);
 
     /* cursor should be mapped already */
     drmmode_paint_cursor(drmmode_cursor.bo->ptr, cursor_pitch, width, height,

@@ -2344,6 +2344,8 @@ drmmode_crtc_destroy(xf86CrtcPtr crtc)
     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
     modesettingPtr ms = modesettingPTR(crtc->scrn);
 
+    free(drmmode_crtc->cursor.dimensions);
+
     if (!ms->atomic_modeset)
         return;
 
@@ -4859,7 +4861,6 @@ drmmode_free_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
         drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 
         dumb_bo_destroy(drmmode->fd, drmmode_crtc->cursor.bo);
-        free(drmmode_crtc->cursor.dimensions);
         drmmode_destroy_tearfree_shadow(crtc);
     }
 }

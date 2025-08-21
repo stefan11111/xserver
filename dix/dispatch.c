@@ -985,9 +985,6 @@ ProcGetGeometry(ClientPtr client)
         return rc;
 
     xGetGeometryReply rep = {
-        .type = X_Reply,
-        .length = 0,
-        .sequenceNumber = client->sequence,
         .root = pDraw->pScreen->root->drawable.id,
         .depth = pDraw->depth,
         .width = pDraw->width,
@@ -1003,7 +1000,6 @@ ProcGetGeometry(ClientPtr client)
     }
 
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
         swapl(&rep.root);
         swaps(&rep.x);
         swaps(&rep.y);
@@ -1011,7 +1007,7 @@ ProcGetGeometry(ClientPtr client)
         swaps(&rep.height);
         swaps(&rep.borderWidth);
     }
-    WriteToClient(client, sizeof(xGetGeometryReply), &rep);
+    X_SEND_REPLY_SIMPLE(client, rep);
     return Success;
 }
 
@@ -1076,17 +1072,13 @@ ProcInternAtom(ClientPtr client)
         return BadAlloc;
 
     xInternAtomReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .length = 0,
         .atom = atom
     };
 
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
         swapl(&rep.atom);
     }
-    WriteToClient(client, sizeof(rep), &rep);
+    X_SEND_REPLY_SIMPLE(client, rep);
     return Success;
 }
 
@@ -1202,11 +1194,7 @@ ProcTranslateCoords(ClientPtr client)
     if (rc != Success)
         return rc;
 
-    xTranslateCoordsReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .length = 0
-    };
+    xTranslateCoordsReply rep = { 0 };
     if (!SAME_SCREENS(pWin->drawable, pDst->drawable)) {
         rep.sameScreen = xFalse;
         rep.child = None;
@@ -1255,12 +1243,11 @@ ProcTranslateCoords(ClientPtr client)
     }
 
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
         swapl(&rep.child);
         swaps(&rep.dstX);
         swaps(&rep.dstY);
     }
-    WriteToClient(client, sizeof(rep), &rep);
+    X_SEND_REPLY_SIMPLE(client, rep);
     return Success;
 }
 
@@ -1380,10 +1367,7 @@ ProcQueryTextExtents(ClientPtr client)
         return BadAlloc;
 
     xQueryTextExtentsReply rep = {
-        .type = X_Reply,
         .drawDirection = info.drawDirection,
-        .sequenceNumber = client->sequence,
-        .length = 0,
         .fontAscent = info.fontAscent,
         .fontDescent = info.fontDescent,
         .overallAscent = info.overallAscent,
@@ -1394,7 +1378,6 @@ ProcQueryTextExtents(ClientPtr client)
     };
 
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
         swaps(&rep.fontAscent);
         swaps(&rep.fontDescent);
         swaps(&rep.overallAscent);
@@ -1403,7 +1386,7 @@ ProcQueryTextExtents(ClientPtr client)
         swapl(&rep.overallLeft);
         swapl(&rep.overallRight);
     }
-    WriteToClient(client, sizeof(rep), &rep);
+    X_SEND_REPLY_SIMPLE(client, rep);
     return Success;
 }
 
@@ -2610,13 +2593,9 @@ ProcAllocColor(ClientPtr client)
     }
 
     xAllocColorReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .length = 0,
         .red = stuff->red,
         .green = stuff->green,
         .blue = stuff->blue,
-        .pixel = 0
     };
 
     if ((rc = AllocColor(pmap, &rep.red, &rep.green, &rep.blue,
@@ -2624,7 +2603,6 @@ ProcAllocColor(ClientPtr client)
         return rc;
 
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
         swaps(&rep.red);
         swaps(&rep.green);
         swaps(&rep.blue);
@@ -2634,7 +2612,7 @@ ProcAllocColor(ClientPtr client)
 #ifdef XINERAMA
     if (noPanoramiXExtension || !pmap->pScreen->myNum)
 #endif /* XINERAMA */
-        WriteToClient(client, sizeof(rep), &rep);
+        X_SEND_REPLY_SIMPLE(client, rep);
     return Success;
 }
 
@@ -2654,11 +2632,7 @@ ProcAllocNamedColor(ClientPtr client)
         return rc;
     }
 
-    xAllocNamedColorReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .length = 0
-    };
+    xAllocNamedColorReply rep = { 0 };
 
     if (!dixLookupBuiltinColor
             (pcmp->pScreen->myNum, (char *) &stuff[1], stuff->nbytes,
@@ -2668,7 +2642,6 @@ ProcAllocNamedColor(ClientPtr client)
     rep.screenRed = rep.exactRed;
     rep.screenGreen = rep.exactGreen;
     rep.screenBlue = rep.exactBlue;
-    rep.pixel = 0;
 
     if ((rc = AllocColor(pcmp,
                          &rep.screenRed, &rep.screenGreen,
@@ -2676,7 +2649,6 @@ ProcAllocNamedColor(ClientPtr client)
         return rc;
 
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
         swapl(&rep.pixel);
         swaps(&rep.exactRed);
         swaps(&rep.exactGreen);
@@ -2689,7 +2661,7 @@ ProcAllocNamedColor(ClientPtr client)
 #ifdef XINERAMA
     if (noPanoramiXExtension || !pcmp->pScreen->myNum)
 #endif /* XINERAMA */
-        WriteToClient(client, sizeof(rep), &rep);
+        X_SEND_REPLY_SIMPLE(client, rep);
     return Success;
 }
 
@@ -2987,9 +2959,6 @@ ProcLookupColor(ClientPtr client)
                                   &exactGreen,
                                   &exactBlue)) {
             xLookupColorReply rep = {
-                .type = X_Reply,
-                .sequenceNumber = client->sequence,
-                .length = 0,
                 .exactRed = exactRed,
                 .exactGreen = exactGreen,
                 .exactBlue = exactBlue,
@@ -3001,7 +2970,6 @@ ProcLookupColor(ClientPtr client)
                                             &rep.screenGreen,
                                             &rep.screenBlue, pcmp->pVisual);
             if (client->swapped) {
-                swaps(&rep.sequenceNumber);
                 swaps(&rep.exactRed);
                 swaps(&rep.exactGreen);
                 swaps(&rep.exactBlue);
@@ -3009,7 +2977,7 @@ ProcLookupColor(ClientPtr client)
                 swaps(&rep.screenGreen);
                 swaps(&rep.screenBlue);
             }
-            WriteToClient(client, sizeof(rep), &rep);
+            X_SEND_REPLY_SIMPLE(client, rep);
             return Success;
         }
         return BadName;
@@ -3197,19 +3165,15 @@ ProcQueryBestSize(ClientPtr client)
                                &stuff->height, pScreen);
 
     xQueryBestSizeReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .length = 0,
         .width = stuff->width,
         .height = stuff->height
     };
 
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
         swaps(&rep.width);
         swaps(&rep.height);
     }
-    WriteToClient(client, sizeof(rep), &rep);
+    X_SEND_REPLY_SIMPLE(client, rep);
     return Success;
 }
 
@@ -3286,9 +3250,6 @@ ProcGetScreenSaver(ClientPtr client)
     }
 
     xGetScreenSaverReply rep = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .length = 0,
         .timeout = ScreenSaverTime / MILLI_PER_SECOND,
         .interval = ScreenSaverInterval / MILLI_PER_SECOND,
         .preferBlanking = ScreenSaverBlanking,
@@ -3296,11 +3257,10 @@ ProcGetScreenSaver(ClientPtr client)
     };
 
     if (client->swapped) {
-        swaps(&rep.sequenceNumber);
         swaps(&rep.timeout);
         swaps(&rep.interval);
     }
-    WriteToClient(client, sizeof(rep), &rep);
+    X_SEND_REPLY_SIMPLE(client, rep);
     return Success;
 }
 

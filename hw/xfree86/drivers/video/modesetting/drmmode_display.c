@@ -2344,6 +2344,8 @@ drmmode_crtc_destroy(xf86CrtcPtr crtc)
     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
     modesettingPtr ms = modesettingPTR(crtc->scrn);
 
+    free(drmmode_crtc->cursor.dimensions);
+
     if (!ms->atomic_modeset)
         return;
 

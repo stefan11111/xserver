@@ -213,7 +213,7 @@ Bool x_rpcbuf_write_CARD32(x_rpcbuf_t *rpcbuf, CARD32 value)
  * @return          TRUE on success, FALSE on allocation failure
  */
 static inline Bool x_rpcbuf_write_INT32(x_rpcbuf_t *rpcbuf, INT32 value) {
-    return x_rpcbuf_write_CARD32(rpcbuf, (CARD16)value);
+    return x_rpcbuf_write_CARD32(rpcbuf, (CARD32)value);
 }
 
 /*

@@ -1740,8 +1740,6 @@ KdReceiveTimeout(KdPointerInfo * pi)
     KdRunMouseMachine(pi, timeout, 0, 0, 0, 0, 0, 0);
 }
 
-extern int nClients;
-
 static void
 KdCheckLock(void)
 {

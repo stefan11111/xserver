@@ -769,7 +769,7 @@ static inline int __write_reply_hdr_and_rpcbuf(
     return Success;
 }
 
-static inline void __write_reply_hdr_simple(
+static inline int __write_reply_hdr_simple(
     ClientPtr pClient, void *hdrData, size_t hdrLen)
 {
     xGenericReply *reply = hdrData;
@@ -783,6 +783,7 @@ static inline void __write_reply_hdr_simple(
     }
 
     WriteToClient(pClient, hdrLen, hdrData);
+    return Success;
 }
 
 /*
@@ -791,6 +792,7 @@ static inline void __write_reply_hdr_simple(
  * @param client      pointer to the client (ClientPtr)
  * @param hdrstruct   the header struct (not pointer, the struct itself!)
  * @param rpcbuf      the rpcbuf to send (not pointer, the struct itself!)
+ * return             X11 result code
  */
 #define X_SEND_REPLY_WITH_RPCBUF(client, hdrstruct, rpcbuf) \
     __write_reply_hdr_and_rpcbuf(client, &hdrstruct, sizeof(hdrstruct), &rpcbuf);
@@ -800,6 +802,7 @@ static inline void __write_reply_hdr_simple(
  *
  * @param client      pointer to the client (ClientPtr)
  * @param hdrstruct   the header struct (not pointer, the struct itself!)
+ * @return            X11 result code (=Success)
  */
 #define X_SEND_REPLY_SIMPLE(client, hdrstruct) \
     __write_reply_hdr_simple(client, &hdrstruct, sizeof(hdrstruct));

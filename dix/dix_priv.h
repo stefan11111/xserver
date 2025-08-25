@@ -748,9 +748,12 @@ static inline Atom dixGetAtomID(const char *name) {
 #define X_REPLY_HEADER_UNITS(hdrtype) \
     (pad_to_int32((sizeof(hdrtype) - sizeof(xGenericReply))))
 
-static inline void __write_reply_hdr_and_rpcbuf(
+static inline int __write_reply_hdr_and_rpcbuf(
     ClientPtr pClient, void *hdrData, size_t hdrLen, x_rpcbuf_t *rpcbuf)
 {
+    if (rpcbuf->error)
+        return BadAlloc;
+
     xGenericReply *reply = hdrData;
     reply->type = X_Reply;
     reply->length = (bytes_to_int32(hdrLen - sizeof(xGenericReply)))
@@ -764,6 +767,8 @@ static inline void __write_reply_hdr_and_rpcbuf(
 
     WriteToClient(pClient, hdrLen, hdrData);
     WriteRpcbufToClient(pClient, rpcbuf);
+
+    return Success;
 }
 
 static inline void __write_reply_hdr_simple(

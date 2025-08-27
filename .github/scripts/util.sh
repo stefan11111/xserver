@@ -79,13 +79,15 @@ build_ac_xts() {
     if [ -f $X11_PREFIX/$pkgname.DONE ]; then
         echo "package $pkgname already built"
     else
+        echo "::group::Build XTS"
         clone_source "$pkgname" "$url" "$ref"
         (
             cd $pkgname
             CFLAGS='-fcommon'
             ./autogen.sh --prefix=$X11_PREFIX CFLAGS="$CFLAGS"
-            make -j${FDO_CI_CONCURRENT:-4} install
+            xvfb-run make -j${FDO_CI_CONCURRENT:-4} install tetexec.cfg
         )
         touch $X11_PREFIX/$pkgname.DONE
+        echo "::endgroup::"
     fi
 }

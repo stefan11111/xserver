@@ -152,3 +152,5 @@ option('legacy_nvidia_padding', type: 'boolean', value: false,
 # testsuite fine tuning - some things might not run everywhere
 option('test_rendercheck_triangles', type: 'boolean', value: false,
        description: 'testsuite: run rendercheck triangles tests (might fail on Xephyr)')
+option('test_xephyr_gles', type: 'boolean', value: true,
+       description: 'testsuite: run gles2/gles3 tests on Xephyr (might fail w/o DRI)')

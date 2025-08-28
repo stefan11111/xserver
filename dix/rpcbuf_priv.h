@@ -267,6 +267,26 @@ Bool x_rpcbuf_write_CARD32s(x_rpcbuf_t *rpcbuf, const CARD32 *values,
     size_t count) _X_ATTRIBUTE_NONNULL_ARG(1);
 
 /*
+ * write array of INT32s and do byte-swapping (when needed).
+ *
+ * allocate a region for INT32s, write them into the buffer and do byte-swap
+ * if buffer is configured to do so (`swapped` field is TRUE).
+ * when `values` or `count` are zero, does nothing.
+ *
+ * doesn't do any padding.
+ *
+ * @param rpcbuf    pointer to x_rpcbuf_t to operate on
+ * @param values    pointer to INT32 array to write
+ * @param count     number of elements in the array
+ * @return          TRUE on success, FALSE on allocation failure
+ */
+static inline Bool x_rpcbuf_write_INT32s(x_rpcbuf_t *rpcbuf,
+                                         const INT32 *values, size_t count)
+{
+    return x_rpcbuf_write_CARD32s(rpcbuf, (CARD32*)values, count);
+}
+
+/*
  * retrieve number of 4-byte-units (padded) of data written in the buffer
  *
  * @param rpcbuf    pointer to x_rpcbuf_t to operate on

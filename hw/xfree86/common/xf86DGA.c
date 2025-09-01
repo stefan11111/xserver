@@ -1699,12 +1699,6 @@ ProcXDGACreateColormap(ClientPtr client)
     return Success;
 }
 
-/*
- *
- * Support for the old DGA protocol, used to live in xf86dga.c
- *
- */
-
 static int _X_COLD
 SProcXDGADispatch(ClientPtr client)
 {

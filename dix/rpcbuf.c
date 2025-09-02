@@ -53,6 +53,7 @@ err:
     return FALSE;
 }
 
+_X_EXPORT /* only for GLX, not part of public ABI */
 void x_rpcbuf_clear(x_rpcbuf_t *rpcbuf)
 {
     free(rpcbuf->buffer);
@@ -159,6 +160,7 @@ Bool x_rpcbuf_write_CARD64(x_rpcbuf_t *rpcbuf, CARD64 value)
     return TRUE;
 }
 
+_X_EXPORT /* only for GLX, not part of public ABI */
 Bool x_rpcbuf_write_CARD8s(x_rpcbuf_t *rpcbuf, const CARD8 *values,
                            size_t count)
 {

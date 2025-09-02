@@ -365,7 +365,7 @@ proc_dri3_get_supported_modifiers(ClientPtr client)
     pScreen = window->drawable.pScreen;
 
     dri3_get_supported_modifiers(pScreen, &window->drawable,
-				 stuff->depth, stuff->bpp,
+                                 stuff->depth, stuff->bpp,
                                  &nwindowmodifiers, &window_modifiers,
                                  &nscreenmodifiers, &screen_modifiers);
 

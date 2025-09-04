@@ -508,8 +508,7 @@ miDCDeviceCleanup(DeviceIntPtr pDev, ScreenPtr pScreen)
             dixDestroyPixmap(pBuffer->pSave, 0);
 
             free(pBuffer);
-            dixSetScreenPrivate(&pDev->devPrivates, miDCDeviceKey, walkScreen,
-                                NULL);
+            dixSetScreenPrivate(&pDev->devPrivates, miDCDeviceKey, walkScreen, NULL);
         }
     }
 }

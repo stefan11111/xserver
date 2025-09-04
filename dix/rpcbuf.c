@@ -132,6 +132,7 @@ Bool x_rpcbuf_write_CARD16(x_rpcbuf_t *rpcbuf, CARD16 value)
     return TRUE;
 }
 
+_X_EXPORT /* only for GLX, not part of public ABI */
 Bool x_rpcbuf_write_CARD32(x_rpcbuf_t *rpcbuf, CARD32 value)
 {
     CARD32 *reserved = x_rpcbuf_reserve(rpcbuf, sizeof(value));

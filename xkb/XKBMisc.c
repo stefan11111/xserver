@@ -50,14 +50,12 @@ XkbKeyTypesForCoreSymbols(XkbDescPtr xkb,
                           int *types_inout, KeySym * xkb_syms_rtrn)
 {
     register int i;
-    unsigned int empty;
     int nSyms[XkbNumKbdGroups];
-    int nGroups, tmp, groupsWidth;
     BOOL replicated = FALSE;
 
     /* Section 12.2 of the protocol describes this process in more detail */
     /* Step 1:  find the # of symbols in the core mapping per group */
-    groupsWidth = 2;
+    int groupsWidth = 2;
     for (i = 0; i < XkbNumKbdGroups; i++) {
         if ((protected & (1 << i)) && (types_inout[i] < xkb->map->num_types)) {
             nSyms[i] = xkb->map->types[types_inout[i]].num_levels;
@@ -83,7 +81,7 @@ XkbKeyTypesForCoreSymbols(XkbDescPtr xkb,
     }
     xkb_syms_rtrn[XKB_OFFSET(XkbGroup2Index, 0)] = CORE_SYM(2);
     xkb_syms_rtrn[XKB_OFFSET(XkbGroup2Index, 1)] = CORE_SYM(3);
-    tmp = 2 + (nSyms[XkbGroup1Index] - 2);      /* offset to extra group2 syms */
+    int tmp = 2 + (nSyms[XkbGroup1Index] - 2);      /* offset to extra group2 syms */
     for (i = 2; i < nSyms[XkbGroup2Index]; i++) {
         xkb_syms_rtrn[XKB_OFFSET(XkbGroup2Index, i)] = CORE_SYM(tmp + i);
     }
@@ -116,6 +114,7 @@ XkbKeyTypesForCoreSymbols(XkbDescPtr xkb,
         }
     }
 
+    int nGroups = 0;
     if (replicated) {
         nSyms[XkbGroup2Index] = 0;
         nSyms[XkbGroup3Index] = 0;
@@ -149,11 +148,10 @@ XkbKeyTypesForCoreSymbols(XkbDescPtr xkb,
         }
     }
     /* steps 3&4: alphanumeric expansion,  assign canonical types */
-    empty = 0;
+    unsigned int empty = 0;
     for (i = 0; i < nGroups; i++) {
-        KeySym *syms;
+        KeySym *syms = &xkb_syms_rtrn[XKB_OFFSET(i, 0)];
 
-        syms = &xkb_syms_rtrn[XKB_OFFSET(i, 0)];
         if ((nSyms[i] > 1) && (syms[1] == NoSymbol) && (syms[0] != NoSymbol)) {
             KeySym upper, lower;
 
@@ -183,9 +181,9 @@ XkbKeyTypesForCoreSymbols(XkbDescPtr xkb,
         }
         if (syms[0] == NoSymbol) {
             register int n;
-            Bool found;
+            Bool found = FALSE;
 
-            for (n = 1, found = FALSE; (!found) && (n < nSyms[i]); n++) {
+            for (n = 1; (!found) && (n < nSyms[i]); n++) {
                 found = (syms[n] != NoSymbol);
             }
             if (!found)
@@ -227,11 +225,11 @@ XkbKeyTypesForCoreSymbols(XkbDescPtr xkb,
      * the core replication.
      */
     if (nGroups > 1) {
-        Bool sameType, allOneLevel, canonical = TRUE;
+        Bool sameType = TRUE,
+             canonical = TRUE,
+             allOneLevel = (xkb->map->types[types_inout[0]].num_levels == 1);
 
-        allOneLevel = (xkb->map->types[types_inout[0]].num_levels == 1);
-        for (i = 1, sameType = TRUE; (allOneLevel || sameType) && (i < nGroups);
-             i++) {
+        for (i = 1; (allOneLevel || sameType) && (i < nGroups); i++) {
             sameType = (sameType &&
                         (types_inout[i] == types_inout[XkbGroup1Index]));
             if (allOneLevel)
@@ -243,9 +241,9 @@ XkbKeyTypesForCoreSymbols(XkbDescPtr xkb,
             (!(protected &
                (XkbExplicitKeyTypesMask & ~XkbExplicitKeyType1Mask)))) {
             register int s;
-            Bool identical;
+            Bool identical = TRUE;
 
-            for (i = 1, identical = TRUE; identical && (i < nGroups); i++) {
+            for (i = 1; identical && (i < nGroups); i++) {
                 KeySym *syms;
 
                 if (nSyms[i] != nSyms[XkbGroup1Index])
@@ -260,9 +258,7 @@ XkbKeyTypesForCoreSymbols(XkbDescPtr xkb,
                 nGroups = 1;
         }
         if (allOneLevel && (nGroups > 1)) {
-            KeySym *syms;
-
-            syms = &xkb_syms_rtrn[nSyms[XkbGroup1Index]];
+            KeySym *syms = &xkb_syms_rtrn[nSyms[XkbGroup1Index]];
             nSyms[XkbGroup1Index] = 1;
             for (i = 1; i < nGroups; i++) {
                 xkb_syms_rtrn[i] = syms[0];

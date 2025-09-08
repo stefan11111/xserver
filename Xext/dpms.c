@@ -465,8 +465,7 @@ ProcDPMSInfo(ClientPtr client)
     if (client->swapped) {
         swaps(&reply.power_level);
     }
-    X_SEND_REPLY_SIMPLE(client, reply);
-    return Success;
+    return X_SEND_REPLY_SIMPLE(client, reply);
 }
 
 static int

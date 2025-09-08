@@ -1973,15 +1973,14 @@ SProcRenderQueryVersion(ClientPtr client)
     REQUEST_SIZE_MATCH(xRenderQueryVersionReq);
     swapl(&stuff->majorVersion);
     swapl(&stuff->minorVersion);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderQueryVersion(client);
 }
 
 static int _X_COLD
 SProcRenderQueryPictFormats(ClientPtr client)
 {
-    REQUEST(xRenderQueryPictFormatsReq);
     REQUEST_SIZE_MATCH(xRenderQueryPictFormatsReq);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderQueryPictFormats(client);
 }
 
 static int _X_COLD
@@ -1990,7 +1989,7 @@ SProcRenderQueryPictIndexValues(ClientPtr client)
     REQUEST(xRenderQueryPictIndexValuesReq);
     REQUEST_AT_LEAST_SIZE(xRenderQueryPictIndexValuesReq);
     swapl(&stuff->format);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderQueryPictIndexValues(client);
 }
 
 static int _X_COLD
@@ -2009,7 +2008,7 @@ SProcRenderCreatePicture(ClientPtr client)
     swapl(&stuff->format);
     swapl(&stuff->mask);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCreatePicture(client);
 }
 
 static int _X_COLD
@@ -2020,7 +2019,7 @@ SProcRenderChangePicture(ClientPtr client)
     swapl(&stuff->picture);
     swapl(&stuff->mask);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderChangePicture(client);
 }
 
 static int _X_COLD
@@ -2032,7 +2031,7 @@ SProcRenderSetPictureClipRectangles(ClientPtr client)
     swaps(&stuff->xOrigin);
     swaps(&stuff->yOrigin);
     SwapRestS(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderSetPictureClipRectangles(client);
 }
 
 static int _X_COLD
@@ -2041,7 +2040,7 @@ SProcRenderFreePicture(ClientPtr client)
     REQUEST(xRenderFreePictureReq);
     REQUEST_SIZE_MATCH(xRenderFreePictureReq);
     swapl(&stuff->picture);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderFreePicture(client);
 }
 
 static int _X_COLD
@@ -2060,7 +2059,7 @@ SProcRenderComposite(ClientPtr client)
     swaps(&stuff->yDst);
     swaps(&stuff->width);
     swaps(&stuff->height);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderComposite(client);
 }
 
 static int _X_COLD
@@ -2081,7 +2080,7 @@ SProcRenderTrapezoids(ClientPtr client)
     swaps(&stuff->xSrc);
     swaps(&stuff->ySrc);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderTrapezoids(client);
 }
 
 static int _X_COLD
@@ -2096,7 +2095,7 @@ SProcRenderTriangles(ClientPtr client)
     swaps(&stuff->xSrc);
     swaps(&stuff->ySrc);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderTriangles(client);
 }
 
 static int _X_COLD
@@ -2111,7 +2110,7 @@ SProcRenderTriStrip(ClientPtr client)
     swaps(&stuff->xSrc);
     swaps(&stuff->ySrc);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderTriStrip(client);
 }
 
 static int _X_COLD
@@ -2126,7 +2125,7 @@ SProcRenderTriFan(ClientPtr client)
     swaps(&stuff->xSrc);
     swaps(&stuff->ySrc);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderTriFan(client);
 }
 
 static int _X_COLD
@@ -2154,7 +2153,7 @@ SProcRenderCreateGlyphSet(ClientPtr client)
     REQUEST_SIZE_MATCH(xRenderCreateGlyphSetReq);
     swapl(&stuff->gsid);
     swapl(&stuff->format);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCreateGlyphSet(client);
 }
 
 static int _X_COLD
@@ -2164,7 +2163,7 @@ SProcRenderReferenceGlyphSet(ClientPtr client)
     REQUEST_SIZE_MATCH(xRenderReferenceGlyphSetReq);
     swapl(&stuff->gsid);
     swapl(&stuff->existing);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderReferenceGlyphSet(client);
 }
 
 static int _X_COLD
@@ -2173,7 +2172,7 @@ SProcRenderFreeGlyphSet(ClientPtr client)
     REQUEST(xRenderFreeGlyphSetReq);
     REQUEST_SIZE_MATCH(xRenderFreeGlyphSetReq);
     swapl(&stuff->glyphset);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderFreeGlyphSet(client);
 }
 
 static int _X_COLD
@@ -2206,7 +2205,7 @@ SProcRenderAddGlyphs(ClientPtr client)
         swaps(&gi[i].xOff);
         swaps(&gi[i].yOff);
     }
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderAddGlyphs(client);
 }
 
 static int _X_COLD
@@ -2222,7 +2221,7 @@ SProcRenderFreeGlyphs(ClientPtr client)
     REQUEST_AT_LEAST_SIZE(xRenderFreeGlyphsReq);
     swapl(&stuff->glyphset);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderFreeGlyphs(client);
 }
 
 static int _X_COLD
@@ -2302,7 +2301,7 @@ SProcRenderCompositeGlyphs(ClientPtr client)
                 buffer += 4 - (space & 3);
         }
     }
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCompositeGlyphs(client);
 }
 
 static int _X_COLD
@@ -2317,7 +2316,7 @@ SProcRenderFillRectangles(ClientPtr client)
     swaps(&stuff->color.blue);
     swaps(&stuff->color.alpha);
     SwapRestS(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderFillRectangles(client);
 }
 
 static int _X_COLD
@@ -2330,7 +2329,7 @@ SProcRenderCreateCursor(ClientPtr client)
     swapl(&stuff->src);
     swaps(&stuff->x);
     swaps(&stuff->y);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCreateCursor(client);
 }
 
 static int _X_COLD
@@ -2349,7 +2348,7 @@ SProcRenderSetPictureTransform(ClientPtr client)
     swapl(&stuff->transform.matrix31);
     swapl(&stuff->transform.matrix32);
     swapl(&stuff->transform.matrix33);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderSetPictureTransform(client);
 }
 
 static int _X_COLD
@@ -2359,7 +2358,7 @@ SProcRenderQueryFilters(ClientPtr client)
     REQUEST_SIZE_MATCH(xRenderQueryFiltersReq);
 
     swapl(&stuff->drawable);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderQueryFilters(client);
 }
 
 static int _X_COLD
@@ -2370,7 +2369,7 @@ SProcRenderSetPictureFilter(ClientPtr client)
 
     swapl(&stuff->picture);
     swaps(&stuff->nbytes);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderSetPictureFilter(client);
 }
 
 static int _X_COLD
@@ -2381,7 +2380,7 @@ SProcRenderCreateAnimCursor(ClientPtr client)
 
     swapl(&stuff->cid);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCreateAnimCursor(client);
 }
 
 static int _X_COLD
@@ -2394,7 +2393,7 @@ SProcRenderAddTraps(ClientPtr client)
     swaps(&stuff->xOff);
     swaps(&stuff->yOff);
     SwapRestL(stuff);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderAddTraps(client);
 }
 
 static int _X_COLD
@@ -2408,7 +2407,7 @@ SProcRenderCreateSolidFill(ClientPtr client)
     swaps(&stuff->color.red);
     swaps(&stuff->color.green);
     swaps(&stuff->color.blue);
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCreateSolidFill(client);
 }
 
 static void _X_COLD
@@ -2453,7 +2452,7 @@ SProcRenderCreateLinearGradient(ClientPtr client)
 
     swapStops(stuff + 1, stuff->nStops);
 
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCreateLinearGradient(client);
 }
 
 static int _X_COLD
@@ -2481,7 +2480,7 @@ SProcRenderCreateRadialGradient(ClientPtr client)
 
     swapStops(stuff + 1, stuff->nStops);
 
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCreateRadialGradient(client);
 }
 
 static int _X_COLD
@@ -2506,7 +2505,7 @@ SProcRenderCreateConicalGradient(ClientPtr client)
 
     swapStops(stuff + 1, stuff->nStops);
 
-    return (*ProcRenderVector[stuff->renderReqType]) (client);
+    return ProcRenderCreateConicalGradient(client);
 }
 
 static int _X_COLD

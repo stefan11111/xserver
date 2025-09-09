@@ -96,27 +96,20 @@ static int ProcRenderCreateConicalGradient(ClientPtr pClient);
 static int ProcRenderDispatch(ClientPtr pClient);
 
 static int SProcRenderQueryVersion(ClientPtr pClient);
-static int SProcRenderQueryPictFormats(ClientPtr pClient);
 static int SProcRenderQueryPictIndexValues(ClientPtr pClient);
-static int SProcRenderQueryDithers(ClientPtr pClient);
 static int SProcRenderCreatePicture(ClientPtr pClient);
 static int SProcRenderChangePicture(ClientPtr pClient);
 static int SProcRenderSetPictureClipRectangles(ClientPtr pClient);
 static int SProcRenderFreePicture(ClientPtr pClient);
 static int SProcRenderComposite(ClientPtr pClient);
-static int SProcRenderScale(ClientPtr pClient);
 static int SProcRenderTrapezoids(ClientPtr pClient);
 static int SProcRenderTriangles(ClientPtr pClient);
 static int SProcRenderTriStrip(ClientPtr pClient);
 static int SProcRenderTriFan(ClientPtr pClient);
-static int SProcRenderColorTrapezoids(ClientPtr pClient);
-static int SProcRenderColorTriangles(ClientPtr pClient);
-static int SProcRenderTransform(ClientPtr pClient);
 static int SProcRenderCreateGlyphSet(ClientPtr pClient);
 static int SProcRenderReferenceGlyphSet(ClientPtr pClient);
 static int SProcRenderFreeGlyphSet(ClientPtr pClient);
 static int SProcRenderAddGlyphs(ClientPtr pClient);
-static int SProcRenderAddGlyphsFromPicture(ClientPtr pClient);
 static int SProcRenderFreeGlyphs(ClientPtr pClient);
 static int SProcRenderCompositeGlyphs(ClientPtr pClient);
 static int SProcRenderFillRectangles(ClientPtr pClient);
@@ -173,27 +166,27 @@ ProcRenderQueryVersion,
 
 int (*SProcRenderVector[RenderNumberRequests]) (ClientPtr) = {
 SProcRenderQueryVersion,
-        SProcRenderQueryPictFormats,
+        ProcRenderQueryPictFormats,
         SProcRenderQueryPictIndexValues,
-        SProcRenderQueryDithers,
+        ProcRenderQueryDithers,
         SProcRenderCreatePicture,
         SProcRenderChangePicture,
         SProcRenderSetPictureClipRectangles,
         SProcRenderFreePicture,
         SProcRenderComposite,
-        SProcRenderScale,
+        ProcRenderScale,
         SProcRenderTrapezoids,
         SProcRenderTriangles,
         SProcRenderTriStrip,
         SProcRenderTriFan,
-        SProcRenderColorTrapezoids,
-        SProcRenderColorTriangles,
-        SProcRenderTransform,
+        ProcRenderColorTrapezoids,
+        ProcRenderColorTriangles,
+        ProcRenderTransform,
         SProcRenderCreateGlyphSet,
         SProcRenderReferenceGlyphSet,
         SProcRenderFreeGlyphSet,
         SProcRenderAddGlyphs,
-        SProcRenderAddGlyphsFromPicture,
+        ProcRenderAddGlyphsFromPicture,
         SProcRenderFreeGlyphs,
         SProcRenderCompositeGlyphs,
         SProcRenderCompositeGlyphs,
@@ -1977,25 +1970,12 @@ SProcRenderQueryVersion(ClientPtr client)
 }
 
 static int _X_COLD
-SProcRenderQueryPictFormats(ClientPtr client)
-{
-    REQUEST_SIZE_MATCH(xRenderQueryPictFormatsReq);
-    return ProcRenderQueryPictFormats(client);
-}
-
-static int _X_COLD
 SProcRenderQueryPictIndexValues(ClientPtr client)
 {
     REQUEST(xRenderQueryPictIndexValuesReq);
     REQUEST_AT_LEAST_SIZE(xRenderQueryPictIndexValuesReq);
     swapl(&stuff->format);
     return ProcRenderQueryPictIndexValues(client);
-}
-
-static int _X_COLD
-SProcRenderQueryDithers(ClientPtr client)
-{
-    return BadImplementation;
 }
 
 static int _X_COLD
@@ -2063,12 +2043,6 @@ SProcRenderComposite(ClientPtr client)
 }
 
 static int _X_COLD
-SProcRenderScale(ClientPtr client)
-{
-    return BadImplementation;
-}
-
-static int _X_COLD
 SProcRenderTrapezoids(ClientPtr client)
 {
     REQUEST(xRenderTrapezoidsReq);
@@ -2126,24 +2100,6 @@ SProcRenderTriFan(ClientPtr client)
     swaps(&stuff->ySrc);
     SwapRestL(stuff);
     return ProcRenderTriFan(client);
-}
-
-static int _X_COLD
-SProcRenderColorTrapezoids(ClientPtr client)
-{
-    return BadImplementation;
-}
-
-static int _X_COLD
-SProcRenderColorTriangles(ClientPtr client)
-{
-    return BadImplementation;
-}
-
-static int _X_COLD
-SProcRenderTransform(ClientPtr client)
-{
-    return BadImplementation;
 }
 
 static int _X_COLD
@@ -2206,12 +2162,6 @@ SProcRenderAddGlyphs(ClientPtr client)
         swaps(&gi[i].yOff);
     }
     return ProcRenderAddGlyphs(client);
-}
-
-static int _X_COLD
-SProcRenderAddGlyphsFromPicture(ClientPtr client)
-{
-    return BadImplementation;
 }
 
 static int _X_COLD

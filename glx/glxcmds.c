@@ -2327,43 +2327,26 @@ __glXDisp_QueryExtensionsString(__GLXclientState * cl, GLbyte * pc)
     ClientPtr client = cl->client;
     xGLXQueryExtensionsStringReq *req = (xGLXQueryExtensionsStringReq *) pc;
     __GLXscreen *pGlxScreen;
-    size_t n, length;
-    char *buf;
     int err;
 
     if (!validGlxScreen(client, req->screen, &pGlxScreen, &err))
         return err;
 
-    n = strlen(pGlxScreen->GLXextensions) + 1;
-    length = __GLX_PAD(n) >> 2;
-
+    /* client expects payload to contain a null terminated string
+     * and uses this header to determine how many bytes to process */
+    size_t n = strlen(pGlxScreen->GLXextensions) + 1;
     xGLXQueryExtensionsStringReply reply = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .length = length,
         .n = n
     };
 
-    /* Allocate buffer to make sure it's a multiple of 4 bytes big. */
-    buf = calloc(length, 4);
-    if (buf == NULL)
-        return BadAlloc;
-    memcpy(buf, pGlxScreen->GLXextensions, n);
-
     if (client->swapped) {
-        swaps(&reply.sequenceNumber);
-        swapl(&reply.length);
         swapl(&reply.n);
-        WriteToClient(client, sizeof(xGLXQueryExtensionsStringReply), &reply);
-        WriteToClient(client, length << 2, buf);
-    }
-    else {
-        WriteToClient(client, sizeof(xGLXQueryExtensionsStringReply), &reply);
-        WriteToClient(client, (int) (length << 2), buf);
     }
 
-    free(buf);
-    return Success;
+    x_rpcbuf_t rpcbuf = { .swapped = client->swapped, .err_clear = TRUE };
+
+    x_rpcbuf_write_string_0t_pad(&rpcbuf, pGlxScreen->GLXextensions);
+    return X_SEND_REPLY_WITH_RPCBUF(client, reply, rpcbuf);
 }
 
 #ifndef GLX_VENDOR_NAMES_EXT

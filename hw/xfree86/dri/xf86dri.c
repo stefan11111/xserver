@@ -197,7 +197,7 @@ ProcXF86DRICloseConnection(register ClientPtr client)
 static int
 ProcXF86DRIGetClientDriverName(register ClientPtr client)
 {
-    char *clientDriverName;
+    char *clientDriverName = NULL;
 
     REQUEST(xXF86DRIGetClientDriverNameReq);
     REQUEST_SIZE_MATCH(xXF86DRIGetClientDriverNameReq);

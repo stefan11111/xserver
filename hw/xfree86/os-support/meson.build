@@ -92,7 +92,7 @@ elif host_machine.system() == 'sunos'
         error('Unknown CPU family for Solaris build')
     endif
 
-elif host_machine.system().endswith('bsd')
+elif host_machine.system().endswith('bsd') or host_machine.system() == 'dragonfly'
     srcs_xorg_os_support += [
         'bsd/bsd_VTsw.c',
         'bsd/bsd_bell.c',
@@ -129,7 +129,7 @@ elif host_machine.system().endswith('bsd')
         endif
     endif
 
-    if host_machine.system() == 'freebsd'
+    if host_machine.system() == 'freebsd' or host_machine.system() == 'dragonfly'
         srcs_xorg_os_support += 'bsd/bsd_kmod.c'
     else
         srcs_xorg_os_support += 'shared/kmod_noop.c'

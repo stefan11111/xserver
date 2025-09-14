@@ -247,6 +247,20 @@ jobs:
                   usesh: true
                   release: "14.3"
                   run:     ./.github/scripts/freebsd/run-xserver-build.sh
+    xserver-build-dragonflybsd:
+        runs-on: ubuntu-latest
+        env:
+            MESON_ARGS: -Dxephyr=true -Dxorg=true -Dxvfb=true -Dxnest=true
+        steps:
+            - uses: actions/checkout@v4
+            - name: run in DragonFlyBSD VM
+              id: xserver-build
+              uses: vmactions/dragonflybsd-vm@v1
+              with:
+                  envs: 'MESON_ARGS'
+                  usesh: true
+                  release: "6.4.2"
+                  run:     ./.github/scripts/DragonFlyBSD/run-xserver-build.sh
 
     release:
         name: Release pushed tag
@@ -258,6 +272,7 @@ jobs:
             - xserver-build-mingw32-ubuntu
             - xserver-build-macos
             - xserver-build-freebsd
+            - xserver-build-dragonflybsd
         steps:
             - name: Checkout
               uses: actions/checkout@v4

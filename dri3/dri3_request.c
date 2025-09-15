@@ -515,8 +515,8 @@ proc_dri3_buffers_from_pixmap(ClientPtr client)
     }
 
     x_rpcbuf_t rpcbuf = { .swapped = client->swapped, .err_clear = TRUE };
-    x_rpcbuf_write_CARD32s(&rpcbuf, strides, num_fds);
-    x_rpcbuf_write_CARD32s(&rpcbuf, offsets, num_fds);
+    x_rpcbuf_write_CARD32s(&rpcbuf, (CARD32*)strides, num_fds);
+    x_rpcbuf_write_CARD32s(&rpcbuf, (CARD32*)offsets, num_fds);
 
     xDRI3BuffersFromPixmapReply rep = {
         .nfd = num_fds,

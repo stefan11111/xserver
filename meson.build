@@ -49,6 +49,7 @@ if cc.get_id() == 'gcc' or cc.get_id() == 'clang'
         '-Werror=pointer-to-int-cast',
         '-Woverride-init',
         '-Wvla',
+        '-Wincompatible-pointer-types',
     ]
 else
     test_wflags = []

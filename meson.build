@@ -457,7 +457,7 @@ else
     build_dri2 = get_option('dri2') == 'true'
 endif
 
-if host_machine.system() in ['freebsd', 'openbsd']
+if host_machine.system() in ['freebsd', 'openbsd', 'dragonfly']
    epoll_dep = dependency('epoll-shim')
    epoll_inc = join_paths(epoll_dep.get_variable('prefix'), get_option('includedir'), 'libepoll-shim')
 else

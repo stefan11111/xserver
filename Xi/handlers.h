@@ -93,7 +93,6 @@ int SProcXISelectEvents(ClientPtr client);
 int SProcXISetClientPointer(ClientPtr client);
 int SProcXISetFocus(ClientPtr client);
 int SProcXIWarpPointer(ClientPtr client);
-int SProcXSelectExtensionEvent(ClientPtr client);
 int SProcXSendExtensionEvent(ClientPtr client);
 int SProcXSetDeviceFocus(ClientPtr client);
 int SProcXUngrabDeviceButton(ClientPtr client);

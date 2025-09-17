@@ -97,7 +97,6 @@ int SProcXSelectExtensionEvent(ClientPtr client);
 int SProcXSendExtensionEvent(ClientPtr client);
 int SProcXSetDeviceFocus(ClientPtr client);
 int SProcXUngrabDeviceButton(ClientPtr client);
-int SProcXUngrabDevice(ClientPtr client);
 int SProcXUngrabDeviceKey(ClientPtr client);
 
 #endif /* _XSERVER_XI_HANDLERS_H */

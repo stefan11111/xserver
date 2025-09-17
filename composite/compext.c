@@ -124,8 +124,8 @@ ProcCompositeQueryVersion(ClientPtr client)
         swapl(&rep.majorVersion);
         swapl(&rep.minorVersion);
     }
-    X_SEND_REPLY_SIMPLE(client, rep);
-    return Success;
+
+    return X_SEND_REPLY_SIMPLE(client, rep);
 }
 
 #define VERIFY_WINDOW(pWindow, wid, client, mode)			\
@@ -303,8 +303,8 @@ SingleCompositeGetOverlayWindow(ClientPtr client, xCompositeGetOverlayWindowReq 
     if (client->swapped) {
         swapl(&rep.overlayWin);
     }
-    X_SEND_REPLY_SIMPLE(client, rep);
-    return Success;
+
+    return X_SEND_REPLY_SIMPLE(client, rep);
 }
 
 static int
@@ -858,8 +858,8 @@ ProcCompositeGetOverlayWindow(ClientPtr client)
     if (client->swapped) {
         swapl(&rep.overlayWin);
     }
-    X_SEND_REPLY_SIMPLE(client, rep);
-    return Success;
+
+    return X_SEND_REPLY_SIMPLE(client, rep);
 #else
     return SingleCompositeGetOverlayWindow(client, stuff);
 #endif /* XINERAMA */

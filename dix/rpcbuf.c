@@ -196,6 +196,7 @@ Bool x_rpcbuf_write_CARD16s(x_rpcbuf_t *rpcbuf, const CARD16 *values,
     return TRUE;
 }
 
+_X_EXPORT /* only for GLX, not part of public ABI */
 Bool x_rpcbuf_write_CARD32s(x_rpcbuf_t *rpcbuf, const CARD32 *values,
                             size_t count)
 {

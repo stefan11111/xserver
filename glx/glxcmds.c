@@ -1886,28 +1886,17 @@ DoGetDrawableAttributes(__GLXclientState * cl, XID drawId)
 #undef ATTRIB
 
     xGLXGetDrawableAttributesReply reply = {
-        .type = X_Reply,
-        .sequenceNumber = client->sequence,
-        .length = num << 1,
         .numAttribs = num
     };
 
     if (client->swapped) {
-        int length = reply.length;
-
-        swaps(&reply.sequenceNumber);
-        swapl(&reply.length);
         swapl(&reply.numAttribs);
-        WriteToClient(client, sizeof(xGLXGetDrawableAttributesReply), &reply);
-        SwapLongs(attributes, length);
-        WriteToClient(client, length << 2, attributes);
-    }
-    else {
-        WriteToClient(client, sizeof(xGLXGetDrawableAttributesReply), &reply);
-        WriteToClient(client, reply.length * sizeof(CARD32), attributes);
     }
 
-    return Success;
+    x_rpcbuf_t rpcbuf = { .swapped = client->swapped, .err_clear = TRUE };
+    x_rpcbuf_write_CARD32s(&rpcbuf, attributes, num << 1);
+
+    return X_SEND_REPLY_WITH_RPCBUF(client, reply, rpcbuf);
 }
 
 int

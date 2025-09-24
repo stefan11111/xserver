@@ -353,16 +353,6 @@ SProcXkbPerClientFlags(ClientPtr client)
 }
 
 static int _X_COLD
-SProcXkbListComponents(ClientPtr client)
-{
-    REQUEST(xkbListComponentsReq);
-    REQUEST_AT_LEAST_SIZE(xkbListComponentsReq);
-    swaps(&stuff->deviceSpec);
-    swaps(&stuff->maxNames);
-    return ProcXkbListComponents(client);
-}
-
-static int _X_COLD
 SProcXkbGetKbdByName(ClientPtr client)
 {
     REQUEST(xkbGetKbdByNameReq);
@@ -457,7 +447,7 @@ SProcXkbDispatch(ClientPtr client)
     case X_kbPerClientFlags:
         return SProcXkbPerClientFlags(client);
     case X_kbListComponents:
-        return SProcXkbListComponents(client);
+        return ProcXkbListComponents(client);
     case X_kbGetKbdByName:
         return SProcXkbGetKbdByName(client);
     case X_kbGetDeviceInfo:

@@ -102,7 +102,7 @@ SOFTWARE.
 #include "xvdisp.h"
 
 #define SCREEN_PROLOGUE(pScreen, field) ((pScreen)->field = ((XvScreenPtr) \
-    dixLookupPrivate(&(pScreen)->devPrivates, XvScreenKey))->field)
+    dixLookupPrivate(&(pScreen)->devPrivates, &XvScreenKeyRec))->field)
 
 #define SCREEN_EPILOGUE(pScreen, field, wrapper)\
     ((pScreen)->field = wrapper)
@@ -118,7 +118,6 @@ static DevPrivateKeyRec XvScreenKeyRec;
 
 Bool noXvExtension = FALSE;
 
-#define XvScreenKey (&XvScreenKeyRec)
 static x_server_generation_t XvExtensionGeneration = 0;
 static x_server_generation_t XvScreenGeneration = 0;
 static x_server_generation_t XvResourceGeneration = 0;
@@ -283,7 +282,7 @@ XvScreenInit(ScreenPtr pScreen)
     if (!dixRegisterPrivateKey(&XvScreenKeyRec, PRIVATE_SCREEN, 0))
         return BadAlloc;
 
-    if (dixLookupPrivate(&pScreen->devPrivates, XvScreenKey)) {
+    if (dixLookupPrivate(&pScreen->devPrivates, &XvScreenKeyRec)) {
         ErrorF("XvScreenInit: screen devPrivates ptr non-NULL before init\n");
     }
 
@@ -295,7 +294,7 @@ XvScreenInit(ScreenPtr pScreen)
         return BadAlloc;
     }
 
-    dixSetPrivate(&pScreen->devPrivates, XvScreenKey, pxvs);
+    dixSetPrivate(&pScreen->devPrivates, &XvScreenKeyRec, pxvs);
 
     dixScreenHookWindowDestroy(pScreen, XvWindowDestroy);
     dixScreenHookClose(pScreen, XvScreenClose);
@@ -308,7 +307,7 @@ static void XvScreenClose(CallbackListPtr *pcbl, ScreenPtr pScreen, void *unused
 {
     XvScreenPtr pxvs;
 
-    pxvs = (XvScreenPtr) dixLookupPrivate(&pScreen->devPrivates, XvScreenKey);
+    pxvs = (XvScreenPtr) dixLookupPrivate(&pScreen->devPrivates, &XvScreenKeyRec);
 
     dixScreenUnhookWindowDestroy(pScreen, XvWindowDestroy);
     dixScreenUnhookClose(pScreen, XvScreenClose);
@@ -316,7 +315,7 @@ static void XvScreenClose(CallbackListPtr *pcbl, ScreenPtr pScreen, void *unused
 
     free(pxvs);
 
-    dixSetPrivate(&pScreen->devPrivates, XvScreenKey, NULL);
+    dixSetPrivate(&pScreen->devPrivates, &XvScreenKeyRec, NULL);
 }
 
 static void
@@ -328,7 +327,7 @@ XvResetProc(ExtensionEntry * extEntry)
 DevPrivateKey
 XvGetScreenKey(void)
 {
-    return XvScreenKey;
+    return &XvScreenKeyRec;
 }
 
 unsigned long
@@ -341,7 +340,7 @@ static void
 XvStopAdaptors(DrawablePtr pDrawable)
 {
     ScreenPtr pScreen = pDrawable->pScreen;
-    XvScreenPtr pxvs = dixLookupPrivate(&pScreen->devPrivates, XvScreenKey);
+    XvScreenPtr pxvs = dixLookupPrivate(&pScreen->devPrivates, &XvScreenKeyRec);
     XvAdaptorPtr pa = pxvs->pAdaptors;
     int na = pxvs->nAdaptors;
 

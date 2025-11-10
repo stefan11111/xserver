@@ -111,18 +111,6 @@ typedef struct {
 } drmmode_tearfree_rec, *drmmode_tearfree_ptr;
 
 typedef struct {
-    uint16_t width, height;
-} drmmode_cursor_dim_rec, *drmmode_cursor_dim_ptr;
-
-typedef struct {
-    uint16_t num_dimensions;
-
-    /* Sorted from smallest to largest. */
-    drmmode_cursor_dim_rec* dimensions;
-    struct dumb_bo *bo;
-} drmmode_cursor_rec, *drmmode_cursor_ptr;
-
-typedef struct {
     drmmode_ptr drmmode;
     drmModeCrtcPtr mode_crtc;
     uint32_t vblank_pipe;
@@ -233,15 +221,6 @@ typedef struct _msPixmapPriv {
 
 #define msGetPixmapPriv(drmmode, p) ((msPixmapPrivPtr)dixGetPrivateAddr(&(p)->devPrivates, &(drmmode)->pixmapPrivateKeyRec))
 
-typedef struct _msSpritePriv {
-    CursorPtr cursor;
-    Bool sprite_visible;
-} msSpritePrivRec, *msSpritePrivPtr;
-
-#define msGetSpritePriv(dev, ms, screen) dixLookupScreenPrivate(&(dev)->devPrivates, &(ms)->drmmode.spritePrivateKeyRec, screen)
-
-extern miPointerSpriteFuncRec drmmode_sprite_funcs;
-
 Bool drmmode_is_format_supported(ScrnInfoPtr scrn, uint32_t format,
                                  uint64_t modifier, Bool async_flip);
 int drmmode_bo_import(drmmode_ptr drmmode, drmmode_bo *bo,
@@ -273,7 +252,6 @@ extern void drmmode_uevent_fini(ScrnInfoPtr scrn, drmmode_ptr drmmode);
 
 Bool drmmode_create_initial_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode);
 void *drmmode_map_front_bo(drmmode_ptr drmmode);
-Bool drmmode_map_cursor_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode);
 void drmmode_free_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode);
 void drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmmode,
                              int *depth, int *bpp);

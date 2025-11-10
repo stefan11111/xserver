@@ -45,6 +45,7 @@
 #include <gbm.h>
 #endif
 
+#include "drmmode_cursor.h"
 #include "drmmode_display.h"
 #define MS_LOGLEVEL_DEBUG 4
 

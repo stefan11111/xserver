@@ -2,6 +2,7 @@ modesetting_srcs = [
     'dri2.c',
     'driver.c',
     'drmmode_bo.c',
+    'drmmode_cursor.c',
     'drmmode_display.c',
     'dumb_bo.c',
     'pageflip.c',

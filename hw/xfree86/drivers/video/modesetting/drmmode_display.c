@@ -38,7 +38,6 @@
 #include "os/fmt.h"
 #include "present/present_priv.h"
 
-#include "dumb_bo.h"
 #include "inputstr.h"
 #include "xf86str.h"
 #include "X11/Xatom.h"
@@ -52,6 +51,7 @@
 #include <xf86drm.h>
 #include "xf86Crtc.h"
 #include "drmmode_display.h"
+#include "drmmode_bo.h"
 
 #include <cursorstr.h>
 
@@ -1003,60 +1003,6 @@ drmmode_crtc_flip(xf86CrtcPtr crtc, uint32_t fb_id, int x, int y,
 
     return drmModePageFlip(ms->fd, drmmode_crtc->mode_crtc->crtc_id,
                            fb_id, flags, data);
-}
-
-int
-drmmode_bo_destroy(drmmode_ptr drmmode, drmmode_bo *bo)
-{
-    int ret;
-
-#ifdef GLAMOR_HAS_GBM
-    if (bo->gbm) {
-        gbm_bo_destroy(bo->gbm);
-        bo->gbm = NULL;
-    }
-#endif
-
-    if (bo->dumb) {
-        ret = dumb_bo_destroy(drmmode->fd, bo->dumb);
-        if (ret == 0)
-            bo->dumb = NULL;
-    }
-
-    return 0;
-}
-
-uint32_t
-drmmode_bo_get_pitch(drmmode_bo *bo)
-{
-#ifdef GLAMOR_HAS_GBM
-    if (bo->gbm)
-        return gbm_bo_get_stride(bo->gbm);
-#endif
-
-    return bo->dumb->pitch;
-}
-
-static Bool
-drmmode_bo_has_bo(drmmode_bo *bo)
-{
-#ifdef GLAMOR_HAS_GBM
-    if (bo->gbm)
-        return TRUE;
-#endif
-
-    return bo->dumb != NULL;
-}
-
-uint32_t
-drmmode_bo_get_handle(drmmode_bo *bo)
-{
-#ifdef GLAMOR_HAS_GBM
-    if (bo->gbm)
-        return gbm_bo_get_handle(bo->gbm).u32;
-#endif
-
-    return bo->dumb->handle;
 }
 
 static void *
@@ -2259,11 +2205,7 @@ drmmode_shadow_fb_allocate(xf86CrtcPtr crtc, int width, int height,
         return NULL;
     }
 
-#ifdef GLAMOR_HAS_GBM
-    if (drmmode->gbm)
-        return bo->gbm;
-#endif
-    return bo->dumb;
+    return drmmode_bo_get_bo(bo);
 }
 
 static void *
@@ -2318,7 +2260,7 @@ drmmode_shadow_fb_create(xf86CrtcPtr crtc, void *data, int width, int height,
         }
     }
 
-    if (!drmmode_bo_has_bo(bo)) {
+    if (!drmmode_bo_get_bo(bo)) {
         xf86DrvMsg(scrn->scrnIndex, X_ERROR,
                    "Couldn't allocate shadow pixmap for CRTC\n");
         return NULL;

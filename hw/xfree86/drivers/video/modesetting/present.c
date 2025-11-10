@@ -41,7 +41,7 @@
 #include <present.h>
 
 #include "driver.h"
-#include "drmmode_display.h"
+#include "drmmode_bo.h"
 
 #if 0
 #define DebugPresent(x) ErrorF x

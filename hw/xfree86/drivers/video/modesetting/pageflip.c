@@ -30,6 +30,8 @@
 
 #include "driver.h"
 
+#include "drmmode_bo.h"
+
 /*
  * Flush the DRM event queue when full; makes space for new events.
  *

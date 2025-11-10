@@ -29,14 +29,7 @@
 #ifndef DRMMODE_DISPLAY_H
 #define DRMMODE_DISPLAY_H
 
-#include "xf86drmMode.h"
-#ifdef CONFIG_UDEV_KMS
-#include "libudev.h"
-#endif
-
-#include "dumb_bo.h"
-
-struct gbm_device;
+#include "drmmode_common.h"
 
 enum drmmode_plane_property {
     DRMMODE_PLANE_TYPE = 0,
@@ -76,75 +69,6 @@ enum drmmode_crtc_property {
     DRMMODE_CRTC_CTM,
     DRMMODE_CRTC__COUNT
 };
-
-typedef struct {
-    uint32_t width;
-    uint32_t height;
-    struct dumb_bo *dumb;
-#ifdef GLAMOR_HAS_GBM
-    Bool used_modifiers;
-    struct gbm_bo *gbm;
-#endif
-} drmmode_bo;
-
-typedef struct {
-    int fd;
-    unsigned fb_id;
-    drmModeFBPtr mode_fb;
-    int cpp;
-    int kbpp;
-    ScrnInfoPtr scrn;
-
-    struct gbm_device *gbm;
-
-#ifdef CONFIG_UDEV_KMS
-    struct udev_monitor *uevent_monitor;
-    InputHandlerProc uevent_handler;
-#endif
-    drmEventContext event_context;
-    drmmode_bo front_bo;
-    Bool sw_cursor;
-    Bool set_cursor_failed;
-
-    /* Broken-out options. */
-    OptionInfoPtr Options;
-
-    Bool glamor;
-    Bool shadow_enable;
-    Bool shadow_enable2;
-    /** Is Option "PageFlip" enabled? */
-    Bool pageflip;
-    Bool force_24_32;
-    void *shadow_fb;
-    void *shadow_fb2;
-
-    DevPrivateKeyRec pixmapPrivateKeyRec;
-    DevScreenPrivateKeyRec spritePrivateKeyRec;
-    DevPrivateKeyRec vrrPrivateKeyRec;
-    /* Number of SW cursors currently visible on this screen */
-    int sprites_visible;
-
-    Bool reverse_prime_offload_mode;
-
-    Bool is_secondary;
-
-    PixmapPtr fbcon_pixmap;
-
-    Bool dri2_flipping;
-    Bool present_flipping;
-    Bool flip_bo_import_failed;
-
-    Bool can_async_flip;
-    Bool async_flip_secondaries;
-    Bool dri2_enable;
-    Bool present_enable;
-    Bool tearfree_enable;
-
-    uint32_t vrr_prop_id;
-    Bool use_ctm;
-
-    Bool pending_modeset;
-} drmmode_rec, *drmmode_ptr;
 
 typedef struct {
     const char *name;
@@ -322,9 +246,6 @@ Bool drmmode_is_format_supported(ScrnInfoPtr scrn, uint32_t format,
                                  uint64_t modifier, Bool async_flip);
 int drmmode_bo_import(drmmode_ptr drmmode, drmmode_bo *bo,
                       uint32_t *fb_id);
-int drmmode_bo_destroy(drmmode_ptr drmmode, drmmode_bo *bo);
-uint32_t drmmode_bo_get_pitch(drmmode_bo *bo);
-uint32_t drmmode_bo_get_handle(drmmode_bo *bo);
 Bool drmmode_glamor_handle_new_screen_pixmap(drmmode_ptr drmmode);
 void *drmmode_map_secondary_bo(drmmode_ptr drmmode, msPixmapPrivPtr ppriv);
 Bool drmmode_SetSlaveBO(PixmapPtr ppix,

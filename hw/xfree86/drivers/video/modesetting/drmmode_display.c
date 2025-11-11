@@ -1062,21 +1062,69 @@ drmmode_bo_get_handle(drmmode_bo *bo)
 static void *
 drmmode_bo_map(drmmode_ptr drmmode, drmmode_bo *bo)
 {
-    int ret;
+    if (bo->map) {
+        return bo->map;
+    }
 
 #ifdef GLAMOR_HAS_GBM
-    if (bo->gbm)
-        return NULL;
+    if (bo->map) {
+        return bo->map;
+    }
+
+    if (bo->gbm) {
+        /* We shouldn't read from gpu memory */
+        uint32_t stride;
+        void* unused;
+        void *map = gbm_bo_map(bo->gbm, 0, 0, bo->width, bo->height, GBM_BO_TRANSFER_WRITE, &stride, &unused);
+        if (map) {
+            bo->map = map;
+            return bo->map;
+        }
+    }
 #endif
 
-    if (bo->dumb->ptr)
-        return bo->dumb->ptr;
-
-    ret = dumb_bo_map(drmmode->fd, bo->dumb);
+    int ret = dumb_bo_map(drmmode->fd, bo->dumb);
     if (ret)
         return NULL;
 
-    return bo->dumb->ptr;
+    bo->map = bo->dumb->ptr;
+    return bo->map;
+}
+
+static uint32_t drmmode_gbm_format_for_depth(int depth);
+
+static void
+drmmode_bo_backing_bo_from_fd(drmmode_ptr drmmode, drmmode_bo *bo, int fd_handle, int pitch, int size)
+{
+    /* pitch == width * cpp */
+    int width = pitch / drmmode->cpp;
+    /* size = pitch * height */
+    int height = size / pitch;
+
+
+#ifdef GLAMOR_HAS_GBM
+    if (drmmode->gbm) {
+        uint32_t format = drmmode_gbm_format_for_depth(drmmode->kbpp);
+        struct gbm_import_fd_data import_data = {.fd = fd_handle,
+                                                 .width = height,
+                                                 .height = width,
+                                                 .stride = pitch,
+                                                 .format = format,
+                                                };
+        /* Do we need scanout, even though this is a backing bo? */
+        struct gbm_bo *ret = gbm_bo_import(drmmode->gbm, GBM_BO_IMPORT_FD, &import_data, GBM_BO_USE_RENDERING);
+        if (ret) {
+            bo->width = width;
+            bo->height = height;
+            bo->gbm = ret;
+            bo->used_modifiers = FALSE;
+            return;
+        }
+    }
+#endif
+    bo->width = width;
+    bo->height = height;
+    bo->dumb = dumb_get_bo_from_fd(drmmode->fd, fd_handle, pitch, size);
 }
 
 int
@@ -1125,6 +1173,24 @@ drmmode_bo_import(drmmode_ptr drmmode, drmmode_bo *bo,
                         drmmode_bo_get_handle(bo), fb_id);
 }
 
+/* formats taken from glamor/glamor_egl.c */
+static uint32_t
+drmmode_gbm_format_for_depth(int depth)
+{
+    switch (depth) {
+    case 8:
+        return GBM_FORMAT_R8;
+    case 15:
+        return GBM_FORMAT_ARGB1555;
+    case 16:
+        return GBM_FORMAT_RGB565;
+    case 30:
+        return GBM_FORMAT_ARGB2101010;
+    default:
+        return GBM_FORMAT_ARGB8888;
+    }
+}
+
 static Bool
 drmmode_create_front_bo(drmmode_ptr drmmode, drmmode_bo *bo,
                         unsigned width, unsigned height, unsigned bpp)
@@ -1134,22 +1200,7 @@ drmmode_create_front_bo(drmmode_ptr drmmode, drmmode_bo *bo,
 
 #ifdef GLAMOR_HAS_GBM
     if (drmmode->glamor) {
-        uint32_t format;
-
-        switch (drmmode->scrn->depth) {
-        case 15:
-            format = GBM_FORMAT_ARGB1555;
-            break;
-        case 16:
-            format = GBM_FORMAT_RGB565;
-            break;
-        case 30:
-            format = GBM_FORMAT_ARGB2101010;
-            break;
-        default:
-            format = GBM_FORMAT_ARGB8888;
-            break;
-        }
+        uint32_t format = drmmode_gbm_format_for_depth(drmmode->scrn->depth);
 
 #ifndef GBM_BO_USE_FRONT_RENDERING
 #define GBM_BO_USE_FRONT_RENDERING 0
@@ -1198,16 +1249,16 @@ drmmode_SetSlaveBO(PixmapPtr ppix,
     msPixmapPrivPtr ppriv = msGetPixmapPriv(drmmode, ppix);
 
     if (fd_handle == -1) {
-        dumb_bo_destroy(drmmode->fd, ppriv->backing_bo);
-        ppriv->backing_bo = NULL;
+        drmmode_bo_destroy(drmmode, &ppriv->backing_bo);
         return TRUE;
     }
 
-    ppriv->backing_bo =
-        dumb_get_bo_from_fd(drmmode->fd, fd_handle, pitch, size);
-    if (!ppriv->backing_bo)
+    memset(&ppriv->backing_bo, 0, sizeof(ppriv->backing_bo));
+    drmmode_bo_backing_bo_from_fd(drmmode, &ppriv->backing_bo, fd_handle, pitch, size);
+    if (!drmmode_bo_get_bo(&ppriv->backing_bo))
         return FALSE;
 
+    /* XXX We're importing a dmabuf, and closing it's fd??? This can't be right. XXX */
     close(fd_handle);
     return TRUE;
 }
@@ -2183,7 +2234,7 @@ drmmode_set_target_scanout_pixmap_cpu(xf86CrtcPtr crtc, PixmapPtr ppix,
                      ppix->drawable.height,
                      ppix->drawable.depth,
                      ppix->drawable.bitsPerPixel,
-                     ppix->devKind, ppriv->backing_bo->handle, &ppriv->fb_id);
+                     ppix->devKind, drmmode_bo_get_handle(&ppriv->backing_bo), &ppriv->fb_id);
     }
     *target = ppix;
     return TRUE;
@@ -4881,16 +4932,7 @@ drmmode_map_front_bo(drmmode_ptr drmmode)
 void *
 drmmode_map_secondary_bo(drmmode_ptr drmmode, msPixmapPrivPtr ppriv)
 {
-    int ret;
-
-    if (ppriv->backing_bo->ptr)
-        return ppriv->backing_bo->ptr;
-
-    ret = dumb_bo_map(drmmode->fd, ppriv->backing_bo);
-    if (ret)
-        return NULL;
-
-    return ppriv->backing_bo->ptr;
+    return drmmode_bo_map(drmmode, &ppriv->backing_bo);
 }
 
 Bool

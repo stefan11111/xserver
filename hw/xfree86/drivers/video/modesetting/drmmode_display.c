@@ -62,6 +62,10 @@
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
+#ifndef GBM_BO_USE_FRONT_RENDERING
+#define GBM_BO_USE_FRONT_RENDERING 0
+#endif
+
 static Bool drmmode_xf86crtc_resize(ScrnInfoPtr scrn, int width, int height);
 static PixmapPtr drmmode_create_pixmap_header(ScreenPtr pScreen, int width, int height,
                                               int depth, int bitsPerPixel, int devKind,
@@ -1090,7 +1094,7 @@ drmmode_bo_map(drmmode_ptr drmmode, drmmode_bo *bo)
         /* We shouldn't read from gpu memory */
         uint32_t stride;
         void* unused;
-        void* map = gbm_bo_map(bo->gbm, 0, 0, bo->width, bo->height, GBM_BO_TRANSFER_WRITE | GBM_BO_TRANSFER_READ, &stride, &unused);
+        void* map = gbm_bo_map(bo->gbm, 0, 0, bo->width, bo->height, GBM_BO_TRANSFER_WRITE, &stride, &unused);
         if (map) {
             bo->map = map;
             return bo->map;
@@ -1228,12 +1232,42 @@ drmmode_create_cursor_bo(drmmode_ptr drmmode, drmmode_bo *bo,
                                 format,
                                 GBM_BO_USE_CURSOR | GBM_BO_USE_WRITE);
         if (bo->gbm) {
+            bo->used_modifiers = FALSE;
             return TRUE;
         }
     }
 #endif
 
     bo->dumb = dumb_bo_create(drmmode->fd, bo->width, bo->height, bpp);
+    return bo->dumb != NULL;
+}
+
+/* XXX Do we really need to do this? XXX */
+static Bool
+drmmode_create_bpp_probe_bo(drmmode_ptr drmmode, drmmode_bo *bo,
+                            unsigned width, unsigned height, unsigned bpp, void **out_gbm_dev)
+{
+    *out_gbm_dev = NULL;
+#ifdef GLAMOR_HAS_GBM
+    struct gbm_device *gbm_dev = drmmode->gbm;
+    if (!gbm_dev) {
+        /* There is no way this is set right now, as glamor isn't yet initialized. */
+        gbm_dev = gbm_create_device(drmmode->fd);
+        *out_gbm_dev = gbm_dev;
+    }
+
+    if (gbm_dev) {
+        uint32_t format = drmmode_gbm_format_for_depth(bpp);
+
+        bo->gbm = gbm_bo_create(gbm_dev, width, height, format,
+                                GBM_BO_USE_RENDERING | GBM_BO_USE_SCANOUT);
+        if (bo->gbm) {
+            bo->used_modifiers = FALSE;
+            return TRUE;
+        }
+    }
+#endif
+    bo->dumb = dumb_bo_create(drmmode->fd, width, height, bpp);
     return bo->dumb != NULL;
 }
 
@@ -1245,14 +1279,10 @@ drmmode_create_front_bo(drmmode_ptr drmmode, drmmode_bo *bo,
     bo->height = height;
 
 #ifdef GLAMOR_HAS_GBM
-    if (drmmode->glamor) {
-        uint32_t format = drmmode_gbm_format_for_depth(drmmode->scrn->depth);
-
-#ifndef GBM_BO_USE_FRONT_RENDERING
-#define GBM_BO_USE_FRONT_RENDERING 0
-#endif
+    uint32_t format = drmmode_gbm_format_for_depth(drmmode->scrn->depth);
 
 #ifdef GBM_BO_WITH_MODIFIERS
+    if (drmmode->glamor && drmmode->gbm) {
         uint32_t num_modifiers;
         uint64_t *modifiers = NULL;
         num_modifiers = get_modifiers_set(drmmode->scrn, format, &modifiers,
@@ -1274,13 +1304,18 @@ drmmode_create_front_bo(drmmode_ptr drmmode, drmmode_bo *bo,
                 return TRUE;
             }
         }
+    }
 #endif
 
+    if (drmmode->gbm) {
+        /* We don't need glamor if modifiers aren't used */
         bo->gbm = gbm_bo_create(drmmode->gbm, width, height, format,
                                 GBM_BO_USE_RENDERING | GBM_BO_USE_SCANOUT |
                                 GBM_BO_USE_FRONT_RENDERING);
-        bo->used_modifiers = FALSE;
-        return bo->gbm != NULL;
+        if (bo->gbm) {
+            bo->used_modifiers = FALSE;
+            return TRUE;
+        }
     }
 #endif
 
@@ -5029,7 +5064,7 @@ drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int *depth,
 {
     drmModeResPtr mode_res;
     uint64_t value;
-    struct dumb_bo *bo;
+    drmmode_bo bo = {0};
     uint32_t fb_id;
     int ret;
 
@@ -5041,6 +5076,8 @@ drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int *depth,
         return;
     }
 
+    /* XXX Why do we not trust the above value if it isn't 16 or 8? XXX */
+
     *depth = 24;
     mode_res = drmModeGetResources(drmmode->fd);
     if (!mode_res)
@@ -5050,28 +5087,42 @@ drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int *depth,
         mode_res->min_width = 1;
     if (mode_res->min_height == 0)
         mode_res->min_height = 1;
+
+    /* We don't have to worry about overriding anything, this is not yet set */
+    drmmode->kbpp = 32;
+
+    void* free_gbm_device;
+
     /*create a bo */
-    bo = dumb_bo_create(drmmode->fd, mode_res->min_width, mode_res->min_height,
-                        32);
-    if (!bo) {
+    ret = drmmode_create_bpp_probe_bo(drmmode, &bo, mode_res->min_width, mode_res->min_height, 32, &free_gbm_device);
+
+    if (!ret) {
         *bpp = 24;
         goto out;
     }
 
+    uint32_t handle = drmmode_bo_get_handle(&bo);
+    uint32_t pitch  = drmmode_bo_get_pitch(&bo);
+
     ret = drmModeAddFB(drmmode->fd, mode_res->min_width, mode_res->min_height,
-                       24, 32, bo->pitch, bo->handle, &fb_id);
+                       24, 32, pitch, handle, &fb_id);
 
     if (ret) {
         *bpp = 24;
-        dumb_bo_destroy(drmmode->fd, bo);
+        drmmode_bo_destroy(drmmode, &bo);
         goto out;
     }
 
     drmModeRmFB(drmmode->fd, fb_id);
     *bpp = 32;
 
-    dumb_bo_destroy(drmmode->fd, bo);
+    drmmode_bo_destroy(drmmode, &bo);
  out:
+#ifdef GLAMOR_HAS_GBM
+    if (free_gbm_device) {
+        gbm_device_destroy(free_gbm_device);
+    }
+#endif
     drmModeFreeResources(mode_res);
     return;
 }

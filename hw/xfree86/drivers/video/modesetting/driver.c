@@ -1951,8 +1951,11 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
         return FALSE;
 
 #ifdef GLAMOR_HAS_GBM
-    if (ms->drmmode.glamor)
+    if (ms->drmmode.glamor) {
         ms->drmmode.gbm = ms->glamor.egl_get_gbm_device(pScreen);
+    } else {
+        ms->drmmode.gbm = gbm_create_device(ms->drmmode.fd);
+    }
 #endif
 
     /* HW dependent - FIXME */
@@ -2271,6 +2274,14 @@ CloseScreen(ScreenPtr pScreen)
     if (!ms->drmmode.sw_cursor || ms->drmmode.set_cursor_failed) {
         xf86_cursors_fini(pScreen);
     }
+
+#ifdef GLAMOR_HAS_GBM
+    /* If we didn't get the gbm device from glamor, we have to free it ourserves */
+    if (!ms->drmmode.glamor && ms->drmmode.gbm) {
+        gbm_device_destroy(ms->drmmode.gbm);
+        ms->drmmode.gbm = NULL;
+    }
+#endif
 
     drmmode_uevent_fini(pScrn, &ms->drmmode);
 

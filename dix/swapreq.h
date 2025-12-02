@@ -68,7 +68,6 @@ int SProcReparentWindow(ClientPtr client);
 int SProcSetClipRectangles(ClientPtr client);
 int SProcSetDashes(ClientPtr client);
 int SProcSetFontPath(ClientPtr client);
-int SProcSetScreenSaver(ClientPtr client);
 int SProcStoreColors(ClientPtr client);
 int SProcStoreNamedColor(ClientPtr client);
 int SProcTranslateCoords(ClientPtr client);

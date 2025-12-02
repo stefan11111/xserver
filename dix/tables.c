@@ -426,7 +426,7 @@ int (*SwappedProcVector[256]) (ClientPtr /* client */) = {
     SProcQueryColors,
     ProcLookupColor,
     SProcCreateCursor,
-    SProcCreateGlyphCursor,
+    ProcCreateGlyphCursor,
     ProcFreeCursor,                     /* 95 */
     SProcRecolorCursor,
     SProcQueryBestSize,

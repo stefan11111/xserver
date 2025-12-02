@@ -62,7 +62,6 @@ int SProcOpenFont(ClientPtr client);
 int SProcPutImage(ClientPtr client);
 int SProcQueryBestSize(ClientPtr client);
 int SProcQueryColors(ClientPtr client);
-int SProcQueryExtension(ClientPtr client);
 int SProcReparentWindow(ClientPtr client);
 int SProcSetClipRectangles(ClientPtr client);
 int SProcSetDashes(ClientPtr client);

@@ -46,21 +46,89 @@
 
 int fbSlotClaimed = 0;
 
+static Bool
+xf86_check_fb_slot(GDevPtr dev, const char* driver_name)
+{
+    int i, j, k;
+#ifdef XSERVER_LIBPCIACCESS
+    struct pci_device fake, *pdev;
+#endif
+
+    if (dev == NULL) {
+        return FALSE;
+    }
+
+#ifdef XSERVER_LIBPCIACCESS
+    if (dev->busID &&
+        xf86ParsePciBusString(dev->busID, &i, &j, &k)) {
+            fake.domain = 0;
+            fake.bus = i;
+            fake.dev = j;
+            fake.func = k;
+    } else {
+        if (pciSlotClaimed
+#ifdef XSERVER_PLATFORM_BUS
+            || platformSlotClaimed
+#endif
+#if defined(__sparc__) || defined(__sparc)
+            || sbusSlotClaimed
+#endif
+        ) {
+            /**
+             * XXX This is a hack XXX
+             * Drivers like fbdev and modesetting, when in framebuffer mode, can drive almos anything.
+             * However, this also means that, when autoconfiguring, the X server may pick
+             * one of these drivers and use it alongside another DDX driver, causing issues.
+             */
+            LogMessageVerb(X_ERROR, 0, "Refusing to use driver %s in framebuffer mode.\n", driver_name);
+            LogMessageVerb(X_ERROR, 0, "Please specify busIDs for all framebuffer devices\n");
+            return FALSE;
+        }
+
+        /* If no slots were claimed, we can't conflict with anything */
+        return TRUE;
+    }
+
+    for (i = 0; i < xf86NumEntities; i++) {
+        const EntityPtr pent = xf86Entities[i];
+
+        if (pent->numInstances <= 0) {
+        /* All devices are unclaimed, ignoring this entity */
+            continue;
+        }
+
+        if (fake.domain != PCI_MATCH_ANY) {
+            pdev = xf86GetPciInfoForEntity(i);
+            if (pdev != NULL) {
+                if (MATCH_PCI_DEVICES(pdev, &fake))
+                    return FALSE;
+            }
+        }
+#endif
+    }
+    return TRUE;
+}
+
+
 int
 xf86ClaimFbSlot(DriverPtr drvp, int chipset, GDevPtr dev, Bool active)
 {
     EntityPtr p;
     int num;
 
-    num = xf86AllocateEntity();
-    p = xf86Entities[num];
-    p->driver = drvp;
-    p->chipset = 0;
-    p->bus.type = BUS_NONE;
-    p->active = active;
-    p->inUse = FALSE;
-    xf86AddDevToEntity(num, dev);
+    if (xf86_check_fb_slot(dev, drvp->driverName)) {
+        num = xf86AllocateEntity();
+        p = xf86Entities[num];
+        p->driver = drvp;
+        p->chipset = 0;
+        p->bus.type = BUS_NONE;
+        p->active = active;
+        p->inUse = FALSE;
+        xf86AddDevToEntity(num, dev);
 
-    fbSlotClaimed++;
-    return num;
+        fbSlotClaimed++;
+        return num;
+    } else {
+        return -1;
+    }
 }

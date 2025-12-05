@@ -46,6 +46,41 @@
 
 int fbSlotClaimed = 0;
 
+#ifdef XSERVER_LIBPCIACCESS
+static const char*
+xf86_get_fb_dev_path(GDevPtr dev)
+{
+    const char* device_path = NULL;
+
+    /**
+      * These option names are driver specific.
+      * If we need to handle another driver claiming fb slots,
+      * we'll have to add it's device path option name here.
+      */
+
+    /* for modesetting */
+    device_path = xf86FindOptionValue(dev->options, "kmsdev");
+    if (device_path) {
+        return device_path;
+    }
+
+    /* for xf86-video-fbdev, but not only */
+    device_path = xf86FindOptionValue(dev->options, "fbdev");
+    if (device_path) {
+        return device_path;
+    }
+
+    /* for xf86-video-scfb */
+    device_path = xf86FindOptionValue(dev->options, "device");
+    if (device_path) {
+        return device_path;
+    }
+
+    /* See the fbdevhw module for more info */
+    return getenv("FRAMEBUFFER");
+}
+#endif
+
 static Bool
 xf86_check_fb_slot(GDevPtr dev, const char* driver_name)
 {
@@ -58,28 +93,25 @@ xf86_check_fb_slot(GDevPtr dev, const char* driver_name)
     struct pci_device fake, *pdev;
 
     if (dev->busID &&
-        xf86ParsePciBusString(dev->busID, &i, &j, &k)) {
-        /**
-         * These option names are driver specific.
-         * If we need to handle another driver claiming fb slots,
-         * we'll have to add it's device path option name here.
-         */
-        const char* ms_path = xf86FindOptionValue(dev->options, "kmsdev");
-        const char* fb_path = xf86FindOptionValue(dev->options, "fbdev");
-        const char* device_path = NULL;
-        if (ms_path) {
-            device_path = ms_path;
-        } else if (fb_path) {
-            device_path = fb_path;
-        } else {
-            /* See the fbdevhw module for more info */
-            device_path = getenv("FRAMEBUFFER");
+        (StringToBusType(dev->busID, NULL) != BUS_PCI)) {
+        /* If the framebuffer isn't pci based, skip checks */
+        const char* device_path = xf86_get_fb_dev_path(dev);
+        if (!device_path) {
+            device_path = "<driver default>";
         }
 
+        LogMessageVerb(X_INFO, 1, "Using driver: %s in framebuffer mode without collision checks "
+                                   "for non-pci device: %s with busID: %s.\n", driver_name, device_path, dev->busID);
+        return TRUE;
+    }
+
+    if (dev->busID &&
+        xf86ParsePciBusString(dev->busID, &i, &j, &k)) {
+        const char* device_path = xf86_get_fb_dev_path(dev);
         if (device_path) {
             /* If we have both a busID and a device path configured, assume the user knows what they are doing */
-            LogMessageVerb(X_INFO, 0, "Using driver: %s in framebuffer mode without collision checks "
-                                      "for device: %s with busID: %s.\n", driver_name, device_path, dev->busID);
+            LogMessageVerb(X_INFO, 1, "Using driver: %s in framebuffer mode without collision checks "
+                                      "for pci device: %s with busID: %s.\n", driver_name, device_path, dev->busID);
             return TRUE;
         }
 
@@ -102,9 +134,9 @@ xf86_check_fb_slot(GDevPtr dev, const char* driver_name)
              * However, this also means that, when autoconfiguring, the X server may pick
              * one of these drivers and use it alongside another DDX driver, causing issues.
              */
-            LogMessageVerb(X_ERROR, 0, "Refusing to use driver: %s in framebuffer mode.\n", driver_name);
-            LogMessageVerb(X_ERROR, 0, "Please specify busIDs for all framebuffer devices.\n");
-            LogMessageVerb(X_ERROR, 0, "If a slot collision is desired, please specify busIDs and device paths "
+            LogMessageVerb(X_ERROR, 1, "Refusing to use driver: %s in framebuffer mode.\n", driver_name);
+            LogMessageVerb(X_ERROR, 1, "Please specify busIDs for all framebuffer devices.\n");
+            LogMessageVerb(X_ERROR, 1, "If a slot collision is desired, please specify busIDs and device paths "
                                        "for all framebuffer devices where collisions are desired.\n");
             return FALSE;
         }

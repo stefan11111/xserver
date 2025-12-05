@@ -49,22 +49,44 @@ int fbSlotClaimed = 0;
 static Bool
 xf86_check_fb_slot(GDevPtr dev, const char* driver_name)
 {
-    int i, j, k;
-#ifdef XSERVER_LIBPCIACCESS
-    struct pci_device fake, *pdev;
-#endif
-
     if (dev == NULL) {
         return FALSE;
     }
 
 #ifdef XSERVER_LIBPCIACCESS
+    int i, j, k;
+    struct pci_device fake, *pdev;
+
     if (dev->busID &&
         xf86ParsePciBusString(dev->busID, &i, &j, &k)) {
-            fake.domain = 0;
-            fake.bus = i;
-            fake.dev = j;
-            fake.func = k;
+        /**
+         * These option names are driver specific.
+         * If we need to handle another driver claiming fb slots,
+         * we'll have to add it's device path option name here.
+         */
+        const char* ms_path = xf86FindOptionValue(dev->options, "kmsdev");
+        const char* fb_path = xf86FindOptionValue(dev->options, "fbdev");
+        const char* device_path = NULL;
+        if (ms_path) {
+            device_path = ms_path;
+        } else if (fb_path) {
+            device_path = fb_path;
+        } else {
+            /* See the fbdevhw module for more info */
+            device_path = getenv("FRAMEBUFFER");
+        }
+
+        if (device_path) {
+            /* If we have both a busID and a device path configured, assume the user knows what they are doing */
+            LogMessageVerb(X_INFO, 0, "Using driver: %s in framebuffer mode without collision checks "
+                                      "for device: %s with busID: %s.\n", driver_name, device_path, dev->busID);
+            return TRUE;
+        }
+
+        fake.domain = 0;
+        fake.bus = i;
+        fake.dev = j;
+        fake.func = k;
     } else {
         if (pciSlotClaimed
 #ifdef XSERVER_PLATFORM_BUS
@@ -80,8 +102,10 @@ xf86_check_fb_slot(GDevPtr dev, const char* driver_name)
              * However, this also means that, when autoconfiguring, the X server may pick
              * one of these drivers and use it alongside another DDX driver, causing issues.
              */
-            LogMessageVerb(X_ERROR, 0, "Refusing to use driver %s in framebuffer mode.\n", driver_name);
-            LogMessageVerb(X_ERROR, 0, "Please specify busIDs for all framebuffer devices\n");
+            LogMessageVerb(X_ERROR, 0, "Refusing to use driver: %s in framebuffer mode.\n", driver_name);
+            LogMessageVerb(X_ERROR, 0, "Please specify busIDs for all framebuffer devices.\n");
+            LogMessageVerb(X_ERROR, 0, "If a slot collision is desired, please specify busIDs and device paths "
+                                       "for all framebuffer devices where collisions are desired.\n");
             return FALSE;
         }
 
@@ -104,8 +128,8 @@ xf86_check_fb_slot(GDevPtr dev, const char* driver_name)
                     return FALSE;
             }
         }
-#endif
     }
+#endif
     return TRUE;
 }
 

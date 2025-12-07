@@ -45,7 +45,6 @@
 #ifdef CONFIG_MITSHM
 # if defined(__CYGWIN__)
 #  include <sys/param.h>
-#  include <sys/sysmacros.h>
 # endif
 #include <sys/sysmacros.h>
 #include <sys/ipc.h>
@@ -66,6 +65,7 @@
 
 #include "misc.h"
 #include "os.h"
+#include "os/osdep.h"
 #include "dixstruct.h"
 #include "gcstruct.h"
 #include "dixfontstr.h"

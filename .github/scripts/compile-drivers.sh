@@ -53,4 +53,5 @@ build_xf86drv_ac    video-suncg14           1.2.0.1
 build_xf86drv_ac    video-suncg3            1.1.3.0
 build_xf86drv_ac    video-vesa              2.6.0.2
 build_xf86drv_ac    video-vmware            13.4.0.3
+build_xf86drv_ac    video-voodoo            1.2.6.3
 build_xf86drv_ac    video-xgi               1.6.1.3

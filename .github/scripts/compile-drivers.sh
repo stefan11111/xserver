@@ -60,6 +60,7 @@ build_xf86drv_ac    video-tdfx              1.5.0.2
 build_xf86drv_ac    video-trident           1.4.0.2
 build_xf86drv_ac    video-vesa              2.6.0.2
 build_xf86drv_ac    video-vmware            13.4.0.3
+build_xf86drv_ac    video-v4l               0.3.0.2
 build_xf86drv_ac    video-vbox              1.0.1.2
 build_xf86drv_ac    video-voodoo            1.2.6.3
 build_xf86drv_ac    video-xgi               1.6.1.3

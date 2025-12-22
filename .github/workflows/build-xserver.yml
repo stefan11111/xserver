@@ -266,7 +266,7 @@ jobs:
             MESON_ARGS: -Dwerror=true -Dxephyr=true -Dxorg=true -Dxvfb=true -Dxnest=true -Dxfbdev=false
         steps:
             - uses: actions/checkout@v4
-            - uses: vmactions/netbsd-vm@v1
+            - uses: vmactions/netbsd-vm@v1.2.3
               id: vm
               with:
                   envs: 'MESON_ARGS'

@@ -323,6 +323,18 @@ jobs:
             - run: |
                   bash ./.github/scripts/Cygwin/build.sh
 
+    check-sign-off:
+        name: Write comment if unsigned commits found
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        env:
+            FORCE_COLOR: 1
+            runs-on: ubuntu-latest
+        steps:
+          - uses: live627/check-pr-signoff-action@v1
+            with:
+                token: ${{ secrets.GITHUB_TOKEN }}
+
     release:
         name: Release pushed tag
         runs-on: ubuntu-latest
@@ -336,6 +348,7 @@ jobs:
             - xserver-build-dragonflybsd
             - xserver-build-netbsd
             - xserver-build-cygwin
+            - check-sign-off
         steps:
             - name: Checkout
               uses: actions/checkout@v4

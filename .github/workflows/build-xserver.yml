@@ -273,6 +273,7 @@ jobs:
                   usesh: true
                   release: '10.1'
                   run:     ./.github/scripts/netbsd/run-xserver-build.sh
+
     xserver-build-cygwin:
         runs-on: windows-latest
         steps:
@@ -284,6 +285,9 @@ jobs:
                 restore-keys: ${{ runner.os }}-packages
             - uses: cygwin/cygwin-install-action@master
               with:
+                  # FIXME: temporary workaround for cygwin mirror problem
+                  # https://github.com/cygwin/cygwin-install-action/issues/39
+                  check-installer-sig: false
                   platform: x86_64
                   packages: >-
                    binutils, bison, ccache, flex, gcc-core, meson, ninja,

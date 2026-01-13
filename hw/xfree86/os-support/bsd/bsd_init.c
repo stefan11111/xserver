@@ -149,7 +149,6 @@ xf86OpenConsole(void)
     xf86ConsOpen_t *driver;
 
 #if defined (SYSCONS_SUPPORT) || defined (PCVT_SUPPORT)
-    int result;
 
     vtmode_t vtmode;
 #endif
@@ -227,6 +226,7 @@ xf86OpenConsole(void)
 #endif
 acquire_vt:
             if (!xf86Info.ShareVTs) {
+                int result;
                 /*
                  * now get the VT
                  */

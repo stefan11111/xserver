@@ -264,9 +264,6 @@ typedef struct {
     Bool cursor_dim_fallback_warned;
 
     int* cursor_pitches;
-
-    /* See: https://github.com/X11Libre/xserver/issues/1816 */
-    int cursor_supports_legacy_probe;
 } drmmode_crtc_private_rec, *drmmode_crtc_private_ptr;
 
 typedef struct {

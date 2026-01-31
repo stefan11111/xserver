@@ -34,6 +34,10 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#ifdef GLAMOR_HAS_EGL
+#include <epoxy/egl.h>
+#endif
+
 #include "dix/dix_priv.h"
 #include "os/fmt.h"
 #include "present/present_priv.h"
@@ -3003,6 +3007,26 @@ drmmode_cursor_get_fallback(drmmode_crtc_private_ptr drmmode_crtc)
 
     char *height;
 
+#ifdef GLAMOR_HAS_EGL
+    const char* renderer = (const char*)glGetString(GL_RENDERER);
+    const char* vendor = (const char*)glGetString(GL_VENDOR);
+
+#define CHECK_GL_NAME(name) ((renderer && strstr(renderer, name)) || (vendor && strstr(vendor, name)))
+
+    /**
+     * Some setups have different requirements for the
+     * cursor pitch compared to intel and nvidia.
+     *
+     * See: https://github.com/X11Libre/xserver/issues/1816
+     */
+    if (CHECK_GL_NAME("Intel") ||
+        CHECK_GL_NAME("NVIDIA")) {
+        drmmode_crtc->cursor_supports_legacy_probe = TRUE;
+    }
+
+#undef CHECK_GL_NAME
+#endif
+
     if (!cursor_size_str) {
         return drmmode_get_kms_default(drmmode);
     }
@@ -4883,6 +4907,10 @@ static void drmmode_probe_cursor_size(xf86CrtcPtr crtc)
     int width, height, size;
     int max_width, max_height;
     int min_width, min_height;
+
+    if (!drmmode_crtc->cursor_supports_legacy_probe) {
+        drmmode_crtc->cursor_probed = TRUE;
+    }
 
     if (drmmode_crtc->cursor_probed) {
         return;

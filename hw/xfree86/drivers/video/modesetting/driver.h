@@ -39,11 +39,10 @@
 #include <damage.h>
 #include <X11/extensions/dpmsconst.h>
 #include <shadow.h>
-#ifdef GLAMOR_HAS_GBM
+
 #define GLAMOR_FOR_XORG 1
 #include "glamor.h"
 #include <gbm.h>
-#endif
 
 #include "drmmode_display.h"
 #define MS_LOGLEVEL_DEBUG 4
@@ -162,7 +161,6 @@ typedef struct _modesettingRec {
         void (*UpdatePacked)(ScreenPtr, shadowBufPtr);
     } shadow;
 
-#ifdef GLAMOR_HAS_GBM
     /* glamor API */
     struct {
         Bool (*back_pixmap_from_fd)(PixmapPtr, int, CARD16, CARD16, CARD16,
@@ -188,7 +186,6 @@ typedef struct _modesettingRec {
         XF86VideoAdaptorPtr (*xv_init)(ScreenPtr, int);
         const char *(*egl_get_driver_name)(ScreenPtr);
     } glamor;
-#endif
 } modesettingRec, *modesettingPtr;
 
 #define glamor_finish(screen) ms->glamor.finish(screen)
@@ -235,8 +232,6 @@ void ms_vblank_close_screen(ScreenPtr screen);
 
 Bool ms_present_screen_init(ScreenPtr screen);
 
-#ifdef GLAMOR_HAS_GBM
-
 typedef void (*ms_pageflip_handler_proc)(modesettingPtr ms,
                                          uint64_t frame,
                                          uint64_t usec,
@@ -262,8 +257,6 @@ void
 ms_tearfree_dri_abort_all(xf86CrtcPtr crtc);
 
 Bool ms_do_tearfree_flip(ScreenPtr screen, xf86CrtcPtr crtc);
-
-#endif
 
 int ms_flush_drm_events(ScreenPtr screen);
 void ms_drain_drm_events(ScreenPtr screen);

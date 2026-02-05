@@ -1,4 +1,4 @@
-/*
+]/*
  * Copyright © 2014 Intel Corporation
  *
  * Permission to use, copy, modify, distribute, and sell this software and its
@@ -163,13 +163,11 @@ ms_present_abort_vblank(RRCrtcPtr crtc, uint64_t event_id, uint64_t msc)
 {
     ScreenPtr screen = crtc->pScreen;
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
-#ifdef GLAMOR_HAS_GBM
     xf86CrtcPtr xf86_crtc = crtc->devPrivate;
 
     /* Check if this is a fake flip routed through TearFree and abort it */
     if (ms_tearfree_dri_abort(xf86_crtc, ms_present_event_match, &event_id))
         return;
-#endif
 
     ms_drm_abort(scrn, ms_present_event_match, &event_id);
 }
@@ -180,17 +178,13 @@ ms_present_abort_vblank(RRCrtcPtr crtc, uint64_t event_id, uint64_t msc)
 static void
 ms_present_flush(WindowPtr window)
 {
-#ifdef GLAMOR_HAS_GBM
     ScreenPtr screen = window->drawable.pScreen;
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     modesettingPtr ms = modesettingPTR(scrn);
 
     if (ms->drmmode.glamor)
         ms->glamor.block_handler(screen);
-#endif
 }
-
-#ifdef GLAMOR_HAS_GBM
 
 /**
  * Callback for the DRM event queue when a flip has completed on all pipes
@@ -484,7 +478,6 @@ ms_present_unflip(ScreenPtr screen, uint64_t event_id)
     present_event_notify(event_id, 0, 0);
     ms->drmmode.present_flipping = FALSE;
 }
-#endif
 
 static present_screen_info_rec ms_present_screen_info = {
     .version = PRESENT_SCREEN_INFO_VERSION,
@@ -496,12 +489,11 @@ static present_screen_info_rec ms_present_screen_info = {
     .flush = ms_present_flush,
 
     .capabilities = PresentCapabilityNone,
-#ifdef GLAMOR_HAS_GBM
+
     .check_flip = NULL,
     .check_flip2 = ms_present_check_flip,
     .flip = ms_present_flip,
     .unflip = ms_present_unflip,
-#endif
 };
 
 Bool

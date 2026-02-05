@@ -284,7 +284,7 @@ check_outputs(int fd, int *count)
         *count = res->count_connectors;
 
     ret = res->count_connectors > 0;
-#if defined(GLAMOR_HAS_GBM_LINEAR)
+#ifdef GBM_BO_USE_LINEAR
     if (ret == FALSE) {
         uint64_t value = 0;
         if (drmGetCap(fd, DRM_CAP_PRIME, &value) == 0 &&
@@ -705,7 +705,6 @@ ms_tearfree_update_damages(ScreenPtr pScreen)
 static void
 ms_tearfree_do_flips(ScreenPtr pScreen)
 {
-#ifdef GLAMOR_HAS_GBM
     ScrnInfoPtr scrn = xf86ScreenToScrn(pScreen);
     xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(scrn);
     modesettingPtr ms = modesettingPTR(scrn);
@@ -741,7 +740,6 @@ ms_tearfree_do_flips(ScreenPtr pScreen)
             RegionEmpty(&trf->buf[trf->back_idx ^ 1].dmg);
         }
     }
-#endif
 }
 
 static void
@@ -822,7 +820,6 @@ redisplay_dirty(ScreenPtr screen, PixmapDirtyUpdatePtr dirty, int *timeout)
     PixmapSyncDirtyHelper(dirty);
 
     if (!screen->isGPU) {
-#ifdef GLAMOR_HAS_GBM
         modesettingPtr ms = modesettingPTR(xf86ScreenToScrn(screen));
         /*
          * When copying from the primary framebuffer to the shared pixmap,
@@ -832,7 +829,6 @@ redisplay_dirty(ScreenPtr screen, PixmapDirtyUpdatePtr dirty, int *timeout)
          */
         if (ms->drmmode.glamor)
             ms->glamor.finish(screen);
-#endif
         /* Ensure the secondary processes the damage immediately */
         if (timeout)
             *timeout = 0;
@@ -1020,8 +1016,6 @@ FreeScreen(ScrnInfoPtr pScrn)
 
 }
 
-#ifdef GLAMOR_HAS_GBM
-
 static Bool
 load_glamor(ScrnInfoPtr pScrn)
 {
@@ -1052,8 +1046,6 @@ load_glamor(ScrnInfoPtr pScrn)
     return TRUE;
 }
 
-#endif
-
 static void
 try_enable_glamor(ScrnInfoPtr pScrn)
 {
@@ -1065,7 +1057,6 @@ try_enable_glamor(ScrnInfoPtr pScrn)
 
     ms->drmmode.glamor = FALSE;
 
-#ifdef GLAMOR_HAS_GBM
     if (ms->drmmode.force_24_32) {
         xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "Cannot use glamor with 24bpp packed fb\n");
         return;
@@ -1088,12 +1079,6 @@ try_enable_glamor(ScrnInfoPtr pScrn)
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
                    "Failed to load glamor module.\n");
     }
-#else
-    if (do_glamor) {
-        xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-                   "No glamor support in the X Server\n");
-    }
-#endif
 }
 
 static Bool
@@ -1347,7 +1332,7 @@ PreInit(ScrnInfoPtr pScrn, int flags)
             if (ms->drmmode.glamor)
                 pScrn->capabilities |= RR_Capability_SinkOffload;
         }
-#ifdef GLAMOR_HAS_GBM_LINEAR
+#ifdef GBM_BO_USE_LINEAR
         if (value & DRM_PRIME_CAP_EXPORT && ms->drmmode.glamor)
             pScrn->capabilities |= RR_Capability_SourceOutput | RR_Capability_SourceOffload;
 #endif
@@ -1771,7 +1756,6 @@ modesetCreateScreenResources(ScreenPtr pScreen)
 static Bool
 msSharePixmapBacking(PixmapPtr ppix, ScreenPtr secondary, void **handle)
 {
-#ifdef GLAMOR_HAS_GBM
     modesettingPtr ms =
         modesettingPTR(xf86ScreenToScrn(ppix->drawable.pScreen));
     int ret;
@@ -1784,14 +1768,11 @@ msSharePixmapBacking(PixmapPtr ppix, ScreenPtr secondary, void **handle)
 
     *handle = (void *)(long)(ret);
     return TRUE;
-#endif
-    return FALSE;
 }
 
 static Bool
 msSetSharedPixmapBacking(PixmapPtr ppix, void *fd_handle)
 {
-#ifdef GLAMOR_HAS_GBM
     ScreenPtr screen = ppix->drawable.pScreen;
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     modesettingPtr ms = modesettingPTR(scrn);
@@ -1818,9 +1799,6 @@ msSetSharedPixmapBacking(PixmapPtr ppix, void *fd_handle)
     }
 
     return ret;
-#else
-    return FALSE;
-#endif
 }
 
 static Bool
@@ -2105,7 +2083,6 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
     else
         xf86DPMSInit(pScreen, xf86DPMSSet, 0);
 
-#ifdef GLAMOR_HAS_GBM
     if (ms->drmmode.glamor) {
         XF86VideoAdaptorPtr     glamor_adaptor;
 
@@ -2116,7 +2093,6 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
             xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
                        "Failed to initialize XV support.\n");
     }
-#endif
 
     if (serverGeneration == 1)
         xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
@@ -2127,7 +2103,6 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
         return FALSE;
     }
 
-#ifdef GLAMOR_HAS_GBM
     if (ms->drmmode.glamor) {
         if (!(ms->drmmode.dri2_enable = ms_dri2_screen_init(pScreen))) {
             xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -2169,7 +2144,7 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
             }
         }
     }
-#endif
+
     if (!(ms->drmmode.present_enable = ms_present_screen_init(pScreen))) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
                    "Failed to initialize the Present extension.\n");
@@ -2262,11 +2237,9 @@ CloseScreen(ScreenPtr pScreen)
     /* Clear mask of assigned crtc's in this generation */
     ms_ent->assigned_crtcs = 0;
 
-#ifdef GLAMOR_HAS_GBM
     if (ms->drmmode.dri2_enable) {
         ms_dri2_close_screen(pScreen);
     }
-#endif
 
     ms_vblank_close_screen(pScreen);
 

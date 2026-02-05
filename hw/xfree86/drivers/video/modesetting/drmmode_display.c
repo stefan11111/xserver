@@ -858,11 +858,9 @@ drmmode_crtc_set_mode(xf86CrtcPtr crtc, Bool test_only)
     if (!drmmode_crtc_get_fb_id(crtc, &fb_id, &x, &y))
         return 1;
 
-#ifdef GLAMOR_HAS_GBM
     /* Make sure any pending drawing will be visible in a new scanout buffer */
     if (drmmode->glamor)
         glamor_finish(crtc->scrn->pScreen);
-#endif
 
     if (ms->atomic_modeset) {
         drmModeAtomicReq *req = drmModeAtomicAlloc();
@@ -1332,7 +1330,6 @@ drmmode_crtc_dpms(xf86CrtcPtr crtc, int mode)
     }
 }
 
-#ifdef GLAMOR_HAS_GBM
 static PixmapPtr
 create_pixmap_for_fbcon(drmmode_ptr drmmode, ScrnInfoPtr pScrn, int fbcon_id)
 {
@@ -1372,12 +1369,10 @@ out_free_fb:
     drmModeFreeFB(fbcon);
     return pixmap;
 }
-#endif
 
 void
 drmmode_copy_fb(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
 {
-#ifdef GLAMOR_HAS_GBM
     xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
     ScreenPtr pScreen = xf86ScrnToScreen(pScrn);
     PixmapPtr src, dst;
@@ -1421,13 +1416,11 @@ drmmode_copy_fb(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
 
     dixDestroyPixmap(drmmode->fbcon_pixmap, 0);
     drmmode->fbcon_pixmap = NULL;
-#endif
 }
 
 void
 drmmode_copy_damage(xf86CrtcPtr crtc, PixmapPtr dst, RegionPtr dmg, Bool empty)
 {
-#ifdef GLAMOR_HAS_GBM
     ScreenPtr pScreen = xf86ScrnToScreen(crtc->scrn);
     DrawableRec *src;
 
@@ -1446,7 +1439,6 @@ drmmode_copy_damage(xf86CrtcPtr crtc, PixmapPtr dst, RegionPtr dmg, Bool empty)
 
     /* Wait until the GC operations finish */
     modesettingPTR(crtc->scrn)->glamor.finish(pScreen);
-#endif
 }
 
 static void
@@ -2182,14 +2174,12 @@ drmmode_clear_pixmap(PixmapPtr pixmap)
 {
     ScreenPtr screen = pixmap->drawable.pScreen;
     GCPtr gc;
-#ifdef GLAMOR_HAS_GBM
     modesettingPtr ms = modesettingPTR(xf86ScreenToScrn(screen));
 
     if (ms->drmmode.glamor) {
         ms->glamor.clear_pixmap(pixmap);
         return;
     }
-#endif
 
     gc = GetScratchGC(pixmap->drawable.depth, screen);
     if (gc) {
@@ -4196,7 +4186,6 @@ drmmode_pre_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int cpp)
 Bool
 drmmode_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
 {
-#ifdef GLAMOR_HAS_GBM
     ScreenPtr pScreen = xf86ScrnToScreen(pScrn);
     modesettingPtr ms = modesettingPTR(pScrn);
 
@@ -4208,7 +4197,6 @@ drmmode_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
         ms->glamor.set_drawable_modifiers_func(pScreen, get_drawable_modifiers);
 #endif
     }
-#endif
 
     return TRUE;
 }

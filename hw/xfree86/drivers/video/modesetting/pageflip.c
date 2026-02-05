@@ -77,8 +77,6 @@ ms_drain_drm_events(ScreenPtr screen)
         ms_flush_drm_events_timeout(screen, -1);
 }
 
-#ifdef GLAMOR_HAS_GBM
-
 /*
  * Event data for an in progress flip.
  * This contains a pointer to the vblank event,
@@ -683,7 +681,6 @@ no_flip:
                         &trf->buf[idx ^ 1].dmg, FALSE);
     return TRUE;
 }
-#endif
 
 Bool
 ms_tearfree_is_active_on_crtc(xf86CrtcPtr crtc)

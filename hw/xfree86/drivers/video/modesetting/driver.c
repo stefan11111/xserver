@@ -1458,7 +1458,9 @@ msShadowWindow(ScreenPtr screen, CARD32 row, CARD32 offset, int mode,
     stride = (pScrn->displayWidth * ms->drmmode.kbpp) / 8;
     *size = stride;
 
-    return ((uint8_t *) ms->drmmode.front_bo.dumb->ptr + row * stride + offset);
+    bo_user_data_t *user_data = gbm_bo_get_user_data(ms->drmmode.front_bo);
+
+    return ((uint8_t *) user_data->map_addr + row * stride + offset);
 }
 
 /* somewhat arbitrary tile size, in pixels */
@@ -1704,15 +1706,6 @@ modesetCreateScreenResources(ScreenPtr pScreen)
         return FALSE;
 
     drmmode_uevent_init(pScrn, &ms->drmmode);
-
-    if (!ms->drmmode.sw_cursor)
-        drmmode_map_cursor_bos(pScrn, &ms->drmmode);
-
-    if (!ms->drmmode.gbm) {
-        pixels = drmmode_map_front_bo(&ms->drmmode);
-        if (!pixels)
-            return FALSE;
-    }
 
     rootPixmap = pScreen->GetScreenPixmap(pScreen);
 
@@ -1962,10 +1955,15 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
     if (!SetMaster(pScrn))
         return FALSE;
 
-#ifdef GLAMOR_HAS_GBM
-    if (ms->drmmode.glamor)
+    if (ms->drmmode.glamor) {
         ms->drmmode.gbm = ms->glamor.egl_get_gbm_device(pScreen);
-#endif
+    } else {
+        ms->drmmode.gbm = gbm_create_device(ms->drmmode.fd);
+    }
+
+    if (!ms->drmmode.gbm) {
+        return FALSE;
+    }
 
     /* HW dependent - FIXME */
     pScrn->displayWidth = pScrn->virtualX;
@@ -2294,12 +2292,18 @@ CloseScreen(ScreenPtr pScreen)
 
     drmmode_free_bos(pScrn, &ms->drmmode);
 
+    /* If we didn't get the gbm device from glamor, we have to free it ourserves */
+    if (!ms->drmmode.glamor) {
+        gbm_device_destroy(ms->drmmode.gbm);
+        ms->drmmode.gbm = NULL;
+    }
+
     if (ms->drmmode.pageflip) {
         miPointerScreenPtr PointPriv =
             dixLookupPrivate(&pScreen->devPrivates, miPointerScreenKey);
 
         if (PointPriv->spriteFuncs == &drmmode_sprite_funcs)
-            PointPriv->spriteFuncs = ms->SpriteFuncs;        
+            PointPriv->spriteFuncs = ms->SpriteFuncs;
     }
 
     if (pScrn->vtSema) {

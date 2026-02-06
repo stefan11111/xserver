@@ -1466,14 +1466,10 @@ out:
 Bool
 DRI2ScreenInit(ScreenPtr pScreen, DRI2InfoPtr info)
 {
-    DRI2ScreenPtr ds;
-
     const char *driverTypeNames[] = {
         "DRI",                  /* DRI2DriverDRI */
         "VDPAU",                /* DRI2DriverVDPAU */
     };
-    unsigned int i;
-    CARD8 cur_minor;
 
     if (info->version < 3)
         return FALSE;
@@ -1490,7 +1486,7 @@ DRI2ScreenInit(ScreenPtr pScreen, DRI2InfoPtr info)
     if (!dixRegisterPrivateKey(&dri2ClientPrivateKeyRec, PRIVATE_CLIENT, sizeof(DRI2ClientRec)))
         return FALSE;
 
-    ds = calloc(1, sizeof *ds);
+    DRI2ScreenPtr ds = calloc(1, sizeof *ds);
     if (!ds)
         return FALSE;
 
@@ -1502,7 +1498,7 @@ DRI2ScreenInit(ScreenPtr pScreen, DRI2InfoPtr info)
     ds->CreateBuffer = info->CreateBuffer;
     ds->DestroyBuffer = info->DestroyBuffer;
     ds->CopyRegion = info->CopyRegion;
-    cur_minor = 1;
+    CARD8 cur_minor = 1;
 
     if (info->version >= 4) {
         ds->ScheduleSwap = info->ScheduleSwap;
@@ -1604,7 +1600,7 @@ DRI2ScreenInit(ScreenPtr pScreen, DRI2InfoPtr info)
     pScreen->SetWindowPixmap = DRI2SetWindowPixmap;
 
     xf86DrvMsg(pScreen->myNum, X_INFO, "[DRI2] Setup complete\n");
-    for (i = 0; i < ARRAY_SIZE(driverTypeNames); i++) {
+    for (int i = 0; i < ARRAY_SIZE(driverTypeNames); i++) {
         if (i < ds->numDrivers && ds->driverNames[i]) {
             xf86DrvMsg(pScreen->myNum, X_INFO, "[DRI2]   %s driver: %s\n",
                        driverTypeNames[i], ds->driverNames[i]);

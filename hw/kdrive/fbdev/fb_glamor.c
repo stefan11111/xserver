@@ -140,7 +140,7 @@ fbdevInitAccel(ScreenPtr pScreen)
 #ifdef XV
     /* X-Video needs glamor render accel */
     if (fbXVAllowed && !(flags & GLAMOR_NO_RENDER_ACCEL)) {
-        kd_glamor_xv_init(pScreen);
+        kd_glamor_xv_init(pScreen, NULL);
     }
 #endif
 

@@ -438,6 +438,7 @@ if build_xorg
             'extinit.h',
             'extnsionst.h',
             'fb.h',
+            'fbdevhw.h',
             'fboverlay.h',
             'fbpict.h',
             'fbrop.h',

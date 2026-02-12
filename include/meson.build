@@ -426,6 +426,7 @@ if build_xorg
             'dixfont.h',
             'dixfontstr.h',
             'dixstruct.h',
+            'dri3.h',
             'events.h',
             'exa.h',
             'exevents.h',

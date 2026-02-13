@@ -1081,11 +1081,11 @@ try_enable_glamor(ScrnInfoPtr pScrn)
 
     if (load_glamor(pScrn)) {
         if (ms->glamor.egl_init(pScrn, ms->fd)) {
-            xf86DrvMsg(pScrn->scrnIndex, X_INFO, "glamor initialized\n");
+            xf86DrvMsg(pScrn->scrnIndex, X_INFO, "glamor dri initialized\n");
             ms->drmmode.glamor = TRUE;
         } else {
             xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-                       "glamor initialization failed\n");
+                       "glamor dri initialization failed\n");
         }
     } else {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR,

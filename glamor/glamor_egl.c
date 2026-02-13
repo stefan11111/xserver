@@ -58,6 +58,7 @@ struct glamor_egl_screen_private {
     struct gbm_device *gbm;
     int fd;
     int dmabuf_capable;
+    int linear_only;
 
     xf86FreeScreenProc *saved_free_screen;
 };
@@ -877,13 +878,20 @@ glamor_get_formats(ScreenPtr screen,
 
 static void
 glamor_filter_modifiers(uint32_t *num_modifiers, uint64_t **modifiers,
-                        EGLBoolean *external_only)
+                        EGLBoolean *external_only, int linear_only)
 {
     uint32_t write_pos = 0;
     for (uint32_t i = 0; i < *num_modifiers; i++) {
         if (external_only[i]) {
             continue;
         }
+
+        if (linear_only &&
+            ((*modifiers)[i] != DRM_FORMAT_MOD_LINEAR) &&
+            ((*modifiers)[i] != DRM_FORMAT_MOD_INVALID)) {
+            continue;
+        }
+
         (*modifiers)[write_pos++] = (*modifiers)[i];
     }
 
@@ -945,7 +953,7 @@ glamor_get_modifiers_internal(struct glamor_egl_screen_private *glamor_egl, uint
     }
 
     *num_modifiers = num;
-    glamor_filter_modifiers(num_modifiers, modifiers, external_only);
+    glamor_filter_modifiers(num_modifiers, modifiers, external_only, glamor_egl->linear_only);
     free(external_only);
 
 
@@ -1305,6 +1313,20 @@ static const OptionInfoRec GlamorEGLOptions[] = {
     { -1, NULL, OPTV_NONE, {0}, FALSE },
 };
 
+static struct gbm_device*
+gbm_create_device_by_name(int fd, const char* name)
+{
+    struct gbm_device* ret = NULL;
+    const char* old_backend = getenv("GBM_BACKEND");
+    setenv("GBM_BACKEND", name, 1);
+    ret = gbm_create_device(fd);
+    unsetenv("GBM_BACKEND");
+    if (old_backend) {
+        setenv("GBM_BACKEND", old_backend, 1);
+    }
+    return ret;
+}
+
 Bool
 glamor_egl_init(ScrnInfoPtr scrn, int fd)
 {
@@ -1342,9 +1364,18 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     scrn->privates[xf86GlamorEGLPrivateIndex].ptr = glamor_egl;
     glamor_egl->fd = fd;
     glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
-    if (glamor_egl->gbm == NULL) {
+    if (!glamor_egl->gbm) {
+        glamor_egl->gbm = gbm_create_device_by_name(glamor_egl->fd, "dumb");
+    }
+
+    if (!glamor_egl->gbm) {
         ErrorF("couldn't get display device\n");
         goto error;
+    }
+
+    const char* gbm_backend = gbm_device_get_backend_name(glamor_egl->gbm);
+    if (gbm_backend && !strcmp(gbm_backend, "dumb")) {
+        glamor_egl->linear_only = TRUE;
     }
 
     glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,

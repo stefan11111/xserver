@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <xf86.h>
 #include <xf86Priv.h>

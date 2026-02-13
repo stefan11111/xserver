@@ -1625,11 +1625,20 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     glamor_egl->saved_free_screen = scrn->FreeScreen;
     scrn->FreeScreen = glamor_egl_free_screen;
 
-    if (glamor_egl->fd != -1 && !glamor_egl_init_drm(scrn, glamor_egl)) {
+    if (glamor_egl->fd != -1) {
+        if (glamor_egl_init_drm(scrn, glamor_egl)) {
+            xf86DrvMsg(scrn->scrnIndex, X_INFO, "glamor dri X acceleration enabled on %s\n",
+                       renderer);
+            return TRUE;
+        }
+
         /* Fall back to no dri */
         glamor_egl->fd = -1;
         gbm_device_destroy(glamor_egl->gbm);
         glamor_egl->gbm = NULL;
+
+        /* Return FALSE for compat with drivers */
+        return FALSE;
     }
 
     xf86DrvMsg(scrn->scrnIndex, X_INFO, "glamor X acceleration enabled on %s\n",

@@ -1149,27 +1149,29 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
         glamor_set_glvnd_vendor(screen, glamor_egl->glvnd_vendor);
     }
 #ifdef DRI3
-    /* Tell the core that we have the interfaces for import/export
-     * of pixmaps.
-     */
-    glamor_enable_dri3(screen);
-
-    /* If the driver wants to do its own auth dance (e.g. Xwayland
-     * on pre-3.15 kernels that don't have render nodes and thus
-     * has the wayland compositor as a master), then it needs us
-     * to stay out of the way and let it init DRI3 on its own.
-     */
-    if (!(glamor_priv->flags & GLAMOR_NO_DRI3)) {
-        /* To do DRI3 device FD generation, we need to open a new fd
-         * to the same device we were handed in originally.
+    if (glamor_egl->fd != -1) {
+        /* Tell the core that we have the interfaces for import/export
+         * of pixmaps.
          */
-        glamor_egl->device_path = drmGetRenderDeviceNameFromFd(glamor_egl->fd);
-        if (!glamor_egl->device_path)
-            glamor_egl->device_path = drmGetDeviceNameFromFd2(glamor_egl->fd);
+        glamor_enable_dri3(screen);
 
-        if (!dri3_screen_init(screen, &glamor_dri3_info)) {
-            xf86DrvMsg(scrn->scrnIndex, X_ERROR,
-                       "Failed to initialize DRI3.\n");
+        /* If the driver wants to do its own auth dance (e.g. Xwayland
+         * on pre-3.15 kernels that don't have render nodes and thus
+         * has the wayland compositor as a master), then it needs us
+         * to stay out of the way and let it init DRI3 on its own.
+         */
+        if (!(glamor_priv->flags & GLAMOR_NO_DRI3)) {
+            /* To do DRI3 device FD generation, we need to open a new fd
+             * to the same device we were handed in originally.
+             */
+            glamor_egl->device_path = drmGetRenderDeviceNameFromFd(glamor_egl->fd);
+            if (!glamor_egl->device_path)
+                glamor_egl->device_path = drmGetDeviceNameFromFd2(glamor_egl->fd);
+
+            if (!dri3_screen_init(screen, &glamor_dri3_info)) {
+                xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+                           "Failed to initialize DRI3.\n");
+            }
         }
     }
 #endif
@@ -1327,6 +1329,9 @@ gbm_create_device_by_name(int fd, const char* name)
     return ret;
 }
 
+static Bool
+glamor_egl_init_drm(ScrnInfoPtr scrn, struct glamor_egl_screen_private *glamor_egl);
+
 Bool
 glamor_egl_init(ScrnInfoPtr scrn, int fd)
 {
@@ -1363,19 +1368,21 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 
     scrn->privates[xf86GlamorEGLPrivateIndex].ptr = glamor_egl;
     glamor_egl->fd = fd;
-    glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
-    if (!glamor_egl->gbm) {
-        glamor_egl->gbm = gbm_create_device_by_name(glamor_egl->fd, "dumb");
-    }
+    if (fd != -1) {
+        glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
+        if (!glamor_egl->gbm) {
+            glamor_egl->gbm = gbm_create_device_by_name(glamor_egl->fd, "dumb");
+        }
 
-    if (!glamor_egl->gbm) {
-        ErrorF("couldn't get display device\n");
-        goto error;
-    }
+        if (!glamor_egl->gbm) {
+            ErrorF("couldn't get display device\n");
+            goto error;
+        }
 
-    const char* gbm_backend = gbm_device_get_backend_name(glamor_egl->gbm);
-    if (gbm_backend && !strcmp(gbm_backend, "dumb")) {
-        glamor_egl->linear_only = TRUE;
+        const char* gbm_backend = gbm_device_get_backend_name(glamor_egl->gbm);
+        if (gbm_backend && !strcmp(gbm_backend, "dumb")) {
+            glamor_egl->linear_only = TRUE;
+        }
     }
 
     glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,
@@ -1387,18 +1394,21 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 
     if (!eglInitialize(glamor_egl->display, NULL, NULL)) {
         xf86DrvMsg(scrn->scrnIndex, X_ERROR, "eglInitialize() failed\n");
+        eglTerminate(glamor_egl->display);
         glamor_egl->display = EGL_NO_DISPLAY;
         goto error;
     }
 
 #define GLAMOR_CHECK_EGL_EXTENSION(EXT)  \
-	if (!epoxy_has_egl_extension(glamor_egl->display, "EGL_" #EXT)) {  \
-		ErrorF("EGL_" #EXT " required.\n");  \
-		goto error;  \
-	}
+    if (!epoxy_has_egl_extension(glamor_egl->display, "EGL_" #EXT)) {  \
+        ErrorF("EGL_" #EXT " required.\n");  \
+        goto error;  \
+    }
 
     GLAMOR_CHECK_EGL_EXTENSION(KHR_surfaceless_context);
     GLAMOR_CHECK_EGL_EXTENSION(KHR_no_config_context);
+
+#undef GLAMOR_CHECK_EGL_EXTENSION
 
     if (!force_es) {
         if(!glamor_egl_try_big_gl_api(scrn))
@@ -1412,7 +1422,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 
     if (glamor_egl->context == EGL_NO_CONTEXT) {
         xf86DrvMsg(scrn->scrnIndex, X_ERROR,
-                    "glamor: Failed to create GL or GLES2 contexts\n");
+                   "glamor: Failed to create GL or GLES2 contexts\n");
         goto error;
     }
 
@@ -1444,16 +1454,41 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
      */
     lastGLContext = NULL;
 
-    if (!epoxy_has_gl_extension("GL_OES_EGL_image")) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
-                   "glamor acceleration requires GL_OES_EGL_image\n");
-        goto error;
+    glamor_egl->saved_free_screen = scrn->FreeScreen;
+    scrn->FreeScreen = glamor_egl_free_screen;
+
+    if (glamor_egl->fd != -1 && !glamor_egl_init_drm(scrn, glamor_egl)) {
+        /* Fall back to no dri */
+        glamor_egl->fd = -1;
+        gbm_device_destroy(glamor_egl->gbm);
+        glamor_egl->gbm = NULL;
     }
 
     xf86DrvMsg(scrn->scrnIndex, X_INFO, "glamor X acceleration enabled on %s\n",
                renderer);
+    return TRUE;
+
+error:
+    if (glamor_egl->saved_free_screen) {
+        scrn->FreeScreen = glamor_egl->saved_free_screen;
+    }
+
+    glamor_egl_cleanup(glamor_egl);
+    return FALSE;
+}
+
+static Bool
+glamor_egl_init_drm(ScrnInfoPtr scrn, struct glamor_egl_screen_private *glamor_egl)
+{
+    if (!epoxy_has_gl_extension("GL_OES_EGL_image")) {
+        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+                   "glamor dri acceleration requires GL_OES_EGL_image\n");
+        return FALSE;
+    }
 
 #ifdef GBM_BO_WITH_MODIFIERS
+    const GLubyte *renderer = glGetString(GL_RENDERER);
+
     if (epoxy_has_egl_extension(glamor_egl->display,
                                 "EGL_EXT_image_dma_buf_import") &&
         epoxy_has_egl_extension(glamor_egl->display,
@@ -1472,15 +1507,12 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     }
 #endif
 
-    glamor_egl->saved_free_screen = scrn->FreeScreen;
-    scrn->FreeScreen = glamor_egl_free_screen;
-
     /* Check if at least one combination of format + modifier is supported */
     CARD32 *formats = NULL;
     CARD32 num_formats = 0;
     Bool found = FALSE;
     if (!glamor_get_formats_internal(glamor_egl, &num_formats, &formats)) {
-        goto error;
+        return FALSE;
     }
 
     if (num_formats == 0) {
@@ -1502,17 +1534,10 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     if (!found) {
         xf86DrvMsg(scrn->scrnIndex, X_ERROR,
                    "glamor: No combination of format + modifier is supported\n");
-        goto error;
+        return FALSE;
     }
 
     return TRUE;
-
-error:
-    if (glamor_egl->saved_free_screen) {
-        scrn->FreeScreen = glamor_egl->saved_free_screen;
-    }
-    glamor_egl_cleanup(glamor_egl);
-    return FALSE;
 }
 
 /** Stub to retain compatibility with pre-server-1.16 ABI. */

@@ -1187,6 +1187,11 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 static void glamor_egl_cleanup(struct glamor_egl_screen_private *glamor_egl)
 {
     if (glamor_egl->display != EGL_NO_DISPLAY) {
+        if (glamor_egl->context != EGL_NO_CONTEXT) {
+            eglDestroyContext(glamor_egl->display, glamor_egl->context);
+            glamor_egl->context = EGL_NO_CONTEXT;
+        }
+
         eglMakeCurrent(glamor_egl->display,
                        EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         /*
@@ -1195,7 +1200,9 @@ static void glamor_egl_cleanup(struct glamor_egl_screen_private *glamor_egl)
          */
         lastGLContext = NULL;
         eglTerminate(glamor_egl->display);
+        glamor_egl->display = EGL_NO_DISPLAY;
     }
+
     if (glamor_egl->gbm)
         gbm_device_destroy(glamor_egl->gbm);
     free(glamor_egl->device_path);

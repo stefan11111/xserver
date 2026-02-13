@@ -62,7 +62,7 @@ struct glamor_egl_screen_private {
     xf86FreeScreenProc *saved_free_screen;
 };
 
-int xf86GlamorEGLPrivateIndex = -1;
+static int xf86GlamorEGLPrivateIndex = -1;
 
 
 static struct glamor_egl_screen_private *

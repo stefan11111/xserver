@@ -1184,6 +1184,122 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 #endif
 }
 
+static Bool
+glamor_query_devices_ext(EGLDeviceEXT **devices, EGLint *num_devices)
+{
+    EGLint max_devices = 0;
+
+    *devices = NULL;
+    *num_devices = 0;
+
+    if (!epoxy_has_egl_extension(NULL, "EGL_EXT_device_base") &&
+        !(epoxy_has_egl_extension(NULL, "EGL_EXT_device_query") &&
+          epoxy_has_egl_extension(NULL, "EGL_EXT_device_enumeration"))) {
+        return FALSE;
+    }
+
+    if (!eglQueryDevicesEXT(0, NULL, &max_devices)) {
+         return FALSE;
+    }
+
+    *devices = calloc(sizeof(EGLDeviceEXT), max_devices);
+    if (*devices == NULL) {
+         return FALSE;
+    }
+
+    if (!eglQueryDevicesEXT(max_devices, *devices, num_devices)) {
+         free(*devices);
+         *devices = NULL;
+         *num_devices = 0;
+         return FALSE;
+    }
+
+    if (*num_devices < max_devices) {
+         /* Shouldn't happen */
+         void *tmp = realloc(*devices, *num_devices * sizeof(EGLDeviceEXT));
+         if (tmp) {
+             *devices = tmp;
+         }
+    }
+
+    return TRUE;
+}
+
+static inline Bool
+glamor_egl_device_matches_fd(EGLDeviceEXT device, int fd)
+{
+    const char *dev_file = eglQueryDeviceStringEXT(device, EGL_DRM_DEVICE_FILE_EXT);
+    if (!dev_file) {
+        return FALSE;
+    }
+
+    int dev_fd = open(dev_file, O_RDWR);
+    if (dev_fd == -1) {
+        return FALSE;
+    }
+
+    /**
+     * From https://pubs.opengroup.org/onlinepubs/009696699/basedefs/sys/stat.h.html
+     *
+     * The st_ino and st_dev fields taken together uniquely identify the file within the system.
+     */
+    struct stat stat1, stat2;
+    if(fstat(dev_fd, &stat2) < 0) {
+        close(dev_fd);
+        return FALSE;
+    }
+
+    close(dev_fd);
+
+    if(fstat(fd, &stat1) < 0) {
+        return FALSE;
+    }
+
+    return (stat1.st_dev == stat2.st_dev) && (stat1.st_ino == stat2.st_ino);
+}
+
+static inline Bool
+glamor_egl_device_matches_config(EGLDeviceEXT device,
+                                 struct glamor_egl_screen_private *glamor_egl,
+                                 Bool strict)
+{
+    if (glamor_egl->fd != -1 &&
+        !glamor_egl_device_matches_fd(device, glamor_egl->fd)) {
+        return FALSE;
+    }
+
+    if (!strict || !glamor_egl->glvnd_vendor) {
+        return TRUE;
+    }
+
+/**
+ * For some reason, this isn't part of the epoxy headers.
+ * It is part of EGL/eglext.h, but we can't include that
+ * alongside the expoxy headers.
+ *
+ * See: https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_device_persistent_id.txt
+ * for the spec where this is defined
+ */
+#ifndef EGL_DRIVER_NAME_EXT
+#define EGL_DRIVER_NAME_EXT 0x335E
+#endif
+
+    const char *driver_name = eglQueryDeviceStringEXT(device, EGL_DRIVER_NAME_EXT);
+    if (!driver_name) {
+        return FALSE;
+    }
+
+    /**
+     * This is not specific to nvidia,
+     * but I don't know of any gl library vendors
+     * other than mesa and nvidia
+     */
+    Bool device_is_nvidia = !!strstr(driver_name, "nvidia");
+    Bool config_is_nvidia = !!strstr(glamor_egl->glvnd_vendor, "nvidia");
+
+    return device_is_nvidia == config_is_nvidia;
+}
+
 static void glamor_egl_cleanup(struct glamor_egl_screen_private *glamor_egl)
 {
     if (glamor_egl->display != EGL_NO_DISPLAY) {
@@ -1364,6 +1480,22 @@ glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl, int ScrnId
     if (glamor_egl->fd != -1) {
         GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_GBM_KHR, glamor_egl->gbm, FALSE);
         GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_GBM_MESA, glamor_egl->gbm, TRUE);
+    }
+
+    if (glamor_query_devices_ext(&devices, &num_devices)) {
+        /* Try a strict match first */
+        for (uint32_t i = 0; i < num_devices; i++) {
+            if (glamor_egl_device_matches_config(devices[i], glamor_egl, TRUE)) {
+                GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, devices[i], TRUE);
+            }
+        }
+
+        /* Try a try a less strict match now */
+        for (uint32_t i = 0; i < num_devices; i++) {
+            if (glamor_egl_device_matches_config(devices[i], glamor_egl, FALSE)) {
+                GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, devices[i], TRUE);
+            }
+        }
     }
 
     /* We can't specify the device we want, which can break in multi-card setups */

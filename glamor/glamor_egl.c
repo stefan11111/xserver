@@ -1330,6 +1330,26 @@ gbm_create_device_by_name(int fd, const char* name)
 }
 
 static Bool
+glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl, int ScrnIdx)
+{
+    glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,
+                                                 glamor_egl->gbm);
+    if (!glamor_egl->display) {
+        xf86DrvMsg(ScrnIdx, X_ERROR, "eglGetDisplay() failed\n");
+        return FALSE;
+    }
+
+    if (!eglInitialize(glamor_egl->display, NULL, NULL)) {
+        xf86DrvMsg(ScrnIdx, X_ERROR, "eglInitialize() failed\n");
+        eglTerminate(glamor_egl->display);
+        glamor_egl->display = EGL_NO_DISPLAY;
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static Bool
 glamor_egl_init_drm(ScrnInfoPtr scrn, struct glamor_egl_screen_private *glamor_egl);
 
 Bool
@@ -1385,17 +1405,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
         }
     }
 
-    glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,
-                                                 glamor_egl->gbm);
-    if (!glamor_egl->display) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR, "eglGetDisplay() failed\n");
-        goto error;
-    }
-
-    if (!eglInitialize(glamor_egl->display, NULL, NULL)) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR, "eglInitialize() failed\n");
-        eglTerminate(glamor_egl->display);
-        glamor_egl->display = EGL_NO_DISPLAY;
+    if (!glamor_egl_init_display(glamor_egl, scrn->scrnIndex)) {
         goto error;
     }
 

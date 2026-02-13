@@ -4189,7 +4189,7 @@ drmmode_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
     ScreenPtr pScreen = xf86ScrnToScreen(pScrn);
     modesettingPtr ms = modesettingPTR(pScrn);
 
-    if (!ms->glamor.init(pScreen, GLAMOR_USE_EGL_SCREEN)) {
+    if (drmmode->glamor_base && !ms->glamor.init(pScreen, GLAMOR_USE_EGL_SCREEN)) {
         if (drmmode->glamor) {
             return FALSE;
         }

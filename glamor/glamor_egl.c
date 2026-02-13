@@ -1638,6 +1638,8 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
         glamor_egl->gbm = NULL;
 
         /* Return FALSE for compat with drivers */
+        xf86DrvMsg(scrn->scrnIndex, X_INFO, "glamor X acceleration enabled on %s\n",
+                   renderer);
         return FALSE;
     }
 

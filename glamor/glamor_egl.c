@@ -1450,9 +1450,43 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 
     glamor_egl->saved_free_screen = scrn->FreeScreen;
     scrn->FreeScreen = glamor_egl_free_screen;
+
+    /* Check if at least one combination of format + modifier is supported */
+    CARD32 *formats = NULL;
+    CARD32 num_formats = 0;
+    Bool found = FALSE;
+    if (!glamor_get_formats_internal(glamor_egl, &num_formats, &formats)) {
+        goto error;
+    }
+
+    if (num_formats == 0) {
+        return TRUE;
+    }
+
+    for (uint32_t i = 0; i < num_formats; i++) {
+        uint64_t *modifiers = NULL;
+        uint32_t num_modifiers = 0;
+        if (glamor_get_modifiers_internal(glamor_egl, formats[i],
+                                          &num_modifiers, &modifiers)) {
+            found = TRUE;
+            free(modifiers);
+            break;
+        }
+    }
+    free(formats);
+
+    if (!found) {
+        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+                   "glamor: No combination of format + modifier is supported\n");
+        goto error;
+    }
+
     return TRUE;
 
 error:
+    if (glamor_egl->saved_free_screen) {
+        scrn->FreeScreen = glamor_egl->saved_free_screen;
+    }
     glamor_egl_cleanup(glamor_egl);
     return FALSE;
 }

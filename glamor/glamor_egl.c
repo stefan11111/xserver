@@ -1339,18 +1339,37 @@ gbm_create_device_by_name(int fd, const char* name)
 static Bool
 glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl, int ScrnIdx)
 {
-    glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,
-                                                 glamor_egl->gbm);
-    if (!glamor_egl->display) {
-        xf86DrvMsg(ScrnIdx, X_ERROR, "eglGetDisplay() failed\n");
-        return FALSE;
+    EGLDeviceEXT *devices = NULL;
+    EGLint num_devices = 0;
+
+    /**
+     * If the user didn't give us a GL driver/library name,
+     * we populate it with what we queried
+     */
+#define GLAMOR_EGL_TRY_PLATFORM(platform, native, platform_fallback) \
+    glamor_egl->display = glamor_egl_get_display2(platform, native, platform_fallback); \
+    if (glamor_egl->display == EGL_NO_DISPLAY) { \
+        xf86DrvMsg(ScrnIdx, X_ERROR, "eglGetDisplay(" #platform ", " #native ") failed\n"); \
+    } else { \
+        if (eglInitialize(glamor_egl->display, NULL, NULL)) { \
+            xf86DrvMsg(ScrnIdx, X_INFO, "eglInitialize() succeeded on " #platform "\n"); \
+            free(devices); \
+            return TRUE; \
+        } \
+        xf86DrvMsg(ScrnIdx, X_ERROR, "eglInitialize() failed on " #platform "\n"); \
+        eglTerminate(glamor_egl->display); \
+        glamor_egl->display = EGL_NO_DISPLAY; \
     }
 
-    if (!eglInitialize(glamor_egl->display, NULL, NULL)) {
-        xf86DrvMsg(ScrnIdx, X_ERROR, "eglInitialize() failed\n");
-        eglTerminate(glamor_egl->display);
-        glamor_egl->display = EGL_NO_DISPLAY;
-        return FALSE;
+    if (glamor_egl->fd != -1) {
+        GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_GBM_KHR, glamor_egl->gbm, FALSE);
+        GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_GBM_MESA, glamor_egl->gbm, TRUE);
+    }
+
+    /* We can't specify the device we want, which can break in multi-card setups */
+    if (glamor_egl->fd == -1) {
+        GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, FALSE);
+        GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, EGL_DEFAULT_DISPLAY, TRUE);
     }
 
     return TRUE;

@@ -1397,13 +1397,6 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 		goto error;  \
 	}
 
-#define GLAMOR_CHECK_EGL_EXTENSIONS(EXT1, EXT2)	 \
-	if (!epoxy_has_egl_extension(glamor_egl->display, "EGL_" #EXT1) &&  \
-	    !epoxy_has_egl_extension(glamor_egl->display, "EGL_" #EXT2)) {  \
-		ErrorF("EGL_" #EXT1 " or EGL_" #EXT2 " required.\n");  \
-		goto error;  \
-	}
-
     GLAMOR_CHECK_EGL_EXTENSION(KHR_surfaceless_context);
     GLAMOR_CHECK_EGL_EXTENSION(KHR_no_config_context);
 

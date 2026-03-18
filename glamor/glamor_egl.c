@@ -36,7 +36,10 @@
 #include <xf86drm.h>
 #define EGL_DISPLAY_NO_X_MESA
 
+#ifdef GLAMOR_HAS_GBM
 #include <gbm.h>
+#endif
+
 #include <drm_fourcc.h>
 
 #include "dix/screen_hooks_priv.h"
@@ -81,6 +84,7 @@ glamor_egl_make_current(struct glamor_context *glamor_ctx)
     }
 }
 
+#ifdef GLAMOR_HAS_GBM
 static int
 glamor_get_flink_name(int fd, int handle, int *name)
 {
@@ -102,7 +106,9 @@ glamor_get_flink_name(int fd, int handle, int *name)
     *name = flink.name;
     return TRUE;
 }
+#endif
 
+#ifdef GLAMOR_HAS_GBM
 static Bool
 glamor_create_texture_from_image(ScreenPtr screen,
                                  EGLImageKHR image, GLuint * texture)
@@ -122,13 +128,19 @@ glamor_create_texture_from_image(ScreenPtr screen,
 
     return TRUE;
 }
+#endif
 
 struct gbm_device *
 glamor_egl_get_gbm_device(ScreenPtr screen)
 {
+#ifdef GLAMOR_HAS_GBM
     return glamor_egl_get_screen_private(screen)->gbm;
+#else
+    return NULL;
+#endif
 }
 
+#ifdef GLAMOR_HAS_GBM
 static void
 glamor_egl_set_pixmap_image(PixmapPtr pixmap, EGLImageKHR image,
                             Bool used_modifiers)
@@ -149,6 +161,7 @@ glamor_egl_set_pixmap_image(PixmapPtr pixmap, EGLImageKHR image,
     pixmap_priv->image = image;
     pixmap_priv->used_modifiers = used_modifiers;
 }
+#endif
 
 Bool
 glamor_egl_create_textured_pixmap(PixmapPtr pixmap, int handle, int stride)
@@ -189,6 +202,7 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
                                               struct gbm_bo *bo,
                                               Bool used_modifiers)
 {
+#ifdef GLAMOR_HAS_GBM
     ScreenPtr screen = pixmap->drawable.pScreen;
     struct glamor_screen_private *glamor_priv =
         glamor_get_screen_private(screen);
@@ -310,8 +324,12 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
 
  done:
     return ret;
+#else
+    return FALSE;
+#endif
 }
 
+#ifdef GLAMOR_HAS_GBM
 static void
 glamor_get_name_from_bo(int gbm_fd, struct gbm_bo *bo, int *name)
 {
@@ -321,7 +339,9 @@ glamor_get_name_from_bo(int gbm_fd, struct gbm_bo *bo, int *name)
     if (!glamor_get_flink_name(gbm_fd, handle.u32, name))
         *name = -1;
 }
+#endif
 
+#ifdef GLAMOR_HAS_GBM
 static Bool
 glamor_make_pixmap_exportable(PixmapPtr pixmap, Bool modifiers_ok)
 {
@@ -472,7 +492,9 @@ glamor_make_pixmap_exportable(PixmapPtr pixmap, Bool modifiers_ok)
 
     return TRUE;
 }
+#endif
 
+#ifdef GLAMOR_HAS_GBM
 static struct gbm_bo *
 glamor_gbm_bo_from_pixmap_internal(ScreenPtr screen, PixmapPtr pixmap)
 {
@@ -489,14 +511,19 @@ glamor_gbm_bo_from_pixmap_internal(ScreenPtr screen, PixmapPtr pixmap)
     return gbm_bo_import(glamor_egl->gbm, GBM_BO_IMPORT_EGL_IMAGE,
                          pixmap_priv->image, GBM_BO_USE_RENDERING);
 }
+#endif
 
 struct gbm_bo *
 glamor_gbm_bo_from_pixmap(ScreenPtr screen, PixmapPtr pixmap)
 {
+#ifdef GLAMOR_HAS_GBM
     if (!glamor_make_pixmap_exportable(pixmap, TRUE))
         return NULL;
 
     return glamor_gbm_bo_from_pixmap_internal(screen, pixmap);
+#else
+    return NULL;
+#endif
 }
 
 int
@@ -599,6 +626,7 @@ glamor_egl_fd_name_from_pixmap(ScreenPtr screen,
                                PixmapPtr pixmap,
                                CARD16 *stride, CARD32 *size)
 {
+#ifdef GLAMOR_HAS_GBM
     glamor_egl_priv_t *glamor_egl;
     struct gbm_bo *bo;
     int fd = -1;
@@ -621,8 +649,12 @@ glamor_egl_fd_name_from_pixmap(ScreenPtr screen,
     gbm_bo_destroy(bo);
  failure:
     return fd;
+#else
+    return -1;
+#endif
 }
 
+#ifdef GLAMOR_HAS_GBM
 static bool
 gbm_format_for_depth(CARD8 depth, uint32_t *format)
 {
@@ -647,6 +679,7 @@ gbm_format_for_depth(CARD8 depth, uint32_t *format)
         return false;
     }
 }
+#endif
 
 Bool
 glamor_back_pixmap_from_fd(PixmapPtr pixmap,
@@ -655,6 +688,7 @@ glamor_back_pixmap_from_fd(PixmapPtr pixmap,
                            CARD16 height,
                            CARD16 stride, CARD8 depth, CARD8 bpp)
 {
+#ifdef GLAMOR_HAS_GBM
     ScreenPtr screen = pixmap->drawable.pScreen;
     glamor_egl_priv_t *glamor_egl;
     struct gbm_bo *bo;
@@ -681,6 +715,9 @@ glamor_back_pixmap_from_fd(PixmapPtr pixmap,
     ret = glamor_egl_create_textured_pixmap_from_gbm_bo(pixmap, bo, FALSE);
     gbm_bo_destroy(bo);
     return ret;
+#else
+    return FALSE;
+#endif
 }
 
 PixmapPtr
@@ -691,6 +728,7 @@ glamor_pixmap_from_fds(ScreenPtr screen,
                        CARD8 depth, CARD8 bpp,
                        uint64_t modifier)
 {
+#ifdef GLAMOR_HAS_GBM
     PixmapPtr pixmap;
     glamor_egl_priv_t *glamor_egl;
     Bool ret = FALSE;
@@ -740,6 +778,9 @@ error:
         return NULL;
     }
     return pixmap;
+#else
+    return NULL;
+#endif
 }
 
 PixmapPtr
@@ -749,6 +790,7 @@ glamor_pixmap_from_fd(ScreenPtr screen,
                       CARD16 height,
                       CARD16 stride, CARD8 depth, CARD8 bpp)
 {
+#ifdef GLAMOR_HAS_GBM
     PixmapPtr pixmap;
     Bool ret;
 
@@ -762,6 +804,9 @@ glamor_pixmap_from_fd(ScreenPtr screen,
         return NULL;
     }
     return pixmap;
+#else
+    return NULL;
+#endif
 }
 
 static Bool
@@ -921,6 +966,7 @@ glamor_egl_get_driver_name(ScreenPtr screen)
     return NULL;
 }
 
+#ifdef GLAMOR_HAS_GBM
 static void glamor_egl_pixmap_destroy(CallbackListPtr *pcbl, ScreenPtr pScreen, PixmapPtr pixmap)
 {
     ScreenPtr screen = pixmap->drawable.pScreen;
@@ -935,19 +981,23 @@ static void glamor_egl_pixmap_destroy(CallbackListPtr *pcbl, ScreenPtr pScreen, 
     if (pixmap_priv->image)
         eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
 }
+#endif
 
 void
 glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
 {
+#ifdef GLAMOR_HAS_GBM
     EGLImageKHR temp_img;
     Bool temp_mod;
     struct glamor_pixmap_private *front_priv =
         glamor_get_pixmap_private(front);
     struct glamor_pixmap_private *back_priv =
         glamor_get_pixmap_private(back);
+#endif
 
     glamor_pixmap_exchange_fbos(front, back);
 
+#ifdef GLAMOR_HAS_GBM
     temp_img = back_priv->image;
     temp_mod = back_priv->used_modifiers;
     BUG_RETURN(!back_priv);
@@ -956,6 +1006,7 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
     BUG_RETURN(!front_priv);
     front_priv->image = temp_img;
     front_priv->used_modifiers = temp_mod;
+#endif
 
     glamor_set_pixmap_type(front, GLAMOR_TEXTURE_DRM);
     glamor_set_pixmap_type(back, GLAMOR_TEXTURE_DRM);
@@ -964,10 +1015,13 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
 static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
 {
     glamor_egl_priv_t *glamor_egl;
+#ifdef GLAMOR_HAS_GBM
     struct glamor_pixmap_private *pixmap_priv;
     PixmapPtr screen_pixmap;
+#endif
 
     glamor_egl = glamor_egl_get_screen_private(screen);
+#ifdef GLAMOR_HAS_GBM
     screen_pixmap = screen->GetScreenPixmap(screen);
 
     pixmap_priv = glamor_get_pixmap_private(screen_pixmap);
@@ -975,11 +1029,14 @@ static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, voi
 
     eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
     pixmap_priv->image = NULL;
+#endif
 
     glamor_egl_cleanup(glamor_egl);
 
     dixScreenUnhookPostClose(screen, glamor_egl_close_screen);
+#ifdef GLAMOR_HAS_GBM
     dixScreenUnhookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
+#endif
 }
 
 #ifdef DRI3
@@ -1058,20 +1115,25 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
     const char *gbm_backend_name;
 
     dixScreenHookPostClose(screen, glamor_egl_close_screen);
+#ifdef GLAMOR_HAS_GBM
     dixScreenHookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
+#endif
 
     glamor_ctx->ctx = glamor_egl->context;
     glamor_ctx->display = glamor_egl->display;
 
     glamor_ctx->make_current = glamor_egl_make_current;
 
+#ifdef GLAMOR_HAS_GBM
     /* Use dynamic logic only if vendor is not forced via xorg.conf */
     if (!glamor_egl->glvnd_vendor) {
         gbm_backend_name = gbm_device_get_backend_name(glamor_egl->gbm);
         /* Mesa uses "drm" as backend name, in that case, just do nothing */
         if (gbm_backend_name && strcmp(gbm_backend_name, "drm") != 0)
             glamor_set_glvnd_vendor(screen, gbm_backend_name);
-    } else {
+    } else
+#endif
+    {
         glamor_set_glvnd_vendor(screen, glamor_egl->glvnd_vendor);
     }
 #ifdef DRI3
@@ -1124,8 +1186,10 @@ void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
         lastGLContext = NULL;
         eglTerminate(glamor_egl->display);
     }
+#ifdef GLAMOR_HAS_GBM
     if (glamor_egl->gbm)
         gbm_device_destroy(glamor_egl->gbm);
+#endif
     free(glamor_egl->device_path);
     free(glamor_egl->glvnd_vendor);
 }
@@ -1213,17 +1277,19 @@ glamor_egl_try_gles_api(glamor_egl_priv_t *glamor_egl)
 }
 
 Bool
-glamor_egl_init2(glamor_egl_priv_t* glamor_egl)
+glamor_egl_init_internal(glamor_egl_priv_t* glamor_egl)
 {
     const GLubyte *renderer;
 
     glamor_egl_get_screen_private = glamor_egl->GLAMOR_EGL_PRIV_PROC;
 
+#ifdef GLAMOR_HAS_GBM
     glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
     if (glamor_egl->gbm == NULL) {
         ErrorF("couldn't create gbm device\n");
         goto error;
     }
+#endif
 
     glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,
                                                  glamor_egl->gbm);

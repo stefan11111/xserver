@@ -93,7 +93,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
         glamor_egl->dmabuf_capable = !!strstr(xf86Info.debug,
                                               "dmabuf_capable");
 
-    if (glamor_egl_init2(glamor_egl)) {
+    if (glamor_egl_init_internal(glamor_egl)) {
         glamor_egl->saved_free_screen = scrn->FreeScreen;
         scrn->FreeScreen = glamor_xf86_egl_free_screen;
         return TRUE;

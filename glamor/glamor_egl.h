@@ -54,6 +54,11 @@ typedef struct glamor_egl_screen_private {
     struct glamor_egl_screen_private* (*GLAMOR_EGL_PRIV_PROC)(ScreenPtr screen);
 } glamor_egl_priv_t;
 
+void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl);
+
+/* Initialize an egl context suitable to be used by glamor. */
+Bool glamor_egl_init2(glamor_egl_priv_t* glamor_egl);
+
 /*
  * Create an EGLDisplay from a native display type. This is a little quirky
  * for a few reasons.

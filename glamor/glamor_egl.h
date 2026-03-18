@@ -33,13 +33,21 @@
 #include <epoxy/egl.h>
 #include <glamor_egl_ext.h>
 
+#include "scrnintstr.h"
+
+#ifdef GLAMOR_HAS_GBM
+#include <gbm.h>
+#endif
+
 typedef struct glamor_egl_screen_private {
     EGLDisplay display;
     EGLContext context;
     char *device_path;
     char *glvnd_vendor; /* GLVND vendor if forced from options or NULL otherwise */
 
+#ifdef GLAMOR_HAS_GBM
     struct gbm_device *gbm;
+#endif
     int fd;
     int dmabuf_capable;
 
@@ -57,7 +65,7 @@ typedef struct glamor_egl_screen_private {
 void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl);
 
 /* Initialize an egl context suitable to be used by glamor. */
-Bool glamor_egl_init2(glamor_egl_priv_t* glamor_egl);
+Bool glamor_egl_init_internal(glamor_egl_priv_t* glamor_egl);
 
 /*
  * Create an EGLDisplay from a native display type. This is a little quirky

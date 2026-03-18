@@ -49,28 +49,53 @@
 #include "glamor_glx_provider.h"
 #include "dri3.h"
 
-struct glamor_egl_screen_private {
-    EGLDisplay display;
-    EGLContext context;
-    char *device_path;
-    char *glvnd_vendor; /* GLVND vendor if forced from options or NULL otherwise */
+#if 1 /* xf86-only */
+static int xf86GlamorEGLPrivateIndex = -1;
 
-    struct gbm_device *gbm;
-    int fd;
-    int dmabuf_capable;
-
-    xf86FreeScreenProc *saved_free_screen;
-};
-
-int xf86GlamorEGLPrivateIndex = -1;
-
-
-static struct glamor_egl_screen_private *
-glamor_egl_get_screen_private(ScrnInfoPtr scrn)
+static inline struct glamor_egl_screen_private*
+glamor_xf86_egl_get_scrn_private(ScrnInfoPtr scrn)
 {
     return (struct glamor_egl_screen_private *)
         scrn->privates[xf86GlamorEGLPrivateIndex].ptr;
 }
+
+static struct glamor_egl_screen_private*
+glamor_xf86_egl_get_screen_private(ScreenPtr screen)
+{
+    return glamor_xf86_egl_get_scrn_private(xf86ScreenToScrn(screen));
+}
+
+static void glamor_egl_cleanup(struct glamor_egl_screen_private *glamor_egl);
+
+static void
+glamor_xf86_egl_free_screen(ScrnInfoPtr scrn)
+{
+    struct glamor_egl_screen_private *glamor_egl;
+
+    glamor_egl = glamor_xf86_egl_get_scrn_private(scrn);
+    if (glamor_egl != NULL) {
+        scrn->FreeScreen = glamor_egl->saved_free_screen;
+        glamor_egl_cleanup(glamor_egl);
+        scrn->FreeScreen(scrn);
+    }
+}
+
+#endif
+
+
+/**
+ * Hack to not break xf86 drivers.
+ *
+ * We actually want this to be a regular dixprivate,
+ * just like the regular glamor private is.
+ *
+ * However, this risks breaking drivers.
+ *
+ * See: https://gitlab.freedesktop.org/xorg/xserver/-/merge_requests/309
+ */
+
+static struct glamor_egl_screen_private*
+(*glamor_egl_get_screen_private)(ScreenPtr screen) = NULL;
 
 static void
 glamor_egl_make_current(struct glamor_context *glamor_ctx)
@@ -136,9 +161,7 @@ glamor_create_texture_from_image(ScreenPtr screen,
 struct gbm_device *
 glamor_egl_get_gbm_device(ScreenPtr screen)
 {
-    struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(xf86ScreenToScrn(screen));
-    return glamor_egl->gbm;
+    return glamor_egl_get_screen_private(screen)->gbm;
 }
 
 static void
@@ -154,8 +177,7 @@ glamor_egl_set_pixmap_image(PixmapPtr pixmap, EGLImageKHR image,
     old = pixmap_priv->image;
     if (old) {
         ScreenPtr                               screen = pixmap->drawable.pScreen;
-        ScrnInfoPtr                             scrn = xf86ScreenToScrn(screen);
-        struct glamor_egl_screen_private        *glamor_egl = glamor_egl_get_screen_private(scrn);
+        struct glamor_egl_screen_private        *glamor_egl = glamor_egl_get_screen_private(screen);
 
         eglDestroyImageKHR(glamor_egl->display, old);
     }
@@ -167,9 +189,8 @@ Bool
 glamor_egl_create_textured_pixmap(PixmapPtr pixmap, int handle, int stride)
 {
     ScreenPtr screen = pixmap->drawable.pScreen;
-    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(scrn);
+        glamor_egl_get_screen_private(screen);
     int ret, fd;
 
     /* GBM doesn't have an import path from handles, so we make a
@@ -177,7 +198,7 @@ glamor_egl_create_textured_pixmap(PixmapPtr pixmap, int handle, int stride)
      */
     ret = drmPrimeHandleToFD(glamor_egl->fd, handle, O_CLOEXEC, &fd);
     if (ret) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                    "Failed to make prime FD for handle: %d\n", errno);
         return FALSE;
     }
@@ -188,7 +209,7 @@ glamor_egl_create_textured_pixmap(PixmapPtr pixmap, int handle, int stride)
                                     stride,
                                     pixmap->drawable.depth,
                                     pixmap->drawable.bitsPerPixel)) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                    "Failed to make import prime FD as pixmap: %d\n", errno);
         close(fd);
         return FALSE;
@@ -204,7 +225,6 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
                                               Bool used_modifiers)
 {
     ScreenPtr screen = pixmap->drawable.pScreen;
-    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_screen_private *glamor_priv =
         glamor_get_screen_private(screen);
     struct glamor_egl_screen_private *glamor_egl;
@@ -212,7 +232,7 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
     GLuint texture;
     Bool ret = FALSE;
 
-    glamor_egl = glamor_egl_get_screen_private(scrn);
+    glamor_egl = glamor_egl_get_screen_private(screen);
 #ifdef GBM_BO_FD_FOR_PLANE
     uint64_t modifier = gbm_bo_get_modifier(bo);
     const int num_planes = gbm_bo_get_plane_count(bo);
@@ -341,9 +361,8 @@ static Bool
 glamor_make_pixmap_exportable(PixmapPtr pixmap, Bool modifiers_ok)
 {
     ScreenPtr screen = pixmap->drawable.pScreen;
-    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(scrn);
+        glamor_egl_get_screen_private(screen);
     struct glamor_pixmap_private *pixmap_priv =
         glamor_get_pixmap_private(pixmap);
     unsigned width = pixmap->drawable.width;
@@ -378,7 +397,7 @@ glamor_make_pixmap_exportable(PixmapPtr pixmap, Bool modifiers_ok)
         format = GBM_FORMAT_R8;
         break;
     default:
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                    "Failed to make %d depth, %dbpp pixmap exportable\n",
                    pixmap->drawable.depth, pixmap->drawable.bitsPerPixel);
         return FALSE;
@@ -449,7 +468,7 @@ glamor_make_pixmap_exportable(PixmapPtr pixmap, Bool modifiers_ok)
     }
 
     if (!bo) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                    "Failed to make %dx%dx%dbpp GBM bo\n",
                    width, height, pixmap->drawable.bitsPerPixel);
         return FALSE;
@@ -460,7 +479,7 @@ glamor_make_pixmap_exportable(PixmapPtr pixmap, Bool modifiers_ok)
                                gbm_bo_get_stride(bo), NULL);
     if (!glamor_egl_create_textured_pixmap_from_gbm_bo(exported, bo,
                                                        used_modifiers)) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                    "Failed to make %dx%dx%dbpp pixmap from GBM bo\n",
                    width, height, pixmap->drawable.bitsPerPixel);
         dixDestroyPixmap(exported, 0);
@@ -493,7 +512,7 @@ static struct gbm_bo *
 glamor_gbm_bo_from_pixmap_internal(ScreenPtr screen, PixmapPtr pixmap)
 {
     struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(xf86ScreenToScrn(screen));
+        glamor_egl_get_screen_private(screen);
     struct glamor_pixmap_private *pixmap_priv =
         glamor_get_pixmap_private(pixmap);
 
@@ -619,7 +638,7 @@ glamor_egl_fd_name_from_pixmap(ScreenPtr screen,
     struct gbm_bo *bo;
     int fd = -1;
 
-    glamor_egl = glamor_egl_get_screen_private(xf86ScreenToScrn(screen));
+    glamor_egl = glamor_egl_get_screen_private(screen);
 
     if (!glamor_make_pixmap_exportable(pixmap, FALSE))
         goto failure;
@@ -672,13 +691,12 @@ glamor_back_pixmap_from_fd(PixmapPtr pixmap,
                            CARD16 stride, CARD8 depth, CARD8 bpp)
 {
     ScreenPtr screen = pixmap->drawable.pScreen;
-    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_egl_screen_private *glamor_egl;
     struct gbm_bo *bo;
     struct gbm_import_fd_data import_data = { 0 };
     Bool ret;
 
-    glamor_egl = glamor_egl_get_screen_private(scrn);
+    glamor_egl = glamor_egl_get_screen_private(screen);
 
     if (!gbm_format_for_depth(depth, &import_data.format) ||
         width == 0 || height == 0)
@@ -713,7 +731,7 @@ glamor_pixmap_from_fds(ScreenPtr screen,
     Bool ret = FALSE;
     int i;
 
-    glamor_egl = glamor_egl_get_screen_private(xf86ScreenToScrn(screen));
+    glamor_egl = glamor_egl_get_screen_private(screen);
 
     pixmap = screen->CreatePixmap(screen, 0, 0, depth, 0);
 
@@ -825,7 +843,7 @@ glamor_get_formats(ScreenPtr screen,
                    CARD32 *num_formats, CARD32 **formats)
 {
     struct glamor_egl_screen_private *glamor_egl;
-    glamor_egl = glamor_egl_get_screen_private(xf86ScreenToScrn(screen));
+    glamor_egl = glamor_egl_get_screen_private(screen);
     return glamor_get_formats_internal(glamor_egl, num_formats, formats);
 }
 
@@ -919,7 +937,7 @@ glamor_get_modifiers(ScreenPtr screen, uint32_t format,
                      uint32_t *num_modifiers, uint64_t **modifiers)
 {
     struct glamor_egl_screen_private *glamor_egl;
-    glamor_egl = glamor_egl_get_screen_private(xf86ScreenToScrn(screen));
+    glamor_egl = glamor_egl_get_screen_private(screen);
     return glamor_get_modifiers_internal(glamor_egl, format, num_modifiers, modifiers);
 }
 
@@ -929,7 +947,7 @@ glamor_egl_get_driver_name(ScreenPtr screen)
 #ifdef GLAMOR_HAS_EGL_QUERY_DRIVER
     struct glamor_egl_screen_private *glamor_egl;
 
-    glamor_egl = glamor_egl_get_screen_private(xf86ScreenToScrn(screen));
+    glamor_egl = glamor_egl_get_screen_private(screen);
 
     if (epoxy_has_egl_extension(glamor_egl->display, "EGL_MESA_query_driver"))
         return eglGetDisplayDriverName(glamor_egl->display);
@@ -941,9 +959,8 @@ glamor_egl_get_driver_name(ScreenPtr screen)
 static void glamor_egl_pixmap_destroy(CallbackListPtr *pcbl, ScreenPtr pScreen, PixmapPtr pixmap)
 {
     ScreenPtr screen = pixmap->drawable.pScreen;
-    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(scrn);
+        glamor_egl_get_screen_private(screen);
 
     struct glamor_pixmap_private *pixmap_priv =
         glamor_get_pixmap_private(pixmap);
@@ -981,13 +998,11 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
 
 static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
 {
-    ScrnInfoPtr scrn;
     struct glamor_egl_screen_private *glamor_egl;
     struct glamor_pixmap_private *pixmap_priv;
     PixmapPtr screen_pixmap;
 
-    scrn = xf86ScreenToScrn(screen);
-    glamor_egl = glamor_egl_get_screen_private(scrn);
+    glamor_egl = glamor_egl_get_screen_private(screen);
     screen_pixmap = screen->GetScreenPixmap(screen);
 
     pixmap_priv = glamor_get_pixmap_private(screen_pixmap);
@@ -1007,9 +1022,8 @@ glamor_dri3_open_client(ClientPtr client,
                         RRProviderPtr provider,
                         int *fdp)
 {
-    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(scrn);
+        glamor_egl_get_screen_private(screen);
     int fd;
     drm_magic_t magic;
 
@@ -1066,9 +1080,8 @@ static const dri3_screen_info_rec glamor_dri3_info = {
 void
 glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 {
-    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(scrn);
+        glamor_egl_get_screen_private(screen);
 #ifdef DRI3
     glamor_screen_private *glamor_priv = glamor_get_screen_private(screen);
 #endif
@@ -1114,7 +1127,7 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
             glamor_egl->device_path = drmGetDeviceNameFromFd2(glamor_egl->fd);
 
         if (!dri3_screen_init(screen, &glamor_dri3_info)) {
-            xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+            LogMessage(X_ERROR,
                        "Failed to initialize DRI3.\n");
         }
     }
@@ -1147,24 +1160,11 @@ static void glamor_egl_cleanup(struct glamor_egl_screen_private *glamor_egl)
     free(glamor_egl);
 }
 
-static void
-glamor_egl_free_screen(ScrnInfoPtr scrn)
-{
-    struct glamor_egl_screen_private *glamor_egl;
-
-    glamor_egl = glamor_egl_get_screen_private(scrn);
-    if (glamor_egl != NULL) {
-        scrn->FreeScreen = glamor_egl->saved_free_screen;
-        glamor_egl_cleanup(glamor_egl);
-        scrn->FreeScreen(scrn);
-    }
-}
-
 static Bool
 glamor_egl_try_big_gl_api(ScrnInfoPtr scrn)
 {
     struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(scrn);
+        glamor_xf86_egl_get_scrn_private(scrn);
 
     if (eglBindAPI(EGL_OPENGL_API)) {
         static const EGLint config_attribs_core[] = {
@@ -1194,18 +1194,18 @@ glamor_egl_try_big_gl_api(ScrnInfoPtr scrn)
     if (glamor_egl->context != EGL_NO_CONTEXT) {
         if (!eglMakeCurrent(glamor_egl->display,
                             EGL_NO_SURFACE, EGL_NO_SURFACE, glamor_egl->context)) {
-            xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+            LogMessage(X_ERROR,
                        "Failed to make GL context current\n");
             return FALSE;
         }
 
         if (epoxy_gl_version() < 21) {
-            xf86DrvMsg(scrn->scrnIndex, X_INFO,
+            LogMessage(X_INFO,
                        "glamor: Ignoring GL < 2.1, falling back to GLES.\n");
             eglDestroyContext(glamor_egl->display, glamor_egl->context);
             glamor_egl->context = EGL_NO_CONTEXT;
         }
-        xf86DrvMsg(scrn->scrnIndex, X_INFO,
+        LogMessage(X_INFO,
             "glamor: Using OpenGL %d.%d context.\n",
             epoxy_gl_version() / 10,
             epoxy_gl_version() % 10);
@@ -1217,14 +1217,14 @@ static Bool
 glamor_egl_try_gles_api(ScrnInfoPtr scrn)
 {
     struct glamor_egl_screen_private *glamor_egl =
-        glamor_egl_get_screen_private(scrn);
+        glamor_xf86_egl_get_scrn_private(scrn);
 
     static const EGLint config_attribs[] = {
         EGL_CONTEXT_CLIENT_VERSION, 2,
         EGL_NONE
     };
     if (!eglBindAPI(EGL_OPENGL_ES_API)) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                     "glamor: Failed to bind GLES API.\n");
         return FALSE;
     }
@@ -1236,11 +1236,11 @@ glamor_egl_try_gles_api(ScrnInfoPtr scrn)
     if (glamor_egl->context != EGL_NO_CONTEXT) {
         if (!eglMakeCurrent(glamor_egl->display,
                             EGL_NO_SURFACE, EGL_NO_SURFACE, glamor_egl->context)) {
-            xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+            LogMessage(X_ERROR,
                        "Failed to make GLES context current\n");
             return FALSE;
         }
-        xf86DrvMsg(scrn->scrnIndex, X_INFO,
+        LogMessage(X_INFO,
                 "glamor: Using OpenGL ES %d.%d context.\n",
                 epoxy_gl_version() / 10,
                 epoxy_gl_version() % 10);
@@ -1283,7 +1283,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     if (glvnd_vendor) {
         glamor_egl->glvnd_vendor = strdup(glvnd_vendor);
         if (!glamor_egl->glvnd_vendor) {
-            xf86DrvMsg(scrn->scrnIndex, X_WARNING, "Couldn't set gl vendor to: %s\n", glvnd_vendor);
+            LogMessage(X_WARNING, "Couldn't set gl vendor to: %s\n", glvnd_vendor);
         }
     }
     api = xf86GetOptValString(options, GLAMOREGLOPT_RENDERING_API);
@@ -1292,6 +1292,8 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     else if (api && !strncasecmp(api, "gl", 2))
         es_allowed = FALSE;
     free(options);
+
+    glamor_egl_get_screen_private = glamor_xf86_egl_get_screen_private;
 
     scrn->privates[xf86GlamorEGLPrivateIndex].ptr = glamor_egl;
     glamor_egl->fd = fd;
@@ -1304,12 +1306,12 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,
                                                  glamor_egl->gbm);
     if (!glamor_egl->display) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR, "eglGetDisplay() failed\n");
+        LogMessage(X_ERROR, "eglGetDisplay() failed\n");
         goto error;
     }
 
     if (!eglInitialize(glamor_egl->display, NULL, NULL)) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR, "eglInitialize() failed\n");
+        LogMessage(X_ERROR, "eglInitialize() failed\n");
         glamor_egl->display = EGL_NO_DISPLAY;
         goto error;
     }
@@ -1341,28 +1343,28 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     }
 
     if (glamor_egl->context == EGL_NO_CONTEXT) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                     "glamor: Failed to create GL or GLES2 contexts\n");
         goto error;
     }
 
     renderer = glGetString(GL_RENDERER);
     if (!renderer) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                    "glGetString() returned NULL, your GL is broken\n");
         goto error;
     }
     if (strstr((const char *)renderer, "softpipe")) {
-        xf86DrvMsg(scrn->scrnIndex, X_INFO,
+        LogMessage(X_INFO,
                    "Refusing to try glamor on softpipe\n");
         goto error;
     }
     if (!strncmp("llvmpipe", (const char *)renderer, strlen("llvmpipe"))) {
         if (scrn->confScreen->num_gpu_devices)
-            xf86DrvMsg(scrn->scrnIndex, X_INFO,
+            LogMessage(X_INFO,
                        "Allowing glamor on llvmpipe for PRIME\n");
         else {
-            xf86DrvMsg(scrn->scrnIndex, X_INFO,
+            LogMessage(X_INFO,
                        "Refusing to try glamor on llvmpipe\n");
             goto error;
         }
@@ -1375,12 +1377,12 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     lastGLContext = NULL;
 
     if (!epoxy_has_gl_extension("GL_OES_EGL_image")) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                    "glamor acceleration requires GL_OES_EGL_image\n");
         goto error;
     }
 
-    xf86DrvMsg(scrn->scrnIndex, X_INFO, "glamor X acceleration enabled on %s\n",
+    LogMessage(X_INFO, "glamor X acceleration enabled on %s\n",
                renderer);
 
 #ifdef GBM_BO_WITH_MODIFIERS
@@ -1405,7 +1407,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 #endif
 
     glamor_egl->saved_free_screen = scrn->FreeScreen;
-    scrn->FreeScreen = glamor_egl_free_screen;
+    scrn->FreeScreen = glamor_xf86_egl_free_screen;
 
     /* Check if at least one combination of format + modifier is supported */
     CARD32 *formats = NULL;
@@ -1432,7 +1434,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     free(formats);
 
     if (!found) {
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+        LogMessage(X_ERROR,
                    "glamor: No combination of format + modifier is supported\n");
         goto error;
     }

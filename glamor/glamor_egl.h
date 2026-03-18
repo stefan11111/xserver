@@ -33,6 +33,20 @@
 #include <epoxy/egl.h>
 #include <glamor_egl_ext.h>
 
+typedef struct glamor_egl_screen_private {
+    EGLDisplay display;
+    EGLContext context;
+    char *device_path;
+    char *glvnd_vendor; /* GLVND vendor if forced from options or NULL otherwise */
+
+    struct gbm_device *gbm;
+    int fd;
+    int dmabuf_capable;
+
+    void* saved_free_screen;
+} glamor_egl_priv_t;
+
+
 /*
  * Create an EGLDisplay from a native display type. This is a little quirky
  * for a few reasons.

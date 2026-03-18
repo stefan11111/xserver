@@ -43,9 +43,16 @@ typedef struct glamor_egl_screen_private {
     int fd;
     int dmabuf_capable;
 
-    void* saved_free_screen;
-} glamor_egl_priv_t;
+    int es_disallowed; /* If using GLES contexts is forbidden */
+    int force_es; /* If glamor should only use GLES contexts */
 
+    int llvmpipe_allowed; /* If glamor render accel should initialize on llvmpipe */
+
+    void* saved_free_screen;
+
+    /* Function that maps each screen to a glamor_egl_priv_t */
+    struct glamor_egl_screen_private* (*GLAMOR_EGL_PRIV_PROC)(ScreenPtr screen);
+} glamor_egl_priv_t;
 
 /*
  * Create an EGLDisplay from a native display type. This is a little quirky

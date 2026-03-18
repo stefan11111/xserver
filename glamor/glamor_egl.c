@@ -76,6 +76,7 @@ glamor_xf86_egl_free_screen(ScrnInfoPtr scrn)
     if (glamor_egl != NULL) {
         scrn->FreeScreen = glamor_egl->saved_free_screen;
         glamor_egl_cleanup(glamor_egl);
+        free(glamor_egl);
         scrn->FreeScreen(scrn);
     }
 }
@@ -1011,6 +1012,8 @@ static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, voi
     eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
     pixmap_priv->image = NULL;
 
+    glamor_egl_cleanup(glamor_egl);
+
     dixScreenUnhookClose(screen, glamor_egl_close_screen);
     dixScreenUnhookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 }
@@ -1143,6 +1146,10 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 
 static void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
 {
+    if (!glamor_egl) {
+        return;
+    }
+
     if (glamor_egl->display != EGL_NO_DISPLAY) {
         eglMakeCurrent(glamor_egl->display,
                        EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
@@ -1157,7 +1164,6 @@ static void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
         gbm_device_destroy(glamor_egl->gbm);
     free(glamor_egl->device_path);
     free(glamor_egl->glvnd_vendor);
-    free(glamor_egl);
 }
 
 static Bool
@@ -1254,46 +1260,15 @@ static const OptionInfoRec GlamorEGLOptions[] = {
 };
 
 Bool
-glamor_egl_init(ScrnInfoPtr scrn, int fd)
+glamor_egl_init2(glamor_egl_priv_t* glamor_egl)
 {
-    glamor_egl_priv_t *glamor_egl;
     const GLubyte *renderer;
-    OptionInfoPtr options;
-    const char *api = NULL;
-    Bool es_allowed = TRUE;
-    Bool force_es = FALSE;
-    const char *glvnd_vendor = NULL;
 
-    glamor_egl = calloc(1, sizeof(*glamor_egl));
-    if (glamor_egl == NULL)
-        return FALSE;
-    if (xf86GlamorEGLPrivateIndex == -1)
-        xf86GlamorEGLPrivateIndex = xf86AllocateScrnInfoPrivateIndex();
+    glamor_egl_get_screen_private = glamor_egl->GLAMOR_EGL_PRIV_PROC;
 
-    options = XNFalloc(sizeof(GlamorEGLOptions));
-    memcpy(options, GlamorEGLOptions, sizeof(GlamorEGLOptions));
-    xf86ProcessOptions(scrn->scrnIndex, scrn->options, options);
-    glvnd_vendor = xf86GetOptValString(options, GLAMOREGLOPT_VENDOR_LIBRARY);
-    if (glvnd_vendor) {
-        glamor_egl->glvnd_vendor = strdup(glvnd_vendor);
-        if (!glamor_egl->glvnd_vendor) {
-            LogMessage(X_WARNING, "Couldn't set gl vendor to: %s\n", glvnd_vendor);
-        }
-    }
-    api = xf86GetOptValString(options, GLAMOREGLOPT_RENDERING_API);
-    if (api && !strncasecmp(api, "es", 2))
-        force_es = TRUE;
-    else if (api && !strncasecmp(api, "gl", 2))
-        es_allowed = FALSE;
-    free(options);
-
-    glamor_egl_get_screen_private = glamor_xf86_egl_get_screen_private;
-
-    scrn->privates[xf86GlamorEGLPrivateIndex].ptr = glamor_egl;
-    glamor_egl->fd = fd;
     glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
     if (glamor_egl->gbm == NULL) {
-        ErrorF("couldn't get display device\n");
+        ErrorF("couldn't create gbm device\n");
         goto error;
     }
 
@@ -1326,12 +1301,12 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     GLAMOR_CHECK_EGL_EXTENSION(KHR_surfaceless_context);
     GLAMOR_CHECK_EGL_EXTENSION(KHR_no_config_context);
 
-    if (!force_es) {
+    if (!glamor_egl->force_es) {
         if(!glamor_egl_try_big_gl_api(glamor_egl))
             goto error;
     }
 
-    if (glamor_egl->context == EGL_NO_CONTEXT && es_allowed) {
+    if (glamor_egl->context == EGL_NO_CONTEXT && !glamor_egl->es_disallowed) {
         if(!glamor_egl_try_gles_api(glamor_egl))
             goto error;
     }
@@ -1354,7 +1329,7 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
         goto error;
     }
     if (!strncmp("llvmpipe", (const char *)renderer, strlen("llvmpipe"))) {
-        if (scrn->confScreen->num_gpu_devices)
+        if (glamor_egl->llvmpipe_allowed)
             LogMessage(X_INFO,
                        "Allowing glamor on llvmpipe for PRIME\n");
         else {
@@ -1400,9 +1375,6 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     }
 #endif
 
-    glamor_egl->saved_free_screen = scrn->FreeScreen;
-    scrn->FreeScreen = glamor_xf86_egl_free_screen;
-
     /* Check if at least one combination of format + modifier is supported */
     CARD32 *formats = NULL;
     CARD32 num_formats = 0;
@@ -1436,10 +1408,54 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
     return TRUE;
 
 error:
-    if (glamor_egl->saved_free_screen) {
-        scrn->FreeScreen = glamor_egl->saved_free_screen;
-    }
     glamor_egl_cleanup(glamor_egl);
+    return FALSE;
+}
+
+Bool
+glamor_egl_init(ScrnInfoPtr scrn, int fd)
+{
+    glamor_egl_priv_t *glamor_egl;
+    OptionInfoPtr options;
+    const char *api = NULL;
+    const char *glvnd_vendor = NULL;
+
+    glamor_egl = calloc(1, sizeof(*glamor_egl));
+    if (glamor_egl == NULL)
+        return FALSE;
+    if (xf86GlamorEGLPrivateIndex == -1)
+        xf86GlamorEGLPrivateIndex = xf86AllocateScrnInfoPrivateIndex();
+
+    options = XNFalloc(sizeof(GlamorEGLOptions));
+    memcpy(options, GlamorEGLOptions, sizeof(GlamorEGLOptions));
+    xf86ProcessOptions(scrn->scrnIndex, scrn->options, options);
+    glvnd_vendor = xf86GetOptValString(options, GLAMOREGLOPT_VENDOR_LIBRARY);
+    if (glvnd_vendor) {
+        glamor_egl->glvnd_vendor = strdup(glvnd_vendor);
+        if (!glamor_egl->glvnd_vendor) {
+            LogMessage(X_WARNING, "Couldn't set gl vendor to: %s\n", glvnd_vendor);
+        }
+    }
+    api = xf86GetOptValString(options, GLAMOREGLOPT_RENDERING_API);
+    if (api && !strncasecmp(api, "es", 2))
+        glamor_egl->force_es = TRUE;
+    else if (api && !strncasecmp(api, "gl", 2))
+        glamor_egl->es_disallowed = TRUE;
+    free(options);
+
+    glamor_egl->GLAMOR_EGL_PRIV_PROC = glamor_xf86_egl_get_screen_private;
+
+    scrn->privates[xf86GlamorEGLPrivateIndex].ptr = glamor_egl;
+
+    glamor_egl->fd = fd;
+
+    if (glamor_egl_init2(glamor_egl)) {
+        glamor_egl->saved_free_screen = scrn->FreeScreen;
+        scrn->FreeScreen = glamor_xf86_egl_free_screen;
+        return TRUE;
+    }
+
+    free(glamor_egl);
     return FALSE;
 }
 

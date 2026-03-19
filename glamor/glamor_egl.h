@@ -57,7 +57,9 @@ typedef struct glamor_egl_screen_private {
 
 void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl);
 
-Bool glamor_egl_init2(glamor_egl_priv_t* glamor_egl);
+typedef int Bool;
+
+Bool glamor_egl_init2(glamor_egl_priv_t* glamor_egl, Bool *compat_ret);
 
 /*
  * Create an EGLDisplay from a native display type. This is a little quirky

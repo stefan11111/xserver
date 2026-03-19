@@ -34,7 +34,7 @@
 #endif
 
 #ifdef GLAMOR
-#include <epoxy/egl.h>
+#include "glamor_egl.h"
 #endif
 
 typedef struct _fbdevPriv {
@@ -52,9 +52,7 @@ typedef struct _fbdevScrPriv {
     Rotation randr;
     Bool shadow;
 #ifdef GLAMOR
-    EGLDisplay display;
-    EGLContext ctx;
-    void* glamor_make_current;
+    glamor_egl_priv_t glamor_egl;
 #endif
 } FbdevScrPriv;
 

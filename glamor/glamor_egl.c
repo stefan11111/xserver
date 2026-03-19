@@ -1021,8 +1021,10 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
     glamor_set_pixmap_type(back, GLAMOR_TEXTURE_DRM);
 }
 
-static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
+static Bool
+glamor_egl_close_screen(ScreenPtr screen)
 {
+    Bool ret;
     glamor_egl_priv_t *glamor_egl;
 #ifdef GLAMOR_HAS_GBM
     struct glamor_pixmap_private *pixmap_priv;
@@ -1034,10 +1036,11 @@ static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, voi
     screen_pixmap = screen->GetScreenPixmap(screen);
 
     pixmap_priv = glamor_get_pixmap_private(screen_pixmap);
-    BUG_RETURN(!pixmap_priv);
 
-    eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
-    pixmap_priv->image = NULL;
+    if (pixmap_priv) {
+        eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
+        pixmap_priv->image = NULL;
+    }
 #endif
 
     glamor_egl_cleanup(glamor_egl);
@@ -1046,6 +1049,8 @@ static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, voi
 #ifdef GLAMOR_HAS_GBM
     dixScreenUnhookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 #endif
+
+    return ret;
 }
 
 #ifdef DRI3
@@ -1912,10 +1917,7 @@ error:
     return FALSE;
 
 glamor_no_dri:
-    /* XXX the gbm device gets leaked XXX */
-
     glamor_egl->fd = -1;
-    glamor_egl->gbm = NULL;
     if (compat_ret) {
         *compat_ret = FALSE;
     }

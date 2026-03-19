@@ -41,6 +41,7 @@
 typedef struct glamor_egl_screen_private {
     EGLDisplay display;
     EGLContext context;
+    CloseScreenProcPtr CloseScreen;
     char *device_path;
     char *glvnd_vendor; /* glvnd vendor library name or driver name */
     void* server_private;

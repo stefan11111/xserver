@@ -50,8 +50,30 @@
 #include "glamor.h"
 #include "glamor_egl.h"
 #include "glamor_egl_ext.h"
+#include "glamor_egl_priv.h"
 #include "glamor_glx_provider.h"
 #include "dri3.h"
+
+static DevPrivateKeyRec glamor_egl_screen_private_key;
+
+static inline Bool
+glamor_egl_init_screen_private(ScreenPtr screen)
+{
+    if (!dixRegisterPrivateKey(&glamor_egl_screen_private_key, PRIVATE_SCREEN, sizeof(glamor_egl_priv_t))) {
+        LogMessage(X_ERROR,
+                   "glamor%d: Failed to allocate screen private\n",
+                   screen->myNum);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static glamor_egl_priv_t*
+_glamor_egl_get_screen_private(ScreenPtr screen)
+{
+    return dixLookupPrivate(&screen->devPrivates, &glamor_egl_screen_private_key);
+}
 
 /**
  * Hack to not break xf86 drivers.
@@ -65,7 +87,7 @@
  */
 
 static glamor_egl_priv_t*
-(*glamor_egl_get_screen_private)(ScreenPtr screen) = NULL;
+(*glamor_egl_get_screen_private)(ScreenPtr screen) = _glamor_egl_get_screen_private;
 
 static void
 glamor_egl_make_current(struct glamor_context *glamor_ctx)
@@ -1021,7 +1043,8 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
     glamor_set_pixmap_type(back, GLAMOR_TEXTURE_DRM);
 }
 
-static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
+static void
+glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
 {
     glamor_egl_priv_t *glamor_egl;
 #ifdef GLAMOR_HAS_GBM
@@ -1034,10 +1057,11 @@ static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, voi
     screen_pixmap = screen->GetScreenPixmap(screen);
 
     pixmap_priv = glamor_get_pixmap_private(screen_pixmap);
-    BUG_RETURN(!pixmap_priv);
 
-    eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
-    pixmap_priv->image = NULL;
+    if (pixmap_priv) {
+        eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
+        pixmap_priv->image = NULL;
+    }
 #endif
 
     glamor_egl_cleanup(glamor_egl);
@@ -1452,6 +1476,10 @@ void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
     free(glamor_egl->glvnd_vendor);
 }
 
+void glamor_egl_cleanup_screen(ScreenPtr screen)
+{
+    glamor_egl_cleanup(glamor_egl_get_screen_private(screen));
+}
 
 static void
 glamor_egl_chose_configs(EGLDisplay display, const EGLint *attrib_list,
@@ -1644,7 +1672,7 @@ gbm_create_device_by_name(int fd, const char* name)
 #endif
 
 static Bool
-glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
+glamor_egl_init_display(glamor_egl_priv_t *glamor_egl)
 {
     EGLDeviceEXT *devices = NULL;
     EGLint num_devices = 0;
@@ -1750,10 +1778,22 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, Bool *compat_ret)
 
     glamor_egl = glamor_egl_conf->glamor_egl_priv;
 
+    if (glamor_egl_conf->GLAMOR_EGL_PRIV_PROC) {
+        glamor_egl_get_screen_private = glamor_egl_conf->GLAMOR_EGL_PRIV_PROC;
+        glamor_egl = glamor_egl_conf->glamor_egl_priv;
+    } else {
+        if (!glamor_egl_conf->screen ||
+            !glamor_egl_init_screen_private(glamor_egl_conf->screen)) {
+            goto error;
+        }
+
+        glamor_egl = glamor_egl_get_screen_private(glamor_egl_conf->screen);
+    }
+
+    memset(glamor_egl, 0, sizeof(*glamor_egl));
+
     glamor_egl->glvnd_vendor = glamor_egl_conf->glvnd_vendor;
     glamor_egl->fd = glamor_egl_conf->fd;
-
-    glamor_egl_get_screen_private = glamor_egl_conf->GLAMOR_EGL_PRIV_PROC;
 
 #ifdef GLAMOR_HAS_GBM
     if (glamor_egl->fd < 0) {
@@ -1912,10 +1952,7 @@ error:
     return FALSE;
 
 glamor_no_dri:
-    /* XXX the gbm device gets leaked XXX */
-
     glamor_egl->fd = -1;
-    glamor_egl->gbm = NULL;
     if (compat_ret) {
         *compat_ret = FALSE;
     }

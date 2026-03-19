@@ -26,27 +26,11 @@ bool fbGlamorAllowed = TRUE;
 bool fbForceGlamor = FALSE;
 bool fbXVAllowed = TRUE;
 
-/* TODO: make this per-screen */
-static glamor_egl_priv_t fbdev_glamor_egl;
-
-static glamor_egl_priv_t*
-fbdev_glamor_egl_get_screen_private(ScreenPtr pScreen)
-{
-    return &fbdev_glamor_egl;
-}
-
 Bool
 fbdevInitAccel(ScreenPtr pScreen)
 {
-    KdScreenPriv(pScreen);
-    KdScreenInfo *screen = pScreenPriv->screen;
-    FbdevScrPriv *scrpriv = screen->driver;
-
-    memset(&fbdev_glamor_egl, 0, sizeof(fbdev_glamor_egl));
-
     glamor_egl_conf_t glamor_egl_conf = {
-                                         .glamor_egl_priv = fbdev_glamor_egl,
-                                         .GLAMOR_EGL_PRIV_PROC = fbdev_glamor_egl_get_screen_private,
+                                         .screen = pScreen,
                                          .glvnd_vendor = fbdev_glvnd_provider,
                                          .fd = -1,
                                          .llvmpipe_allowed = TRUE,
@@ -73,7 +57,6 @@ fbdevInitAccel(ScreenPtr pScreen)
     }
 
     if (!glamor_init(pScreen, flags)) {
-        glamor_egl_cleanup(&fbdev_glamor_egl);
         return FALSE;
     }
 

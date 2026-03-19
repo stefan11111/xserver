@@ -31,7 +31,9 @@
 #define EGL_NO_X11
 #include <epoxy/gl.h>
 #include <epoxy/egl.h>
-#include <glamor_egl_ext.h>
+
+#include "scrnintstr.h"
+#include "glamor_egl_ext.h"
 
 typedef struct glamor_egl_screen_private {
     EGLDisplay display;

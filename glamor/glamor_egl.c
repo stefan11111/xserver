@@ -1227,6 +1227,11 @@ void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
     }
 
     if (glamor_egl->display != EGL_NO_DISPLAY) {
+        if (glamor_egl->context != EGL_NO_CONTEXT) {
+            eglDestroyContext(glamor_egl->display, glamor_egl->context);
+            glamor_egl->context = EGL_NO_CONTEXT;
+        }
+
         eglMakeCurrent(glamor_egl->display,
                        EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         /*
@@ -1235,6 +1240,7 @@ void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
          */
         lastGLContext = NULL;
         eglTerminate(glamor_egl->display);
+        glamor_egl->display = EGL_NO_DISPLAY;
     }
 #ifdef GLAMOR_HAS_GBM
     if (glamor_egl->gbm)

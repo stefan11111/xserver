@@ -1070,8 +1070,10 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
     glamor_set_pixmap_type(back, GLAMOR_TEXTURE_DRM);
 }
 
-static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
+static Bool
+glamor_egl_close_screen(ScreenPtr screen)
 {
+    Bool ret;
     glamor_egl_priv_t *glamor_egl;
 #ifdef GLAMOR_HAS_GBM
     struct glamor_pixmap_private *pixmap_priv;
@@ -1083,18 +1085,23 @@ static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, voi
     screen_pixmap = screen->GetScreenPixmap(screen);
 
     pixmap_priv = glamor_get_pixmap_private(screen_pixmap);
-    BUG_RETURN(!pixmap_priv);
 
-    eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
-    pixmap_priv->image = NULL;
+    if (pixmap_priv) {
+        eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
+        pixmap_priv->image = NULL;
+    }
 #endif
 
     glamor_egl_cleanup(glamor_egl);
 
-    dixScreenUnhookClose(screen, glamor_egl_close_screen);
+    screen->CloseScreen = glamor_egl->CloseScreen;
+    ret = screen->CloseScreen(screen);
+
 #ifdef GLAMOR_HAS_GBM
     dixScreenUnhookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 #endif
+
+    return ret;
 }
 
 #ifdef DRI3
@@ -1212,7 +1219,15 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
     static Bool vendor_initialized = FALSE;
 #endif
 
-    dixScreenHookClose(screen, glamor_egl_close_screen);
+    /**
+     * We're doing direct proc wrapping, because we
+     * want drivers that wrap us to end up on top of us.
+     *
+     * Otherwise, we risk freeing stuff they depend on.
+     */
+    glamor_egl->CloseScreen = screen->CloseScreen;
+    screen->CloseScreen = glamor_egl_close_screen;
+
 #ifdef GLAMOR_HAS_GBM
     dixScreenHookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 #endif
@@ -1963,12 +1978,7 @@ error:
     return FALSE;
 
 glamor_no_dri:
-    /* XXX the gbm device gets leaked XXX */
-
     glamor_egl->fd = -1;
-#ifdef GLAMOR_HAS_GBM
-    glamor_egl->gbm = NULL;
-#endif
     if (compat_ret) {
         *compat_ret = FALSE;
     }

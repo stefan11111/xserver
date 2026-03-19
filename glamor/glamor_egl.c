@@ -1703,17 +1703,17 @@ glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
 #define GLAMOR_EGL_TRY_PLATFORM(platform, native, platform_fallback) \
     glamor_egl->display = glamor_egl_get_display2(platform, native, platform_fallback); \
     if (glamor_egl->display == EGL_NO_DISPLAY) { \
-        LogMessage(X_ERROR, "eglGetDisplay(" #platform ", " #native ") failed\n"); \
+        LogMessage(X_ERROR, "glamor: eglGetDisplay(" #platform ", " #native ") failed\n"); \
     } else { \
         if (eglInitialize(glamor_egl->display, NULL, NULL)) { \
             if (!glamor_egl->glvnd_vendor && driver_name) { \
                 glamor_egl->glvnd_vendor = strdup(driver_name); \
             } \
-            LogMessage(X_INFO, "eglInitialize() succeeded on " #platform "\n"); \
+            LogMessage(X_INFO, "glamor: eglInitialize() succeeded on " #platform "\n"); \
             free(devices); \
             return TRUE; \
         } \
-        LogMessage(X_ERROR, "eglInitialize() failed on " #platform "\n"); \
+        LogMessage(X_ERROR, "glamor: eglInitialize() failed on " #platform "\n"); \
         eglTerminate(glamor_egl->display); \
         glamor_egl->display = EGL_NO_DISPLAY; \
     }

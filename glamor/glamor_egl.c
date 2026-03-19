@@ -1272,24 +1272,41 @@ glamor_egl_device_matches_fd(EGLDeviceEXT device, int fd)
     return (stat1.st_dev == stat2.st_dev) && (stat1.st_ino == stat2.st_ino);
 }
 
+
+/**
+ * generic egl extension parser
+ */
 static inline Bool
-glamor_egl_device_matches_config(EGLDeviceEXT device,
-                                 glamor_egl_priv_t *glamor_egl,
-                                 Bool strict)
+glamor_egl_device_has_extension(const char *dev_ext, const char *ext)
 {
-    if (glamor_egl->fd != -1 &&
-        !glamor_egl_device_matches_fd(device, glamor_egl->fd)) {
+    if (!dev_ext) {
         return FALSE;
     }
 
-    if (!strict || !glamor_egl->glvnd_vendor) {
-        return TRUE;
+    int len = strlen(ext);
+
+    for (;;) {
+        dev_ext = strstr(dev_ext, ext);
+        if (!dev_ext) {
+            return FALSE;
+        }
+        if (dev_ext[len] == '\0' ||
+            dev_ext[len] == ' ') {
+            return TRUE;
+        }
     }
 
+    /* Unreachable */
+    return FALSE;
+}
+
+static inline const char*
+glamor_egl_device_get_name(EGLDeviceEXT device)
+{
 /**
  * For some reason, this isn't part of the epoxy headers.
  * It is part of EGL/eglext.h, but we can't include that
- * alongside the expoxy headers.
+ * alongside the epoxy headers.
  *
  * See: https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_device_persistent_id.txt
  * for the spec where this is defined
@@ -1298,8 +1315,89 @@ glamor_egl_device_matches_config(EGLDeviceEXT device,
 #define EGL_DRIVER_NAME_EXT 0x335E
 #endif
 
-    const char *driver_name = eglQueryDeviceStringEXT(device, EGL_DRIVER_NAME_EXT);
-    if (!driver_name) {
+/**
+ * Same for this one
+ *
+ * See: https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_device_query_name.txt
+ * for the spec where this is defined
+ */
+#ifndef EGL_RENDERER_EXT
+#define EGL_RENDERER_EXT 0x335F
+#endif
+
+    const char *dev_ext = eglQueryDeviceStringEXT(device, EGL_EXTENSIONS);
+
+    const char *driver_name = glamor_egl_device_has_extension(dev_ext, "EGL_EXT_device_persistent_id") ?
+                              eglQueryDeviceStringEXT(device, EGL_DRIVER_NAME_EXT) : NULL;
+
+    if (driver_name) {
+        return driver_name;
+    }
+
+    /* This might seem like overkill, but it's actually needed for the nvidia 470 driver */
+    if (glamor_egl_device_has_extension(dev_ext, "EGL_EXT_device_query_name")) {
+        const char *egl_renderer = eglQueryDeviceStringEXT(device, EGL_RENDERER_EXT);
+        if (egl_renderer) {
+            return strstr(egl_renderer, "NVIDIA") ? "nvidia" : "mesa";
+        }
+        const char *egl_vendor = eglQueryDeviceStringEXT(device, EGL_VENDOR);
+        if (egl_vendor) {
+            return strstr(egl_vendor, "NVIDIA") ? "nvidia" : "mesa";
+        }
+    }
+
+    return NULL;
+}
+
+/**
+ * Find the desired EGLDevice for our config.
+ *
+ * If strict == 2, we are looking for EGLDevices with names and,
+ * if a glvnd vendor was passed, an exact match between the
+ * device's name, and the desired vendor.
+ *
+ * If strict == 1, we are looking for EGLDevices with names and,
+ * if a glvnd vendor was passed, a match between the gl vendor library
+ * provider and the desired vendor's library.
+ *
+ * If strict == 0, we accept all devices, even those with no names.
+ *
+ * Regardless of success/failure, and regardless of strictness level,
+ * we save the statically allocated string with the EGLDevice's name
+ * in *driver_name, even if that name is NULL.
+ */
+static inline Bool
+glamor_egl_device_matches_config(EGLDeviceEXT device,
+                                 glamor_egl_priv_t *glamor_egl,
+                                 int strict,
+                                 const char** driver_name)
+{
+    *driver_name = glamor_egl_device_get_name(device);
+
+    if (glamor_egl->fd != -1 &&
+        !glamor_egl_device_matches_fd(device, glamor_egl->fd)) {
+        return FALSE;
+    }
+
+    if (strict <= 0) {
+        return TRUE;
+    }
+
+
+    if (*driver_name == NULL) {
+        return FALSE;
+    }
+
+
+    if (!glamor_egl->glvnd_vendor) {
+        return TRUE;
+    }
+
+    if (!strcmp(*driver_name, glamor_egl->glvnd_vendor)) {
+        return TRUE;
+    }
+
+    if (strict >= 2) {
         return FALSE;
     }
 
@@ -1308,7 +1406,7 @@ glamor_egl_device_matches_config(EGLDeviceEXT device,
      * but I don't know of any gl library vendors
      * other than mesa and nvidia
      */
-    Bool device_is_nvidia = !!strstr(driver_name, "nvidia");
+    Bool device_is_nvidia = !!strstr(*driver_name, "nvidia");
     Bool config_is_nvidia = !!strstr(glamor_egl->glvnd_vendor, "nvidia");
 
     return device_is_nvidia == config_is_nvidia;
@@ -1443,6 +1541,7 @@ glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
 {
     EGLDeviceEXT *devices = NULL;
     EGLint num_devices = 0;
+    const char *driver_name = NULL;
     /**
      * If the user didn't give us a GL driver/library name,
      * we populate it with what we queried
@@ -1453,6 +1552,9 @@ glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
         LogMessage(X_ERROR, "eglGetDisplay(" #platform ", " #native ") failed\n"); \
     } else { \
         if (eglInitialize(glamor_egl->display, NULL, NULL)) { \
+            if (!glamor_egl->glvnd_vendor && driver_name) { \
+                glamor_egl->glvnd_vendor = strdup(driver_name); \
+            } \
             LogMessage(X_INFO, "eglInitialize() succeeded on " #platform "\n"); \
             free(devices); \
             return TRUE; \
@@ -1466,19 +1568,21 @@ glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
         GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_GBM_MESA, glamor_egl->gbm, TRUE);
     }
     if (glamor_query_devices_ext(&devices, &num_devices)) {
-        /* Try a strict match first */
-        for (uint32_t i = 0; i < num_devices; i++) {
-            if (glamor_egl_device_matches_config(devices[i], glamor_egl, TRUE)) {
-                GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, devices[i], TRUE);
-            }
+#define GLAMOR_EGL_TRY_PLATFORM_DEVICE(strict) \
+        for (uint32_t i = 0; i < num_devices; i++) { \
+            if (glamor_egl_device_matches_config(devices[i], glamor_egl, strict, &driver_name)) { \
+                GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, devices[i], TRUE); \
+            } \
         }
-        /* Try a try a less strict match now */
-        for (uint32_t i = 0; i < num_devices; i++) {
-            if (glamor_egl_device_matches_config(devices[i], glamor_egl, FALSE)) {
-                GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, devices[i], TRUE);
-            }
-        }
+
+        GLAMOR_EGL_TRY_PLATFORM_DEVICE(2);
+        GLAMOR_EGL_TRY_PLATFORM_DEVICE(1);
+        GLAMOR_EGL_TRY_PLATFORM_DEVICE(0);
+
+#undef GLAMOR_EGL_TRY_PLATFORM_DEVICE
     }
+    driver_name = NULL;
+
     /* We can't specify the device we want, which can break in multi-card setups */
     if (glamor_egl->fd < 0) {
         GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, FALSE);
@@ -1496,7 +1600,11 @@ glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
          */
         GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, EGL_DEFAULT_DISPLAY, TRUE);
     }
-    return TRUE;
+
+#undef GLAMOR_EGL_TRY_PLATFORM
+
+    free(devices);
+    return FALSE;
 }
 
 Bool

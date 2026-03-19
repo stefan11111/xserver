@@ -35,6 +35,10 @@
 #include "scrnintstr.h"
 #include "glamor_egl_ext.h"
 
+#ifdef GLAMOR_HAS_GBM
+#include <gbm.h>
+#endif
+
 typedef struct glamor_egl_screen_private {
     EGLDisplay display;
     EGLContext context;
@@ -42,7 +46,9 @@ typedef struct glamor_egl_screen_private {
     char *glvnd_vendor; /* glvnd vendor library name or driver name */
     void* server_private;
 
+#ifdef GLAMOR_HAS_GBM
     struct gbm_device *gbm;
+#endif
     int fd;
     int dmabuf_capable;
     int linear_only; /* When using gbm, this means that only linear buffers can be created */

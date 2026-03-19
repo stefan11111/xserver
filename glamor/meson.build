@@ -50,5 +50,6 @@ glamor = static_library('glamor',
         common_dep,
         dependency('libdrm', version: '>= 2.4.46'),
         epoxy_dep,
+        gbm_dep,
     ],
 )

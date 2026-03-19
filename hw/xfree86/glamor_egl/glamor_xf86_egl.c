@@ -10,7 +10,7 @@
 #include <xf86Priv.h>
 
 #include "glamor.h"
-#include "../../glamor/glamor_egl.h"
+#include "glamor_egl.h"
 
 enum {
     GLAMOREGLOPT_RENDERING_API,

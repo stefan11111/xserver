@@ -52,8 +52,8 @@ glamor_xf86_egl_free_screen(ScrnInfoPtr scrn)
     }
 }
 
-Bool
-glamor_egl_init(ScrnInfoPtr scrn, int fd)
+static Bool
+_glamor_egl_init(ScrnInfoPtr scrn, int fd, Bool *compat_ret)
 {
     glamor_egl_priv_t *glamor_egl;
     OptionInfoPtr options;
@@ -97,18 +97,33 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
                                                    "dmabuf_capable");
     }
 
-    Bool compat_ret = TRUE;
-
     glamor_egl_conf.llvmpipe_allowed = !!scrn->confScreen->num_gpu_devices;
 
     glamor_egl_conf.server_private = scrn->FreeScreen;
-    if (glamor_egl_init2(&glamor_egl_conf, &compat_ret)) {
+    if (glamor_egl_init_internal(&glamor_egl_conf, compat_ret)) {
         scrn->FreeScreen = glamor_xf86_egl_free_screen;
-        return compat_ret;
+        return TRUE;
     }
 
     free(glamor_egl);
     return FALSE;
+}
+
+Bool
+glamor_egl_init(ScrnInfoPtr scrn, int fd)
+{
+    Bool compat_ret = TRUE;
+    if (_glamor_egl_init(scrn, fd, &compat_ret)) {
+        return compat_ret;
+    }
+
+    return FALSE;
+}
+
+Bool
+glamor_egl_init2(ScrnInfoPtr scrn, int fd, Bool *dri_support)
+{
+    return _glamor_egl_init(scrn, fd, dri_support);
 }
 
 /** Stub to retain compatibility with pre-server-1.16 ABI. */

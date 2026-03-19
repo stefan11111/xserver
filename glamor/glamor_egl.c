@@ -1790,7 +1790,7 @@ glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
 }
 
 Bool
-glamor_egl_init2(glamor_egl_conf_t* glamor_egl_conf, Bool *compat_ret)
+glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, Bool *compat_ret)
 {
     const GLubyte *renderer;
     glamor_egl_priv_t* glamor_egl;

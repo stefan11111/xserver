@@ -83,13 +83,13 @@ typedef struct {
  * If compat_ret is not NULL, it will be set to a return value
  * for compatibility with xf86 drivers.
  */
-Bool glamor_egl_init2(glamor_egl_conf_t* glamor_egl_conf, Bool *compat_ret);
+Bool glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, Bool *compat_ret);
 
 /**
  * Deinitialize an egl context created by glamor egl
  * and free associated resources.
  *
- * glamor_egl is the pointer passed to glamor_egl_init2
+ * glamor_egl is the pointer passed to glamor_egl_init_internal
  * in glamor_egl_conf->glamor_egl_priv;
  */
 void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl);

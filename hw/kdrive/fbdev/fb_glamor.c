@@ -55,7 +55,7 @@ fbdevInitAccel(ScreenPtr pScreen)
                                          .force_es = force_es,
                                         };
 
-    if (!glamor_egl_init2(&glamor_egl_conf, NULL)) {
+    if (!glamor_egl_init_internal(&glamor_egl_conf, NULL)) {
         return FALSE;
     }
 

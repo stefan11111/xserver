@@ -7,9 +7,8 @@
 
 #include <X11/Xfuncproto.h>
 
-#include <epoxy/egl.h>
-#include "dix.h"
 #include "scrnintstr.h"
+
 #include "glamor.h"
 #include "glamor_egl.h"
 
@@ -46,14 +45,18 @@ fbdevInitAccel(ScreenPtr pScreen)
 
     memset(&scrpriv->glamor_egl, 0, sizeof(scrpriv->glamor_egl));
 
-    scrpriv->glamor_egl.fd = -1;
-    scrpriv->glamor_egl.glvnd_vendor = fbdev_glvnd_provider;
-    scrpriv->glamor_egl.force_es = force_es;
-    scrpriv->glamor_egl.es_disallowed = !es_allowed;
-    scrpriv->glamor_egl.llvmpipe_allowed = TRUE;
-    scrpriv->glamor_egl.GLAMOR_EGL_PRIV_PROC = fbdev_glamor_egl_get_screen_private;
+    glamor_egl_conf_t glamor_egl_conf = {
+                                         .glamor_egl_priv = &scrpriv->glamor_egl,
+                                         .GLAMOR_EGL_PRIV_PROC = fbdev_glamor_egl_get_screen_private,
+                                         .glvnd_vendor = fbdev_glvnd_provider,
+                                         .fd = -1,
+                                         .llvmpipe_allowed = TRUE,
+                                         .force_glamor = TRUE,
+                                         .es_disallowed = !es_allowed,
+                                         .force_es = force_es,
+                                        };
 
-    if (!glamor_egl_init_internal(&scrpriv->glamor_egl, NULL)) {
+    if (!glamor_egl_init_internal(&glamor_egl_conf, NULL)) {
         return FALSE;
     }
 

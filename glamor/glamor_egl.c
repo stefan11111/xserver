@@ -1452,53 +1452,129 @@ void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
     free(glamor_egl->glvnd_vendor);
 }
 
+
+static void
+glamor_egl_chose_configs(EGLDisplay display, const EGLint *attrib_list,
+                         EGLConfig **configs, EGLint *num_configs)
+{
+    EGLint max_configs = 0;
+    *configs = NULL;
+    *num_configs = 0;
+    if (!eglChooseConfig(display, attrib_list, NULL, 0, &max_configs) || max_configs == 0) {
+        return;
+    }
+    *configs = calloc(max_configs, sizeof(EGLConfig));
+    if (*configs == NULL) {
+        return;
+    }
+    if (!eglChooseConfig(display, attrib_list, *configs, max_configs, num_configs) || *num_configs == 0) {
+        free(*configs);
+        *configs = NULL;
+        *num_configs = 0;
+    }
+    if (*num_configs < max_configs) {
+        /* Shouldn't happen */
+        void *tmp = realloc(*configs, *num_configs * sizeof(EGLConfig));
+        if (tmp) {
+            *configs = tmp;
+        }
+    }
+}
+static EGLContext
+glamor_egl_create_context(EGLDisplay display,
+                          const EGLint *config_attrib_list,
+                          const EGLint **ctx_attrib_lists, int num_attr_lists)
+{
+    EGLConfig *configs = NULL;
+    EGLint num_configs = 0;
+    EGLContext ctx = EGL_NO_CONTEXT;
+    /* Try creating a no-config context, maybe we can skip all the config stuff */
+    /* if (epoxy_has_egl_extension(display, "EGL_KHR_no_config_context")) */
+    for (int j = 0; j < num_attr_lists; j++) {
+        ctx = eglCreateContext(display, EGL_NO_CONFIG_KHR,
+                               EGL_NO_CONTEXT, ctx_attrib_lists[j]);
+        if (ctx != EGL_NO_CONTEXT) {
+            return ctx;
+        }
+    }
+    glamor_egl_chose_configs(display, config_attrib_list,
+                             &configs, &num_configs);
+    for (int i = 0; i < num_configs; i++) {
+        for (int j = 0; j < num_attr_lists; j++) {
+            ctx = eglCreateContext(display, configs[i],
+                                   EGL_NO_CONTEXT, ctx_attrib_lists[j]);
+            if (ctx != EGL_NO_CONTEXT) {
+                free(configs);
+                return ctx;
+            }
+        }
+    }
+    free(configs);
+    return EGL_NO_CONTEXT;
+}
+
 static Bool
 glamor_egl_try_big_gl_api(glamor_egl_priv_t *glamor_egl)
 {
-    if (eglBindAPI(EGL_OPENGL_API)) {
-        static const EGLint config_attribs_core[] = {
-            EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR,
-            EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR,
-            EGL_CONTEXT_MAJOR_VERSION_KHR,
-            GLAMOR_GL_CORE_VER_MAJOR,
-            EGL_CONTEXT_MINOR_VERSION_KHR,
-            GLAMOR_GL_CORE_VER_MINOR,
-            EGL_NONE
-        };
-        static const EGLint config_attribs[] = {
-            EGL_NONE
-        };
+    static const EGLint config_attribs_core[] = {
+        EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR,
+        EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR,
+        EGL_CONTEXT_MAJOR_VERSION_KHR,
+        GLAMOR_GL_CORE_VER_MAJOR,
+        EGL_CONTEXT_MINOR_VERSION_KHR,
+        GLAMOR_GL_CORE_VER_MINOR,
+        EGL_NONE
+    };
+    static const EGLint config_attribs[] = {
+        EGL_NONE
+    };
 
-        glamor_egl->context = eglCreateContext(glamor_egl->display,
-                                               EGL_NO_CONFIG_KHR, EGL_NO_CONTEXT,
-                                               config_attribs_core);
+    static const EGLint* ctx_attrib_lists[] =
+        { config_attribs_core, config_attribs };
 
-        if (glamor_egl->context == EGL_NO_CONTEXT)
-            glamor_egl->context = eglCreateContext(glamor_egl->display,
-                                                   EGL_NO_CONFIG_KHR,
-                                                   EGL_NO_CONTEXT,
-                                                   config_attribs);
+    static const EGLint config_attrib_list[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
+        EGL_CONFORMANT, EGL_OPENGL_BIT,
+        EGL_SURFACE_TYPE, EGL_DONT_CARE,
+        EGL_NONE
+    };
+
+    if (!eglBindAPI(EGL_OPENGL_API)) {
+        LogMessage(X_ERROR, "glamor: Failed to bind GL API.\n");
+        return FALSE;
     }
 
-    if (glamor_egl->context != EGL_NO_CONTEXT) {
-        if (!eglMakeCurrent(glamor_egl->display,
-                            EGL_NO_SURFACE, EGL_NO_SURFACE, glamor_egl->context)) {
-            LogMessage(X_ERROR,
-                       "Failed to make GL context current\n");
-            return FALSE;
-        }
+    glamor_egl->context = glamor_egl_create_context(glamor_egl->display,
+                                                    config_attrib_list,
+                                                    ctx_attrib_lists,
+                                                    ARRAY_SIZE(ctx_attrib_lists));
 
-        if (epoxy_gl_version() < 21) {
-            LogMessage(X_INFO,
-                       "glamor: Ignoring GL < 2.1, falling back to GLES.\n");
-            eglDestroyContext(glamor_egl->display, glamor_egl->context);
-            glamor_egl->context = EGL_NO_CONTEXT;
-        }
-        LogMessage(X_INFO,
-            "glamor: Using OpenGL %d.%d context.\n",
-            epoxy_gl_version() / 10,
-            epoxy_gl_version() % 10);
+    if (glamor_egl->context == EGL_NO_CONTEXT) {
+        LogMessage(X_ERROR, "Failed to create GL context\n");
+        return FALSE;
     }
+
+    if (!eglMakeCurrent(glamor_egl->display,
+                        EGL_NO_SURFACE, EGL_NO_SURFACE, glamor_egl->context)) {
+        LogMessage(X_ERROR, "Failed to make GL context current\n");
+
+        eglDestroyContext(glamor_egl->display, glamor_egl->context);
+        glamor_egl->context = EGL_NO_CONTEXT;
+        return FALSE;
+    }
+    if (epoxy_gl_version() < 21) {
+        LogMessage(X_INFO, "glamor: Ignoring GL < 2.1, falling back to GLES.\n");
+
+        eglDestroyContext(glamor_egl->display, glamor_egl->context);
+        glamor_egl->context = EGL_NO_CONTEXT;
+        return FALSE;
+    }
+
+    LogMessage(X_INFO,
+        "glamor: Using OpenGL %d.%d context.\n",
+        epoxy_gl_version() / 10,
+        epoxy_gl_version() % 10);
+
     return TRUE;
 }
 
@@ -1509,28 +1585,45 @@ glamor_egl_try_gles_api(glamor_egl_priv_t *glamor_egl)
         EGL_CONTEXT_CLIENT_VERSION, 2,
         EGL_NONE
     };
+
+    static const EGLint* ctx_attrib_lists[] =
+        { config_attribs };
+
+    static const EGLint config_attrib_list[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_CONFORMANT, EGL_OPENGL_ES2_BIT,
+        EGL_SURFACE_TYPE, EGL_DONT_CARE,
+        EGL_NONE
+    };
+
+
     if (!eglBindAPI(EGL_OPENGL_ES_API)) {
-        LogMessage(X_ERROR,
-                    "glamor: Failed to bind GLES API.\n");
+        LogMessage(X_ERROR, "glamor: Failed to bind GLES API.\n");
         return FALSE;
     }
 
-    glamor_egl->context = eglCreateContext(glamor_egl->display,
-                                            EGL_NO_CONFIG_KHR, EGL_NO_CONTEXT,
-                                            config_attribs);
+    glamor_egl->context = glamor_egl_create_context(glamor_egl->display,
+                                                    config_attrib_list,
+                                                    ctx_attrib_lists,
+                                                    ARRAY_SIZE(ctx_attrib_lists));
 
-    if (glamor_egl->context != EGL_NO_CONTEXT) {
-        if (!eglMakeCurrent(glamor_egl->display,
-                            EGL_NO_SURFACE, EGL_NO_SURFACE, glamor_egl->context)) {
-            LogMessage(X_ERROR,
-                       "Failed to make GLES context current\n");
-            return FALSE;
-        }
-        LogMessage(X_INFO,
-                "glamor: Using OpenGL ES %d.%d context.\n",
-                epoxy_gl_version() / 10,
-                epoxy_gl_version() % 10);
+    if (glamor_egl->context == EGL_NO_CONTEXT) {
+        LogMessage(X_ERROR, "Failed to create GLES context\n");
+        return FALSE;
     }
+    if (!eglMakeCurrent(glamor_egl->display,
+                        EGL_NO_SURFACE, EGL_NO_SURFACE, glamor_egl->context)) {
+        eglDestroyContext(glamor_egl->display, glamor_egl->context);
+        glamor_egl->display = EGL_NO_CONTEXT;
+        LogMessage(X_ERROR, "Failed to make GLES context current\n");
+        return FALSE;
+    }
+
+    LogMessage(X_INFO,
+               "glamor: Using OpenGL ES %d.%d context.\n",
+               epoxy_gl_version() / 10,
+               epoxy_gl_version() % 10);
+
     return TRUE;
 }
 
@@ -1689,15 +1782,7 @@ glamor_egl_init_internal(glamor_egl_priv_t* glamor_egl, Bool *compat_ret)
 		goto error;  \
 	}
 
-#define GLAMOR_CHECK_EGL_EXTENSIONS(EXT1, EXT2)	 \
-	if (!epoxy_has_egl_extension(glamor_egl->display, "EGL_" #EXT1) &&  \
-	    !epoxy_has_egl_extension(glamor_egl->display, "EGL_" #EXT2)) {  \
-		ErrorF("EGL_" #EXT1 " or EGL_" #EXT2 " required.\n");  \
-		goto error;  \
-	}
-
     GLAMOR_CHECK_EGL_EXTENSION(KHR_surfaceless_context);
-    GLAMOR_CHECK_EGL_EXTENSION(KHR_no_config_context);
 
     if (!glamor_egl->force_es) {
         if(!glamor_egl_try_big_gl_api(glamor_egl))

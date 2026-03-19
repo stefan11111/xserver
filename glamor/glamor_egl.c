@@ -864,13 +864,20 @@ glamor_get_formats(ScreenPtr screen,
 
 static void
 glamor_filter_modifiers(uint32_t *num_modifiers, uint64_t **modifiers,
-                        EGLBoolean *external_only)
+                        EGLBoolean *external_only, int linear_only)
 {
     uint32_t write_pos = 0;
     for (uint32_t i = 0; i < *num_modifiers; i++) {
         if (external_only[i]) {
             continue;
         }
+
+        if (linear_only &&
+            ((*modifiers)[i] != DRM_FORMAT_MOD_LINEAR) &&
+            ((*modifiers)[i] != DRM_FORMAT_MOD_INVALID)) {
+            continue;
+        }
+
         (*modifiers)[write_pos++] = (*modifiers)[i];
     }
 
@@ -932,7 +939,7 @@ glamor_get_modifiers_internal(glamor_egl_priv_t *glamor_egl, uint32_t format,
     }
 
     *num_modifiers = num;
-    glamor_filter_modifiers(num_modifiers, modifiers, external_only);
+    glamor_filter_modifiers(num_modifiers, modifiers, external_only, glamor_egl->linear_only);
     free(external_only);
 
 
@@ -1156,27 +1163,29 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 
     glamor_egl_set_glvnd_vendor(screen);
 #ifdef DRI3
-    /* Tell the core that we have the interfaces for import/export
-     * of pixmaps.
-     */
-    glamor_enable_dri3(screen);
-
-    /* If the driver wants to do its own auth dance (e.g. Xwayland
-     * on pre-3.15 kernels that don't have render nodes and thus
-     * has the wayland compositor as a master), then it needs us
-     * to stay out of the way and let it init DRI3 on its own.
-     */
-    if (!(glamor_priv->flags & GLAMOR_NO_DRI3)) {
-        /* To do DRI3 device FD generation, we need to open a new fd
-         * to the same device we were handed in originally.
+    if (glamor_egl->fd >= 0) {
+        /* Tell the core that we have the interfaces for import/export
+         * of pixmaps.
          */
-        glamor_egl->device_path = drmGetRenderDeviceNameFromFd(glamor_egl->fd);
-        if (!glamor_egl->device_path)
-            glamor_egl->device_path = drmGetDeviceNameFromFd2(glamor_egl->fd);
+        glamor_enable_dri3(screen);
 
-        if (!dri3_screen_init(screen, &glamor_dri3_info)) {
-            LogMessage(X_ERROR,
-                       "Failed to initialize DRI3.\n");
+        /* If the driver wants to do its own auth dance (e.g. Xwayland
+         * on pre-3.15 kernels that don't have render nodes and thus
+         * has the wayland compositor as a master), then it needs us
+         * to stay out of the way and let it init DRI3 on its own.
+         */
+        if (!(glamor_priv->flags & GLAMOR_NO_DRI3)) {
+            /* To do DRI3 device FD generation, we need to open a new fd
+             * to the same device we were handed in originally.
+             */
+             glamor_egl->device_path = drmGetRenderDeviceNameFromFd(glamor_egl->fd);
+            if (!glamor_egl->device_path)
+                glamor_egl->device_path = drmGetDeviceNameFromFd2(glamor_egl->fd);
+
+            if (!dri3_screen_init(screen, &glamor_dri3_info)) {
+                LogMessage(X_ERROR,
+                           "Failed to initialize DRI3.\n");
+            }
         }
     }
 #endif
@@ -1299,6 +1308,20 @@ glamor_egl_try_gles_api(glamor_egl_priv_t *glamor_egl)
     return TRUE;
 }
 
+static inline struct gbm_device*
+gbm_create_device_by_name(int fd, const char* name)
+{
+    struct gbm_device* ret = NULL;
+    const char* old_backend = getenv("GBM_BACKEND");
+    setenv("GBM_BACKEND", name, 1);
+    ret = gbm_create_device(fd);
+    unsetenv("GBM_BACKEND");
+    if (old_backend) {
+        setenv("GBM_BACKEND", old_backend, 1);
+    }
+    return ret;
+}
+
 Bool
 glamor_egl_init2(glamor_egl_priv_t* glamor_egl)
 {
@@ -1306,10 +1329,21 @@ glamor_egl_init2(glamor_egl_priv_t* glamor_egl)
 
     glamor_egl_get_screen_private = glamor_egl->GLAMOR_EGL_PRIV_PROC;
 
-    glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
-    if (glamor_egl->gbm == NULL) {
-        ErrorF("couldn't create gbm device\n");
-        goto error;
+    if (fd != -1) {
+        glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
+        if (!glamor_egl->gbm) {
+            glamor_egl->gbm = gbm_create_device_by_name(glamor_egl->fd, "dumb");
+        }
+
+        if (glamor_egl->gbm == NULL) {
+            ErrorF("couldn't create gbm device\n");
+            goto error;
+        }
+
+        const char* gbm_backend = gbm_device_get_backend_name(glamor_egl->gbm);
+        if (gbm_backend && !strcmp(gbm_backend, "dumb")) {
+            glamor_egl->linear_only = TRUE;
+        }
     }
 
     glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,

@@ -49,6 +49,7 @@
 
 #include "glamor.h"
 #include "glamor_egl.h"
+#include "glamor_egl_ext.h"
 #include "glamor_glx_provider.h"
 #include "dri3.h"
 

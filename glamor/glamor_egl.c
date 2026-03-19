@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <xf86drm.h>
 #define EGL_DISPLAY_NO_X_MESA
@@ -1208,7 +1209,6 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 #ifdef GLXEXT
     static Bool vendor_initialized = FALSE;
 #endif
-    const char *gbm_backend_name;
 
     dixScreenHookPostClose(screen, glamor_egl_close_screen);
 #ifdef GLAMOR_HAS_GBM
@@ -1255,6 +1255,122 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
         vendor_initialized = TRUE;
     }
 #endif
+}
+
+static Bool
+glamor_query_devices_ext(EGLDeviceEXT **devices, EGLint *num_devices)
+{
+    EGLint max_devices = 0;
+
+    *devices = NULL;
+    *num_devices = 0;
+
+    if (!epoxy_has_egl_extension(NULL, "EGL_EXT_device_base") &&
+        !(epoxy_has_egl_extension(NULL, "EGL_EXT_device_query") &&
+          epoxy_has_egl_extension(NULL, "EGL_EXT_device_enumeration"))) {
+        return FALSE;
+    }
+
+    if (!eglQueryDevicesEXT(0, NULL, &max_devices)) {
+         return FALSE;
+    }
+
+    *devices = calloc(sizeof(EGLDeviceEXT), max_devices);
+    if (*devices == NULL) {
+         return FALSE;
+    }
+
+    if (!eglQueryDevicesEXT(max_devices, *devices, num_devices)) {
+         free(*devices);
+         *devices = NULL;
+         *num_devices = 0;
+         return FALSE;
+    }
+
+    if (*num_devices < max_devices) {
+         /* Shouldn't happen */
+         void *tmp = realloc(*devices, *num_devices * sizeof(EGLDeviceEXT));
+         if (tmp) {
+             *devices = tmp;
+         }
+    }
+
+    return TRUE;
+}
+
+static inline Bool
+glamor_egl_device_matches_fd(EGLDeviceEXT device, int fd)
+{
+    const char *dev_file = eglQueryDeviceStringEXT(device, EGL_DRM_DEVICE_FILE_EXT);
+    if (!dev_file) {
+        return FALSE;
+    }
+
+    int dev_fd = open(dev_file, O_RDWR);
+    if (dev_fd == -1) {
+        return FALSE;
+    }
+
+    /**
+     * From https://pubs.opengroup.org/onlinepubs/009696699/basedefs/sys/stat.h.html
+     *
+     * The st_ino and st_dev fields taken together uniquely identify the file within the system.
+     */
+    struct stat stat1, stat2;
+    if(fstat(dev_fd, &stat2) < 0) {
+        close(dev_fd);
+        return FALSE;
+    }
+
+    close(dev_fd);
+
+    if(fstat(fd, &stat1) < 0) {
+        return FALSE;
+    }
+
+    return (stat1.st_dev == stat2.st_dev) && (stat1.st_ino == stat2.st_ino);
+}
+
+static inline Bool
+glamor_egl_device_matches_config(EGLDeviceEXT device,
+                                 glamor_egl_priv_t *glamor_egl,
+                                 Bool strict)
+{
+    if (glamor_egl->fd != -1 &&
+        !glamor_egl_device_matches_fd(device, glamor_egl->fd)) {
+        return FALSE;
+    }
+
+    if (!strict || !glamor_egl->glvnd_vendor) {
+        return TRUE;
+    }
+
+/**
+ * For some reason, this isn't part of the epoxy headers.
+ * It is part of EGL/eglext.h, but we can't include that
+ * alongside the expoxy headers.
+ *
+ * See: https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_device_persistent_id.txt
+ * for the spec where this is defined
+ */
+#ifndef EGL_DRIVER_NAME_EXT
+#define EGL_DRIVER_NAME_EXT 0x335E
+#endif
+
+    const char *driver_name = eglQueryDeviceStringEXT(device, EGL_DRIVER_NAME_EXT);
+    if (!driver_name) {
+        return FALSE;
+    }
+
+    /**
+     * This is not specific to nvidia,
+     * but I don't know of any gl library vendors
+     * other than mesa and nvidia
+     */
+    Bool device_is_nvidia = !!strstr(driver_name, "nvidia");
+    Bool config_is_nvidia = !!strstr(glamor_egl->glvnd_vendor, "nvidia");
+
+    return device_is_nvidia == config_is_nvidia;
 }
 
 void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
@@ -1385,15 +1501,80 @@ gbm_create_device_by_name(int fd, const char* name)
 }
 #endif
 
+static Bool
+glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
+{
+    EGLDeviceEXT *devices = NULL;
+    EGLint num_devices = 0;
+    /**
+     * If the user didn't give us a GL driver/library name,
+     * we populate it with what we queried
+     */
+#define GLAMOR_EGL_TRY_PLATFORM(platform, native, platform_fallback) \
+    glamor_egl->display = glamor_egl_get_display2(platform, native, platform_fallback); \
+    if (glamor_egl->display == EGL_NO_DISPLAY) { \
+        LogMessage(X_ERROR, "eglGetDisplay(" #platform ", " #native ") failed\n"); \
+    } else { \
+        if (eglInitialize(glamor_egl->display, NULL, NULL)) { \
+            LogMessage(X_INFO, "eglInitialize() succeeded on " #platform "\n"); \
+            free(devices); \
+            return TRUE; \
+        } \
+        LogMessage(X_ERROR, "eglInitialize() failed on " #platform "\n"); \
+        eglTerminate(glamor_egl->display); \
+        glamor_egl->display = EGL_NO_DISPLAY; \
+    }
+    if (glamor_egl->fd < 0) {
+        GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_GBM_KHR, glamor_egl->gbm, FALSE);
+        GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_GBM_MESA, glamor_egl->gbm, TRUE);
+    }
+    if (glamor_query_devices_ext(&devices, &num_devices)) {
+        /* Try a strict match first */
+        for (uint32_t i = 0; i < num_devices; i++) {
+            if (glamor_egl_device_matches_config(devices[i], glamor_egl, TRUE)) {
+                GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, devices[i], TRUE);
+            }
+        }
+        /* Try a try a less strict match now */
+        for (uint32_t i = 0; i < num_devices; i++) {
+            if (glamor_egl_device_matches_config(devices[i], glamor_egl, FALSE)) {
+                GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, devices[i], TRUE);
+            }
+        }
+    }
+    /* We can't specify the device we want, which can break in multi-card setups */
+    if (glamor_egl->fd < 0) {
+        GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, FALSE);
+        /**
+         * According to https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_platform_device.txt :
+         *
+         * When <platform> is EGL_PLATFORM_DEVICE_EXT, <native_display> must
+         * be an EGLDeviceEXT object.  Platform-specific extensions may
+         * define other valid values for <platform>.
+         *
+         * As far as I know, this is the relevant standard, and it has not been superceeded in this regard.
+         * However, some vendors do allow passing EGL_DEFAULT_DISPLAY as the <native_display> argument.
+         * So, while this is incorrect according to the standard, it doesn't hurt, and it actually does
+         * something with some vendors (notably intel from my testing).
+         */
+        GLAMOR_EGL_TRY_PLATFORM(EGL_PLATFORM_DEVICE_EXT, EGL_DEFAULT_DISPLAY, TRUE);
+    }
+    return TRUE;
+}
+
 Bool
-glamor_egl_init_internal(glamor_egl_priv_t* glamor_egl)
+glamor_egl_init_internal(glamor_egl_priv_t* glamor_egl, Bool *compat_ret)
 {
     const GLubyte *renderer;
+
+    if (compat_ret) {
+        *compat_ret = TRUE;
+    }
 
     glamor_egl_get_screen_private = glamor_egl->GLAMOR_EGL_PRIV_PROC;
 
 #ifdef GLAMOR_HAS_GBM
-    if (fd != -1) {
+    if (glamor_egl->fd != -1) {
         glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
         if (!glamor_egl->gbm) {
             glamor_egl->gbm = gbm_create_device_by_name(glamor_egl->fd, "dumb");
@@ -1401,26 +1582,21 @@ glamor_egl_init_internal(glamor_egl_priv_t* glamor_egl)
 
         if (glamor_egl->gbm == NULL) {
             ErrorF("couldn't create gbm device\n");
-            goto error;
+            glamor_egl->fd = -1;
+            if (compat_ret) {
+                *compat_ret = FALSE;
+            }
         }
 
-        const char* gbm_backend = gbm_device_get_backend_name(glamor_egl->gbm);
+        const char* gbm_backend = glamor_egl->gbm ?
+                                  gbm_device_get_backend_name(glamor_egl->gbm) : NULL;
         if (gbm_backend && !strcmp(gbm_backend, "dumb")) {
             glamor_egl->linear_only = TRUE;
         }
     }
 #endif
 
-    glamor_egl->display = glamor_egl_get_display(EGL_PLATFORM_GBM_MESA,
-                                                 glamor_egl->gbm);
-    if (!glamor_egl->display) {
-        LogMessage(X_ERROR, "eglGetDisplay() failed\n");
-        goto error;
-    }
-
-    if (!eglInitialize(glamor_egl->display, NULL, NULL)) {
-        LogMessage(X_ERROR, "eglInitialize() failed\n");
-        glamor_egl->display = EGL_NO_DISPLAY;
+    if (!glamor_egl_init_display(glamor_egl)) {
         goto error;
     }
 

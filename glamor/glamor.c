@@ -40,6 +40,7 @@
 #include "os/bug_priv.h"
 
 #include "glamor_priv.h"
+#include "glamor_egl_priv.h"
 #include "mipict.h"
 
 DevPrivateKeyRec glamor_screen_private_key;
@@ -647,11 +648,18 @@ glamor_init(ScreenPtr screen, unsigned int flags)
 
     if (flags & ~GLAMOR_VALID_FLAGS) {
         ErrorF("glamor_init: Invalid flags %x\n", flags);
+        if (flags & GLAMOR_USE_EGL_SCREEN) {
+            glamor_egl_cleanup_screen(screen);
+        }
         return FALSE;
     }
     glamor_priv = calloc(1, sizeof(*glamor_priv));
-    if (glamor_priv == NULL)
+    if (glamor_priv == NULL) {
+        if (flags & GLAMOR_USE_EGL_SCREEN) {
+            glamor_egl_cleanup_screen(screen);
+        }
         return FALSE;
+    }
 
     glamor_priv->flags = flags;
 
@@ -659,6 +667,9 @@ glamor_init(ScreenPtr screen, unsigned int flags)
         LogMessage(X_WARNING,
                    "glamor%d: Failed to allocate screen private\n",
                    screen->myNum);
+        if (flags & GLAMOR_USE_EGL_SCREEN) {
+            glamor_egl_cleanup_screen(screen);
+        }
         goto fail;
     }
 
@@ -669,6 +680,9 @@ glamor_init(ScreenPtr screen, unsigned int flags)
         LogMessage(X_WARNING,
                    "glamor%d: Failed to allocate pixmap private\n",
                    screen->myNum);
+        if (flags & GLAMOR_USE_EGL_SCREEN) {
+            glamor_egl_cleanup_screen(screen);
+        }
         goto fail;
     }
 
@@ -677,8 +691,15 @@ glamor_init(ScreenPtr screen, unsigned int flags)
         LogMessage(X_WARNING,
                    "glamor%d: Failed to allocate gc private\n",
                    screen->myNum);
+        if (flags & GLAMOR_USE_EGL_SCREEN) {
+            glamor_egl_cleanup_screen(screen);
+        }
         goto fail;
     }
+
+    /**
+     * glamor_egl_screen_init adds any needed cleanup to CloseScreen
+     */
 
     /* If we are using egl screen, call egl screen init to
      * register correct close screen function. */

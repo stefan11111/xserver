@@ -49,8 +49,30 @@
 
 #include "glamor.h"
 #include "glamor_egl.h"
+#include "glamor_egl_priv.h"
 #include "glamor_glx_provider.h"
 #include "dri3.h"
+
+static DevPrivateKeyRec glamor_egl_screen_private_key;
+
+static inline Bool
+glamor_egl_init_screen_private(ScreenPtr screen)
+{
+    if (!dixRegisterPrivateKey(&glamor_egl_screen_private_key, PRIVATE_SCREEN, sizeof(glamor_egl_priv_t))) {
+        LogMessage(X_ERROR,
+                   "glamor%d: Failed to allocate screen private\n",
+                   screen->myNum);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static glamor_egl_priv_t*
+_glamor_egl_get_screen_private(ScreenPtr screen)
+{
+    return dixLookupPrivate(&screen->devPrivates, &glamor_egl_screen_private_key);
+}
 
 /**
  * Hack to not break xf86 drivers.
@@ -64,7 +86,7 @@
  */
 
 static glamor_egl_priv_t*
-(*glamor_egl_get_screen_private)(ScreenPtr screen) = NULL;
+(*glamor_egl_get_screen_private)(ScreenPtr screen) = _glamor_egl_get_screen_private;
 
 static void
 glamor_egl_make_current(struct glamor_context *glamor_ctx)
@@ -1070,10 +1092,9 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
     glamor_set_pixmap_type(back, GLAMOR_TEXTURE_DRM);
 }
 
-static Bool
-glamor_egl_close_screen(ScreenPtr screen)
+static void
+glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
 {
-    Bool ret;
     glamor_egl_priv_t *glamor_egl;
 #ifdef GLAMOR_HAS_GBM
     struct glamor_pixmap_private *pixmap_priv;
@@ -1094,14 +1115,10 @@ glamor_egl_close_screen(ScreenPtr screen)
 
     glamor_egl_cleanup(glamor_egl);
 
-    screen->CloseScreen = glamor_egl->CloseScreen;
-    ret = screen->CloseScreen(screen);
-
+    dixScreenUnhookPostClose(screen, glamor_egl_close_screen);
 #ifdef GLAMOR_HAS_GBM
     dixScreenUnhookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 #endif
-
-    return ret;
 }
 
 #ifdef DRI3
@@ -1219,15 +1236,7 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
     static Bool vendor_initialized = FALSE;
 #endif
 
-    /**
-     * We're doing direct proc wrapping, because we
-     * want drivers that wrap us to end up on top of us.
-     *
-     * Otherwise, we risk freeing stuff they depend on.
-     */
-    glamor_egl->CloseScreen = screen->CloseScreen;
-    screen->CloseScreen = glamor_egl_close_screen;
-
+    dixScreenHookPostClose(screen, glamor_egl_close_screen);
 #ifdef GLAMOR_HAS_GBM
     dixScreenHookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 #endif
@@ -1516,6 +1525,10 @@ void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
     free(glamor_egl->glvnd_vendor);
 }
 
+void glamor_egl_cleanup_screen(ScreenPtr screen)
+{
+    glamor_egl_cleanup(glamor_egl_get_screen_private(screen));
+}
 
 static void
 glamor_egl_chose_configs(EGLDisplay display, const EGLint *attrib_list,
@@ -1708,7 +1721,7 @@ gbm_create_device_by_name(int fd, const char* name)
 #endif
 
 static Bool
-glamor_egl_init_display(struct glamor_egl_screen_private *glamor_egl)
+glamor_egl_init_display(glamor_egl_priv_t *glamor_egl)
 {
     EGLDeviceEXT *devices = NULL;
     EGLint num_devices = 0;
@@ -1816,10 +1829,22 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, Bool *compat_ret)
 
     glamor_egl = glamor_egl_conf->glamor_egl_priv;
 
+    if (glamor_egl_conf->GLAMOR_EGL_PRIV_PROC) {
+        glamor_egl_get_screen_private = glamor_egl_conf->GLAMOR_EGL_PRIV_PROC;
+        glamor_egl = glamor_egl_conf->glamor_egl_priv;
+    } else {
+        if (!glamor_egl_conf->screen ||
+            !glamor_egl_init_screen_private(glamor_egl_conf->screen)) {
+            goto error;
+        }
+
+        glamor_egl = glamor_egl_get_screen_private(glamor_egl_conf->screen);
+    }
+
+    memset(glamor_egl, 0, sizeof(*glamor_egl));
+
     glamor_egl->glvnd_vendor = glamor_egl_conf->glvnd_vendor;
     glamor_egl->fd = glamor_egl_conf->fd;
-
-    glamor_egl_get_screen_private = glamor_egl_conf->GLAMOR_EGL_PRIV_PROC;
 
 #ifdef GLAMOR_HAS_GBM
     if (glamor_egl->fd != -1) {

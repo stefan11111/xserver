@@ -33,10 +33,6 @@
 #include "randrstr.h"
 #endif
 
-#ifdef GLAMOR
-#include "glamor_egl.h"
-#endif
-
 typedef struct _fbdevPriv {
     struct fb_var_screeninfo var;
     struct fb_fix_screeninfo fix;
@@ -51,9 +47,6 @@ typedef struct _fbdevPriv {
 typedef struct _fbdevScrPriv {
     Rotation randr;
     Bool shadow;
-#ifdef GLAMOR
-    glamor_egl_priv_t glamor_egl;
-#endif
 } FbdevScrPriv;
 
 extern KdCardFuncs fbdevFuncs;

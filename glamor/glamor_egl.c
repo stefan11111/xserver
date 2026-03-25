@@ -976,7 +976,9 @@ static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, voi
     eglDestroyImageKHR(glamor_egl->display, pixmap_priv->image);
     pixmap_priv->image = NULL;
 
-    dixScreenUnhookClose(screen, glamor_egl_close_screen);
+    glamor_egl_cleanup(glamor_egl);
+
+    dixScreenUnhookPostClose(screen, glamor_egl_close_screen);
     dixScreenUnhookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 }
 
@@ -1055,7 +1057,7 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 #endif
     const char *gbm_backend_name;
 
-    dixScreenHookClose(screen, glamor_egl_close_screen);
+    dixScreenHookPostClose(screen, glamor_egl_close_screen);
     dixScreenHookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 
     glamor_ctx->ctx = glamor_egl->context;

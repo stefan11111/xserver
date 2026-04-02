@@ -1154,6 +1154,12 @@ glamor_egl_set_glvnd_vendor(ScreenPtr screen)
     glamor_egl_priv_t *glamor_egl =
         glamor_egl_get_screen_private(screen);
 
+    /* Should we make sure the vendor is valid? (nvidia, mesa, ???) */
+    if (glamor_egl->exact_glvnd_vendor) {
+        glamor_set_glvnd_vendor(screen, glamor_egl->glvnd_vendor);
+        return;
+    }
+
 #ifdef GLAMOR_HAS_GBM
     if (glamor_egl->fd >= 0) {
         const char *gbm_backend_name;
@@ -1807,7 +1813,10 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, Bool *compat_ret)
 
     memset(glamor_egl, 0, sizeof(*glamor_egl));
 
-    glamor_egl->glvnd_vendor = glamor_egl_conf->glvnd_vendor;
+    if (glamor_egl_conf->glvnd_vendor) {
+        glamor_egl->glvnd_vendor = glamor_egl_conf->glvnd_vendor;
+        glamor_egl->exact_glvnd_vendor = TRUE;
+    }
     glamor_egl->fd = glamor_egl_conf->fd;
 
 #ifdef GLAMOR_HAS_GBM

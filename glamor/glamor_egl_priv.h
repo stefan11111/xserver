@@ -27,6 +27,7 @@ typedef struct glamor_egl_screen_private {
     EGLContext context;
     char *device_path;
     char *glvnd_vendor; /* glvnd vendor library name or driver name */
+    int exact_glvnd_vendor; /* If the glvnd vendor should be assumed valid with no checks */
     void* server_private;
 
 #ifdef GLAMOR_HAS_GBM

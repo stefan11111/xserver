@@ -33,14 +33,17 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <errno.h>
+
+#ifdef WITH_LIBDRM
 #include <xf86drm.h>
+#include <drm_fourcc.h>
+#endif
+
 #define EGL_DISPLAY_NO_X_MESA
 
 #ifdef GLAMOR_HAS_GBM
 #include <gbm.h>
 #endif
-
-#include <drm_fourcc.h>
 
 #include "dix/screen_hooks_priv.h"
 #include "glamor/glamor_priv.h"
@@ -84,7 +87,7 @@ glamor_egl_make_current(struct glamor_context *glamor_ctx)
     }
 }
 
-#ifdef GLAMOR_HAS_GBM
+#if defined(GLAMOR_HAS_GBM) && defined (WITH_LIBDRM)
 static int
 glamor_get_flink_name(int fd, int handle, int *name)
 {
@@ -166,6 +169,7 @@ glamor_egl_set_pixmap_image(PixmapPtr pixmap, EGLImageKHR image,
 Bool
 glamor_egl_create_textured_pixmap(PixmapPtr pixmap, int handle, int stride)
 {
+#ifdef WITH_LIBDRM
     ScreenPtr screen = pixmap->drawable.pScreen;
     glamor_egl_priv_t *glamor_egl =
         glamor_egl_get_screen_private(screen);
@@ -195,6 +199,9 @@ glamor_egl_create_textured_pixmap(PixmapPtr pixmap, int handle, int stride)
 
     close(fd);
     return TRUE;
+#else
+    return FALSE;
+#endif
 }
 
 Bool
@@ -329,7 +336,7 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
 #endif
 }
 
-#ifdef GLAMOR_HAS_GBM
+#if defined(GLAMOR_HAS_GBM) && defined (WITH_LIBDRM)
 static void
 glamor_get_name_from_bo(int gbm_fd, struct gbm_bo *bo, int *name)
 {
@@ -531,7 +538,7 @@ glamor_egl_fds_from_pixmap(ScreenPtr screen, PixmapPtr pixmap, int *fds,
                            uint32_t *strides, uint32_t *offsets,
                            uint64_t *modifier)
 {
-#ifdef GLAMOR_HAS_GBM
+#if defined(GLAMOR_HAS_GBM) && defined (WITH_LIBDRM)
     struct gbm_bo *bo;
     int num_fds;
 #ifdef GBM_BO_WITH_MODIFIERS
@@ -626,7 +633,7 @@ glamor_egl_fd_name_from_pixmap(ScreenPtr screen,
                                PixmapPtr pixmap,
                                CARD16 *stride, CARD32 *size)
 {
-#ifdef GLAMOR_HAS_GBM
+#if defined(GLAMOR_HAS_GBM) && defined(WITH_LIBDRM)
     glamor_egl_priv_t *glamor_egl;
     struct gbm_bo *bo;
     int fd = -1;
@@ -728,7 +735,7 @@ glamor_pixmap_from_fds(ScreenPtr screen,
                        CARD8 depth, CARD8 bpp,
                        uint64_t modifier)
 {
-#ifdef GLAMOR_HAS_GBM
+#if defined(GLAMOR_HAS_GBM) && defined(WITH_LIBDRM)
     PixmapPtr pixmap;
     glamor_egl_priv_t *glamor_egl;
     Bool ret = FALSE;
@@ -866,6 +873,7 @@ glamor_filter_modifiers(uint32_t *num_modifiers, uint64_t **modifiers,
         if (external_only[i]) {
             continue;
         }
+
         (*modifiers)[write_pos++] = (*modifiers)[i];
     }
 

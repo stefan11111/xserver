@@ -1012,6 +1012,8 @@ glamor_egl_exchange_buffers(PixmapPtr front, PixmapPtr back)
     glamor_set_pixmap_type(back, GLAMOR_TEXTURE_DRM);
 }
 
+static void glamor_egl_pre_close_screen_cleanup(glamor_egl_priv_t *glamor_egl);
+
 static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
 {
     glamor_egl_priv_t *glamor_egl;
@@ -1031,12 +1033,25 @@ static void glamor_egl_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, voi
     pixmap_priv->image = NULL;
 #endif
 
-    glamor_egl_cleanup(glamor_egl);
+    glamor_egl_pre_close_screen_cleanup(glamor_egl);
 
-    dixScreenUnhookPostClose(screen, glamor_egl_close_screen);
+    dixScreenUnhookClose(screen, glamor_egl_close_screen);
 #ifdef GLAMOR_HAS_GBM
     dixScreenUnhookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 #endif
+}
+
+static void
+glamor_egl_post_close_screen(CallbackListPtr *pcbl, ScreenPtr screen, void *unused)
+{
+#ifdef GLAMOR_HAS_GBM
+    glamor_egl_priv_t *glamor_egl = glamor_egl_get_screen_private(screen);
+
+    if (glamor_egl->gbm)
+        gbm_device_destroy(glamor_egl->gbm);
+#endif
+
+    dixScreenUnhookPostClose(screen, glamor_egl_post_close_screen);
 }
 
 #ifdef DRI3
@@ -1114,7 +1129,8 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 #endif
     const char *gbm_backend_name;
 
-    dixScreenHookPostClose(screen, glamor_egl_close_screen);
+    dixScreenHookClose(screen, glamor_egl_close_screen);
+    dixScreenHookPostClose(screen, glamor_egl_post_close_screen);
 #ifdef GLAMOR_HAS_GBM
     dixScreenHookPixmapDestroy(screen, glamor_egl_pixmap_destroy);
 #endif
@@ -1170,7 +1186,8 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
 #endif
 }
 
-void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
+static void
+glamor_egl_pre_close_screen_cleanup(glamor_egl_priv_t *glamor_egl)
 {
     if (!glamor_egl) {
         return;
@@ -1186,12 +1203,19 @@ void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
         lastGLContext = NULL;
         eglTerminate(glamor_egl->display);
     }
+
+    free(glamor_egl->device_path);
+    free(glamor_egl->glvnd_vendor);
+}
+
+void glamor_egl_cleanup(glamor_egl_priv_t *glamor_egl)
+{
+    glamor_egl_pre_close_screen_cleanup(glamor_egl);
+
 #ifdef GLAMOR_HAS_GBM
     if (glamor_egl->gbm)
         gbm_device_destroy(glamor_egl->gbm);
 #endif
-    free(glamor_egl->device_path);
-    free(glamor_egl->glvnd_vendor);
 }
 
 static Bool

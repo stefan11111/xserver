@@ -48,7 +48,7 @@ glamor = static_library('glamor',
     include_directories: [inc, glx_inc],
     dependencies: [
         common_dep,
-        dependency('libdrm', version: '>= 2.4.46'),
+        libdrm_dep,
         epoxy_dep,
         gbm_dep,
     ],

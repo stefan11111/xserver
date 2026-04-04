@@ -294,7 +294,7 @@ extern _X_EXPORT Bool glamor_egl_init(ScrnInfoPtr scrn, int fd);
  * If dri_support is not NULL, it is set to the what
  * glamor_egl_init would have returned.
  * */
-extern _X_EXPORT Bool glamor_egl_init2(ScrnInfoPtr scrn, int fd, Bool *dri_support);
+extern _X_EXPORT Bool glamor_egl_init2(ScrnInfoPtr scrn, int fd, Bool *dri_support, int flags);
 
 extern _X_EXPORT Bool glamor_egl_init_textured_pixmap(ScreenPtr screen);
 

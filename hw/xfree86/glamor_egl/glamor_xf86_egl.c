@@ -123,8 +123,9 @@ glamor_egl_init(ScrnInfoPtr scrn, int fd)
 }
 
 Bool
-glamor_egl_init2(ScrnInfoPtr scrn, int fd, Bool *dri_support)
+glamor_egl_init2(ScrnInfoPtr scrn, int fd, Bool *dri_support, int flags)
 {
+    (void)flags;
     return _glamor_egl_init(scrn, fd, dri_support);
 }
 

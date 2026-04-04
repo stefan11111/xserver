@@ -1070,7 +1070,7 @@ load_glamor(ScrnInfoPtr pScrn)
     ms->glamor.egl_create_textured_pixmap_from_gbm_bo = LoaderSymbolFromModule(mod, "glamor_egl_create_textured_pixmap_from_gbm_bo");
     ms->glamor.egl_exchange_buffers = LoaderSymbolFromModule(mod, "glamor_egl_exchange_buffers");
     ms->glamor.egl_get_gbm_device = LoaderSymbolFromModule(mod, "glamor_egl_get_gbm_device");
-    ms->glamor.egl_init = LoaderSymbolFromModule(mod, "glamor_egl_init2");
+    ms->glamor.egl_init2 = LoaderSymbolFromModule(mod, "glamor_egl_init2");
     ms->glamor.finish = LoaderSymbolFromModule(mod, "glamor_finish");
     ms->glamor.gbm_bo_from_pixmap = LoaderSymbolFromModule(mod, "glamor_gbm_bo_from_pixmap");
     ms->glamor.init = LoaderSymbolFromModule(mod, "glamor_init");
@@ -1110,7 +1110,7 @@ try_enable_glamor(ScrnInfoPtr pScrn)
     }
 
     if (load_glamor(pScrn)) {
-        if (ms->glamor.egl_init(pScrn, ms->fd, &ms->drmmode.glamor_dri)) {
+        if (ms->glamor.egl_init2(pScrn, ms->fd, &ms->drmmode.glamor_dri, 0)) {
             xf86DrvMsg(pScrn->scrnIndex, X_INFO, "glamor initialized\n");
             ms->drmmode.glamor = TRUE;
         } else {

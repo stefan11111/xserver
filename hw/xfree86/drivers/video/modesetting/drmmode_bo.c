@@ -197,6 +197,7 @@ gbm_create_front_bo(drmmode_ptr drmmode, Bool do_map,
                     bo_priv_t *data,
                     unsigned width, unsigned height)
 {
+    struct gbm_bo *ret = NULL;
     uint32_t format = drmmode_gbm_format_for_depth(drmmode->scrn->depth);
 
     uint32_t num_modifiers = 0;
@@ -221,14 +222,20 @@ gbm_create_front_bo(drmmode_ptr drmmode, Bool do_map,
                                       FALSE, TRUE, TRUE);
 #endif
 
-    return gbm_bo_create_and_map_with_flag_list(drmmode->gbm,
-                                                data,
-                                                do_map,
-                                                width, height,
-                                                format,
-                                                modifiers, num_modifiers,
-                                                front_flag_list,
-                                                ARRAY_SIZE(front_flag_list));
+    ret = gbm_bo_create_and_map_with_flag_list(drmmode->gbm,
+                                               data,
+                                               do_map,
+                                               width, height,
+                                               format,
+                                               modifiers, num_modifiers,
+                                               front_flag_list,
+                                               ARRAY_SIZE(front_flag_list));
+
+#ifdef GBM_BO_WITH_MODIFIERS
+    free(modifiers);
+#endif
+
+    return ret;
 }
 static inline struct gbm_bo*
 gbm_create_cursor_bo(drmmode_ptr drmmode, Bool do_map,

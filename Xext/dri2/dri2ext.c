@@ -585,6 +585,12 @@ DRI2ExtensionInit(void)
         return;
 #endif /* XINERAMA */
 
+    /**
+     * Advertise the DRI2 extension,
+     * even if no screens support it.
+     *
+     * This is needed for steam's proton to work.
+     */
     dri2Extension = AddExtension(DRI2_NAME,
                                  DRI2NumberEvents,
                                  DRI2NumberErrors,

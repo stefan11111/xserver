@@ -1282,10 +1282,12 @@ glamor_egl_set_glvnd_vendor(ScreenPtr screen)
         if (gbm_backend_name) {
             if (!strncmp(gbm_backend_name, "nvidia", sizeof("nvidia") - 1)) {
                  glamor_set_glvnd_vendor(screen, "nvidia");
-            } else {
-                 glamor_set_glvnd_vendor(screen, "mesa");
+                 return;
             }
-            return;
+            if (strncmp(gbm_backend_name, "dumb", sizeof("dumb") - 1)){
+                 glamor_set_glvnd_vendor(screen, "mesa");
+                 return;
+            }
         }
     }
 #endif

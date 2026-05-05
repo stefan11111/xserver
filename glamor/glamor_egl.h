@@ -54,6 +54,9 @@ typedef struct {
 
     char *glvnd_vendor; /* glvnd vendor library or driver name */
     int fd; /* /dev/dri/cardxx */
+
+    int auto_dri; /* If glamor should try to automatically enable DRI3 support */
+
     int dmabuf_forced; /* If glamor should not use dynamic logic and only listen to the config below */
     int dmabuf_capable; /* If glamor should use dmabufs when using direct rendering (dri) */
 
@@ -121,5 +124,7 @@ glamor_egl_get_display(EGLint type, void *native)
 {
     return glamor_egl_get_display2(type, native, true);
 }
+
+int glamor_egl_get_fd(ScreenPtr screen);
 
 #endif

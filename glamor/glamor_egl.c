@@ -1353,14 +1353,20 @@ glamor_egl_render_node_from_fd(int fd)
 }
 
 static inline int
-glamor_egl_device_get_matching_fd(EGLDeviceEXT device, int fd)
+glamor_egl_device_get_fd(EGLDeviceEXT device)
 {
     const char *dev_file = eglQueryDeviceStringEXT(device, EGL_DRM_DEVICE_FILE_EXT);
     if (!dev_file) {
         return FALSE;
     }
 
-    int card_fd = open(dev_file, O_RDWR);
+    return open(dev_file, O_RDWR);
+}
+
+static inline int
+glamor_egl_device_get_matching_fd(EGLDeviceEXT device, int fd)
+{
+    int card_fd = glamor_egl_device_get_fd(device);
     if (glamor_egl_fd_is_render_node(fd)) {
         int render_fd = glamor_egl_render_node_from_fd(card_fd);
         close(card_fd);
@@ -1781,7 +1787,7 @@ gbm_create_device_by_name(int fd, const char* name)
 #endif
 
 static Bool
-glamor_egl_init_display(glamor_egl_priv_t *glamor_egl)
+glamor_egl_init_display(glamor_egl_priv_t *glamor_egl, int *dri_fd)
 {
     EGLDeviceEXT *devices = NULL;
     EGLint num_devices = 0;
@@ -1800,6 +1806,9 @@ glamor_egl_init_display(glamor_egl_priv_t *glamor_egl)
                 glamor_egl->glvnd_vendor = strdup(driver_name); \
             } \
             LogMessage(X_INFO, "glamor: eglInitialize() succeeded on " #platform "\n"); \
+            if (dri_fd && platform == EGL_PLATFORM_DEVICE_EXT) { \
+                *dri_fd = glamor_egl_device_get_fd(native); \
+            } \
             free(devices); \
             return TRUE; \
         } \
@@ -1879,11 +1888,18 @@ glamor_egl_init_display(glamor_egl_priv_t *glamor_egl)
     return FALSE;
 }
 
+int
+glamor_egl_get_fd(ScreenPtr screen)
+{
+    return glamor_egl_get_screen_private(screen)->fd;
+}
+
 Bool
 glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
 {
     const GLubyte *renderer;
     glamor_egl_priv_t* glamor_egl = NULL;
+    int *dri_fd = NULL;
 
     if (caps) {
         *caps = GLAMOR_EGL_CAP_NONE;
@@ -1928,9 +1944,33 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
     }
 #endif
 
-    if (!glamor_egl_init_display(glamor_egl)) {
+    if (glamor_egl_conf->auto_dri && glamor_egl->fd < 0) {
+        dri_fd = &glamor_egl->fd;
+    }
+
+    if (!glamor_egl_init_display(glamor_egl, dri_fd)) {
         goto error;
     }
+
+#ifdef GLAMOR_HAS_GBM
+    if (glamor_egl->fd >= 0) {
+        glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
+        if (!glamor_egl->gbm) {
+            glamor_egl->gbm = gbm_create_device_by_name(glamor_egl->fd, "dumb");
+        }
+
+        if (glamor_egl->gbm == NULL) {
+            ErrorF("couldn't create gbm device\n");
+            glamor_egl->fd = -1;
+        }
+
+        const char* gbm_backend = glamor_egl->gbm ?
+                                  gbm_device_get_backend_name(glamor_egl->gbm) : NULL;
+        if (gbm_backend && !strcmp(gbm_backend, "dumb")) {
+            glamor_egl->linear_only = TRUE;
+        }
+    }
+#endif
 
 #define GLAMOR_CHECK_EGL_EXTENSION(EXT)  \
 	if (!epoxy_has_egl_extension(glamor_egl->display, "EGL_" #EXT)) {  \

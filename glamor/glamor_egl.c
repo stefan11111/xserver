@@ -35,6 +35,13 @@
 #include <sys/stat.h>
 #include <errno.h>
 
+#ifdef HAVE_SYS_SYSMACROS_H
+#include <sys/sysmacros.h> /* for major() & minor() */
+#endif
+#ifdef HAVE_SYS_MKDEV_H
+#include <sys/mkdev.h>          /* for major() & minor() on Solaris */
+#endif
+
 #ifdef WITH_LIBDRM
 #include <xf86drm.h>
 #include <drm_fourcc.h>
@@ -1316,16 +1323,57 @@ glamor_query_devices_ext(EGLDeviceEXT **devices, EGLint *num_devices)
     return TRUE;
 }
 
-/* Perhaps we should move this function to os/ ? */
 static inline Bool
-glamor_egl_device_matches_fd(EGLDeviceEXT device, int fd)
+glamor_egl_fd_is_render_node(int fd)
+{
+    struct stat buf;
+    if(fstat(fd, &buf) < 0) {
+        close(fd);
+        return FALSE;
+    }
+
+    return (major(buf.st_rdev) != 0) && (minor(buf.st_rdev) >= 128);
+}
+
+static inline int
+glamor_egl_render_node_from_fd(int fd)
+{
+#ifdef WITH_LIBDRM
+    const char* render_name;
+
+    render_name = drmGetRenderDeviceNameFromFd(fd);
+    if (!render_name) {
+        return -1;
+    }
+
+    return open(render_name, O_RDWR);
+#else
+    return -1;
+#endif
+}
+
+static inline int
+glamor_egl_device_get_matching_fd(EGLDeviceEXT device, int fd)
 {
     const char *dev_file = eglQueryDeviceStringEXT(device, EGL_DRM_DEVICE_FILE_EXT);
     if (!dev_file) {
         return FALSE;
     }
 
-    int dev_fd = open(dev_file, O_RDWR);
+    int card_fd = open(dev_file, O_RDWR);
+    if (glamor_egl_fd_is_render_node(fd)) {
+        int render_fd = glamor_egl_render_node_from_fd(card_fd);
+        close(card_fd);
+        return render_fd;
+    }
+
+    return card_fd;
+}
+
+static inline Bool
+glamor_egl_device_matches_fd(EGLDeviceEXT device, int fd)
+{
+    int dev_fd = glamor_egl_device_get_matching_fd(device, fd);
     if (dev_fd < 0) {
         return FALSE;
     }
@@ -1423,6 +1471,15 @@ glamor_egl_device_matches_config(EGLDeviceEXT device,
                                  const char** driver_name)
 {
     *driver_name = glamor_egl_device_get_name(device);
+
+    /**
+     * If the fd passed to glamor is a render node,
+     * it is safe to pick a device that doesn't match it.
+     */
+    if (strict <= 0 && glamor_egl->fd >= 0 &&
+        glamor_egl_fd_is_render_node(glamor_egl->fd)) {
+        return TRUE;
+    }
 
     /**
      * If we're trying to do direct rendering,

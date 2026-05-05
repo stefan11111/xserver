@@ -25,6 +25,7 @@
 char *fbdev_glvnd_provider = NULL;
 char *fbdev_dri_path = NULL;
 
+bool fbdev_auto_dri3 = FALSE;
 bool es_allowed = TRUE;
 bool force_es = FALSE;
 bool fbGlamorAllowed = TRUE;
@@ -49,6 +50,10 @@ fbdevInitAccel(ScreenPtr pScreen)
     } else {
         scrpriv->dri_fd = -1;
     }
+
+    if (scrpriv->dri_fd >= 0) {
+        fbdev_auto_dri3 = FALSE;
+    }
 #endif
 
     glamor_egl_conf_t glamor_egl_conf = {
@@ -56,6 +61,7 @@ fbdevInitAccel(ScreenPtr pScreen)
                                          .glvnd_vendor = fbdev_glvnd_provider,
 #ifdef WITH_LIBDRM
                                          .fd = scrpriv->dri_fd,
+                                         .auto_dri = fbdev_auto_dri3,
 #else
                                          .fd = -1;
 #endif
@@ -68,6 +74,12 @@ fbdevInitAccel(ScreenPtr pScreen)
     if (!glamor_egl_init_internal(&glamor_egl_conf, NULL)) {
         return FALSE;
     }
+
+#ifdef WITH_LIBDRM
+    if (fbdev_auto_dri3) {
+        scrpriv->dri_fd = glamor_egl_get_fd(pScreen);
+    }
+#endif
 
     const char *renderer = (const char*)glGetString(GL_RENDERER);
 

@@ -71,7 +71,7 @@ ddxUseMsg(void)
     ErrorF
         ("-fb path         Framebuffer device to use. Defaults to /dev/fb0\n");
     ErrorF
-        ("-dri path        Optional drm device path to use\n");
+        ("-dri <path|auto> Optional drm device path to use\n");
     ErrorF
         ("-noshadow        Disable the ShadowFB layer if possible\n");
     ErrorF
@@ -128,11 +128,16 @@ ddxProcessArgument(int argc, char **argv, int i)
 
     if (!strcmp(argv[i], "-dri")) {
         if (i + 1 < argc) {
-            fbdev_dri_path = strdup(argv[i + 1]);
+            if (argv[i + 1][0] == '-' || !strcmp(argv[i + 1], "auto")) {
+                fbdev_auto_dri3 = TRUE;
+            } else {
+                fbdev_dri_path = strdup(argv[i + 1]);
+            }
             return 2;
+        } else {
+            fbdev_auto_dri3 = TRUE;
+            return 1;
         }
-        UseMsg();
-        exit(1);
     }
 
     if (!strcmp(argv[i], "-force-gl")) {

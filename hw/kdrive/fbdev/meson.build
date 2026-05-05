@@ -18,7 +18,7 @@ xfbdev_server = executable(
         include_directories('../src'),
         include_directories('../linux'),
     ],
-    dependencies: [ common_dep ],
+    dependencies: [ common_dep, libdrm_dep ],
     link_with: [
         libxserver_main,
         fbdev_glamor,

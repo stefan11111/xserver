@@ -71,6 +71,8 @@ ddxUseMsg(void)
     ErrorF
         ("-fb path         Framebuffer device to use. Defaults to /dev/fb0\n");
     ErrorF
+        ("-dri path        Optional drm device path to use\n");
+    ErrorF
         ("-noshadow        Disable the ShadowFB layer if possible\n");
     ErrorF
         ("-glamor          Force enable glamor render acceleration if possible\n");
@@ -118,6 +120,15 @@ ddxProcessArgument(int argc, char **argv, int i)
     if (!strcmp(argv[i], "-glvendor")) {
         if (i + 1 < argc) {
             fbdev_glvnd_provider = strdup(argv[i + 1]);
+            return 2;
+        }
+        UseMsg();
+        exit(1);
+    }
+
+    if (!strcmp(argv[i], "-dri")) {
+        if (i + 1 < argc) {
+            fbdev_dri_path = strdup(argv[i + 1]);
             return 2;
         }
         UseMsg();

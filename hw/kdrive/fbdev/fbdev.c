@@ -30,6 +30,10 @@
 
 #include "fbdev.h"
 
+#if defined (GLAMOR) && defined (WITH_LIBDRM)
+#include <xf86drm.h>
+#endif
+
 const char *fbdevDevicePath = NULL;
 Bool fbDisableShadow = FALSE;
 
@@ -755,6 +759,14 @@ fbdevEnable(ScreenPtr pScreen)
 {
     KdScreenPriv(pScreen);
     FbdevPriv *priv = pScreenPriv->card->driver;
+#if defined (GLAMOR) && defined (WITH_LIBDRM)
+    KdScreenInfo *screen = pScreenPriv->screen;
+    FbdevScrPriv *scrpriv = screen->driver;
+
+    if (scrpriv->dri_fd >= 0) {
+        drmSetMaster(scrpriv->dri_fd);
+    }
+#endif
     int k;
 
     priv->var.activate = FB_ACTIVATE_NOW | FB_CHANGE_CMAP_VBL;
@@ -810,6 +822,15 @@ fbdevDPMS(ScreenPtr pScreen, int mode)
 void
 fbdevDisable(ScreenPtr pScreen)
 {
+#if defined (GLAMOR) && defined (WITH_LIBDRM)
+    KdScreenPriv(pScreen);
+    KdScreenInfo *screen = pScreenPriv->screen;
+    FbdevScrPriv *scrpriv = screen->driver;
+
+    if (scrpriv->dri_fd >= 0) {
+        drmDropMaster(scrpriv->dri_fd);
+    }
+#endif
 }
 
 void

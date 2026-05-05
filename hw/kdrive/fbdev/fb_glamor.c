@@ -18,7 +18,12 @@
 #include "kxv.h"
 #endif
 
+#ifdef WITH_LIBDRM
+#include <xf86drm.h>
+#endif
+
 char *fbdev_glvnd_provider = NULL;
+char *fbdev_dri_path = NULL;
 
 bool es_allowed = TRUE;
 bool force_es = FALSE;
@@ -29,10 +34,31 @@ bool fbXVAllowed = TRUE;
 Bool
 fbdevInitAccel(ScreenPtr pScreen)
 {
+#ifdef WITH_LIBDRM
+    KdScreenPriv(pScreen);
+    KdScreenInfo *screen = pScreenPriv->screen;
+    FbdevScrPriv *scrpriv = screen->driver;
+
+    if (fbdev_dri_path) {
+        scrpriv->dri_fd = open(fbdev_dri_path, O_RDWR);
+        if (scrpriv->dri_fd >= 0) {
+            drmSetMaster(scrpriv->dri_fd);
+        } else {
+            perror("open");
+        }
+    } else {
+        scrpriv->dri_fd = -1;
+    }
+#endif
+
     glamor_egl_conf_t glamor_egl_conf = {
                                          .screen = pScreen,
                                          .glvnd_vendor = fbdev_glvnd_provider,
-                                         .fd = -1,
+#ifdef WITH_LIBDRM
+                                         .fd = scrpriv->dri_fd,
+#else
+                                         .fd = -1;
+#endif
                                          .llvmpipe_allowed = TRUE,
                                          .force_glamor = TRUE,
                                          .es_disallowed = !es_allowed,
@@ -45,7 +71,7 @@ fbdevInitAccel(ScreenPtr pScreen)
 
     const char *renderer = (const char*)glGetString(GL_RENDERER);
 
-    int flags = GLAMOR_USE_EGL_SCREEN | GLAMOR_NO_DRI3;
+    int flags = GLAMOR_USE_EGL_SCREEN;
     if (!fbGlamorAllowed) {
         flags |= GLAMOR_NO_RENDER_ACCEL;
     } else if (!fbForceGlamor){
@@ -54,6 +80,14 @@ fbdevInitAccel(ScreenPtr pScreen)
             strstr(renderer, "llvmpipe")) {
             flags |= GLAMOR_NO_RENDER_ACCEL;
         }
+    }
+
+#ifdef WITH_LIBDRM
+    if (scrpriv->dri_fd < 0 ||
+        flags & GLAMOR_NO_RENDER_ACCEL)
+#endif
+    {
+        flags |= GLAMOR_NO_DRI3;
     }
 
     if (!glamor_init(pScreen, flags)) {
@@ -85,6 +119,13 @@ fbdevDisableAccel(ScreenPtr screen)
 void
 fbdevFiniAccel(ScreenPtr pScreen)
 {
-    /* Handled by CloseScreen */
-    (void)pScreen;
+#ifdef WITH_LIBDRM
+    KdScreenPriv(pScreen);
+    KdScreenInfo *screen = pScreenPriv->screen;
+    FbdevScrPriv *scrpriv = screen->driver;
+
+    if (scrpriv->dri_fd >= 0) {
+        close(scrpriv->dri_fd);
+    }
+#endif
 }

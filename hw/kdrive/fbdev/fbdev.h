@@ -47,6 +47,9 @@ typedef struct _fbdevPriv {
 typedef struct _fbdevScrPriv {
     Rotation randr;
     Bool shadow;
+#if defined (GLAMOR) && defined (WITH_LIBDRM)
+    int dri_fd;
+#endif
 } FbdevScrPriv;
 
 extern KdCardFuncs fbdevFuncs;
@@ -55,6 +58,7 @@ extern Bool fbDisableShadow;
 
 #ifdef GLAMOR
 extern char *fbdev_glvnd_provider;
+extern char *fbdev_dri_path;
 extern bool es_allowed;
 extern bool force_es;
 extern bool fbGlamorAllowed;

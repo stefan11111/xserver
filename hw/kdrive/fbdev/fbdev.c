@@ -42,13 +42,34 @@ fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
 {
     unsigned long off;
 
-    if (fbdevDevicePath == NULL)
-        fbdevDevicePath = "/dev/fb0";
+    if (fbdevDevicePath) {
+        priv->fd = open(fbdevDevicePath, O_RDWR);
+        if (priv->fd < 0) {
+            ErrorF("Error opening framebuffer %s: %s\n",
+                   fbdevDevicePath, strerror(errno));
+            return FALSE;
+        }
+    } else {
+        char devbuf[] = "/dev/fbxx";
+        priv->fd = -1;
+        for (int i = 0; i < 32 && priv->fd < 0; i++) {
+            snprintf(devbuf, sizeof(devbuf),
+                     "/dev/fb%d", i);
+            priv->fd = open(devbuf, O_RDWR);
 
-    if ((priv->fd = open(fbdevDevicePath, O_RDWR)) < 0) {
-        ErrorF("Error opening framebuffer %s: %s\n",
-               fbdevDevicePath, strerror(errno));
-        return FALSE;
+            if (priv->fd >= 0) {
+                struct fb_fix_screeninfo fix;
+                memset(&fix, 0, sizeof(fix));
+                if (ioctl(priv->fd, FBIOGET_FSCREENINFO, &fix) < 0) {
+                    close(priv->fd);
+                    priv->fd = -1;
+                }
+            }
+        }
+        if (priv->fd < 0) {
+            ErrorF("Error opening framebuffers /dev/fb[0-31]\n");
+            return FALSE;
+        }
     }
 
     /* quiet valgrind */

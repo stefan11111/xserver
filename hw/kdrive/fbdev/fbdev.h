@@ -47,7 +47,7 @@ typedef struct _fbdevPriv {
 typedef struct _fbdevScrPriv {
     Rotation randr;
     Bool shadow;
-#if defined (GLAMOR) && defined (WITH_LIBDRM)
+#ifdef GLAMOR
     int dri_fd;
 #endif
 } FbdevScrPriv;

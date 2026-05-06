@@ -35,7 +35,6 @@ bool fbXVAllowed = TRUE;
 Bool
 fbdevInitAccel(ScreenPtr pScreen)
 {
-#ifdef WITH_LIBDRM
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
@@ -43,7 +42,9 @@ fbdevInitAccel(ScreenPtr pScreen)
     if (fbdev_dri_path) {
         scrpriv->dri_fd = open(fbdev_dri_path, O_RDWR);
         if (scrpriv->dri_fd >= 0) {
+#ifdef WITH_LIBDRM
             drmSetMaster(scrpriv->dri_fd);
+#endif
         } else {
             perror("open");
         }
@@ -54,17 +55,12 @@ fbdevInitAccel(ScreenPtr pScreen)
     if (scrpriv->dri_fd >= 0) {
         fbdev_auto_dri3 = FALSE;
     }
-#endif
 
     glamor_egl_conf_t glamor_egl_conf = {
                                          .screen = pScreen,
                                          .glvnd_vendor = fbdev_glvnd_provider,
-#ifdef WITH_LIBDRM
                                          .fd = scrpriv->dri_fd,
                                          .auto_dri = fbdev_auto_dri3,
-#else
-                                         .fd = -1;
-#endif
                                          .llvmpipe_allowed = TRUE,
                                          .force_glamor = TRUE,
                                          .es_disallowed = !es_allowed,
@@ -75,11 +71,9 @@ fbdevInitAccel(ScreenPtr pScreen)
         return FALSE;
     }
 
-#ifdef WITH_LIBDRM
     if (fbdev_auto_dri3) {
         scrpriv->dri_fd = glamor_egl_get_fd(pScreen);
     }
-#endif
 
     const char *renderer = (const char*)glGetString(GL_RENDERER);
 
@@ -94,11 +88,8 @@ fbdevInitAccel(ScreenPtr pScreen)
         }
     }
 
-#ifdef WITH_LIBDRM
     if (scrpriv->dri_fd < 0 ||
-        flags & GLAMOR_NO_RENDER_ACCEL)
-#endif
-    {
+        flags & GLAMOR_NO_RENDER_ACCEL) {
         flags |= GLAMOR_NO_DRI3;
     }
 
@@ -147,7 +138,6 @@ fbdevDisableAccel(ScreenPtr pScreen)
 void
 fbdevFiniAccel(ScreenPtr pScreen)
 {
-#ifdef WITH_LIBDRM
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
@@ -155,5 +145,4 @@ fbdevFiniAccel(ScreenPtr pScreen)
     if (scrpriv->dri_fd >= 0) {
         close(scrpriv->dri_fd);
     }
-#endif
 }

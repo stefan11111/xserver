@@ -327,7 +327,6 @@ _X_EXPORT Bool glamor_get_drawable_modifiers(DrawablePtr draw,
 extern _X_EXPORT void glamor_set_drawable_modifiers_func(ScreenPtr screen,
                                                          GetDrawableModifiersFuncPtr func);
 
-#ifdef GLAMOR_FOR_XORG
 
 #define GLAMOR_EGL_MODULE_NAME  "glamoregl"
 
@@ -404,7 +403,6 @@ extern _X_EXPORT Bool
 
 extern _X_EXPORT const char *glamor_egl_get_driver_name(ScreenPtr screen);
 
-#endif
 
 extern _X_EXPORT int glamor_create_gc(GCPtr gc);
 

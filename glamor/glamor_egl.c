@@ -28,7 +28,6 @@
  */
 #include <dix-config.h>
 
-#define GLAMOR_FOR_XORG /* for -Wmissing-prototypes */
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>

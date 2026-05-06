@@ -117,15 +117,31 @@ fbdevInitAccel(ScreenPtr pScreen)
 }
 
 void
-fbdevEnableAccel(ScreenPtr screen)
+fbdevEnableAccel(ScreenPtr pScreen)
 {
-    (void)screen;
+#ifdef WITH_LIBDRM
+    KdScreenPriv(pScreen);
+    KdScreenInfo *screen = pScreenPriv->screen;
+    FbdevScrPriv *scrpriv = screen->driver;
+
+    if (scrpriv->dri_fd >= 0) {
+        drmSetMaster(scrpriv->dri_fd);
+    }
+#endif
 }
 
 void
-fbdevDisableAccel(ScreenPtr screen)
+fbdevDisableAccel(ScreenPtr pScreen)
 {
-    (void)screen;
+#ifdef WITH_LIBDRM
+    KdScreenPriv(pScreen);
+    KdScreenInfo *screen = pScreenPriv->screen;
+    FbdevScrPriv *scrpriv = screen->driver;
+
+    if (scrpriv->dri_fd >= 0) {
+        drmDropMaster(scrpriv->dri_fd);
+    }
+#endif
 }
 
 void

@@ -1050,9 +1050,11 @@ CloseDeviceList(DeviceIntPtr *listHead)
         return;
 
     DeviceIntPtr dev = *listHead;
+
+    /* Used to mark devices that we tried to free */
+    bool freedIds[MAXDEVICES] = { 0 };
+
     while (dev != NULL) {
-        /* Used to mark devices that we tried to free */
-        bool freedIds[MAXDEVICES] = { 0 };
         freedIds[dev->id] = TRUE;
         DeleteInputDeviceRequest(dev);
 

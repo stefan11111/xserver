@@ -1953,7 +1953,8 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
     }
 
 #ifdef GLAMOR_HAS_GBM
-    if (glamor_egl->fd >= 0) {
+    if (!glamor_egl->gbm && glamor_egl->fd >= 0 &&
+        glamor_egl_conf->auto_dri) {
         glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
         if (!glamor_egl->gbm) {
             glamor_egl->gbm = gbm_create_device_by_name(glamor_egl->fd, "dumb");

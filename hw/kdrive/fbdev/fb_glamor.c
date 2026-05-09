@@ -22,10 +22,13 @@
 #include <xf86drm.h>
 #endif
 
+#include <errno.h>
+
 char *fbdev_glvnd_provider = NULL;
 char *fbdev_dri_path = NULL;
 
 bool fbdev_auto_dri3 = FALSE;
+bool fbdev_drm_master = FALSE;
 bool es_allowed = TRUE;
 bool force_es = FALSE;
 bool fbGlamorAllowed = TRUE;
@@ -43,10 +46,14 @@ fbdevInitAccel(ScreenPtr pScreen)
         scrpriv->dri_fd = open(fbdev_dri_path, O_RDWR);
         if (scrpriv->dri_fd >= 0) {
 #ifdef WITH_LIBDRM
-            drmSetMaster(scrpriv->dri_fd);
+            if (fbdev_drm_master) {
+                drmSetMaster(scrpriv->dri_fd);
+            } else {
+                drmDropMaster(scrpriv->dri_fd);
+            }
 #endif
         } else {
-            perror("open");
+            LogMessage(X_WARNING, "Could not open %s: %s\n", fbdev_dri_path, strerror(errno));
         }
     } else {
         scrpriv->dri_fd = -1;
@@ -115,7 +122,7 @@ fbdevEnableAccel(ScreenPtr pScreen)
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
 
-    if (scrpriv->dri_fd >= 0) {
+    if (fbdev_drm_master && scrpriv->dri_fd >= 0) {
         drmSetMaster(scrpriv->dri_fd);
     }
 #endif
@@ -129,7 +136,7 @@ fbdevDisableAccel(ScreenPtr pScreen)
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
 
-    if (scrpriv->dri_fd >= 0) {
+    if (fbdev_drm_master && scrpriv->dri_fd >= 0) {
         drmDropMaster(scrpriv->dri_fd);
     }
 #endif

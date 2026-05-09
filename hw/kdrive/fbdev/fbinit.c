@@ -73,6 +73,8 @@ ddxUseMsg(void)
     ErrorF
         ("-dri <path|auto> Optional drm device path to use\n");
     ErrorF
+        ("-drm-master      Enable master permissions on the fd used for dri\n");
+    ErrorF
         ("-noshadow        Disable the ShadowFB layer if possible\n");
     ErrorF
         ("-glamor          Force enable glamor render acceleration if possible\n");
@@ -138,6 +140,11 @@ ddxProcessArgument(int argc, char **argv, int i)
             fbdev_auto_dri3 = TRUE;
             return 1;
         }
+    }
+
+    if (!strcmp(argv[i], "-drm-master")) {
+        fbdev_drm_master = TRUE;
+        return 1;
     }
 
     if (!strcmp(argv[i], "-force-gl")) {

@@ -32,6 +32,7 @@ typedef struct glamor_egl_screen_private {
 
 #ifdef GLAMOR_HAS_GBM
     struct gbm_device *gbm;
+    int fast_gbm_import;
 #endif
     int fd;
     int dmabuf_capable;

@@ -245,7 +245,7 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
     struct glamor_screen_private *glamor_priv =
         glamor_get_screen_private(screen);
     glamor_egl_priv_t *glamor_egl;
-    EGLImageKHR image;
+    EGLImageKHR image = EGL_NO_IMAGE_KHR;
     GLuint texture;
     Bool ret = FALSE;
 
@@ -301,8 +301,14 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
 
     glamor_make_current(glamor_priv);
 
+    if (glamor_egl->fast_gbm_import) {
+        image = eglCreateImageKHR(glamor_egl->display,
+                                  EGL_NO_CONTEXT,
+                                  EGL_NATIVE_PIXMAP_KHR, bo, NULL);
+    }
 #ifdef GBM_BO_FD_FOR_PLANE
-    if (glamor_egl->dmabuf_capable) {
+    if (image == EGL_NO_IMAGE_KHR &&
+        glamor_egl->dmabuf_capable) {
 #define ADD_ATTR(attrs, num, attr)                                      \
         do {                                                            \
             assert(((num) + 1) < (sizeof(attrs) / sizeof((attrs)[0]))); \
@@ -337,18 +343,16 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
                                   NULL,
                                   img_attrs);
 
+        if (image != EGL_NO_IMAGE_KHR) {
+            glamor_egl->fast_gbm_import = FALSE;
+        }
+
         for (plane = 0; plane < num_planes; plane++) {
             close(fds[plane]);
             fds[plane] = -1;
         }
     }
-    else
 #endif
-    {
-        image = eglCreateImageKHR(glamor_egl->display,
-                                  EGL_NO_CONTEXT,
-                                  EGL_NATIVE_PIXMAP_KHR, bo, NULL);
-    }
 
     if (image == EGL_NO_IMAGE_KHR) {
         glamor_set_pixmap_type(pixmap, GLAMOR_DRM_ONLY);
@@ -2060,6 +2064,10 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
         else
             glamor_egl->dmabuf_capable = FALSE;
     }
+#endif
+
+#ifdef GLAMOR_HAS_GBM
+    glamor_egl->fast_gbm_import = renderer && !strstr((const char *)renderer, "NVIDIA");
 #endif
 
     /* Check if at least one combination of format + modifier is supported */

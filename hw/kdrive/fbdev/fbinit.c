@@ -69,25 +69,25 @@ ddxUseMsg(void)
     KdUseMsg();
     ErrorF("\nXfbdev Device Usage:\n");
     ErrorF
-        ("-fb path         Framebuffer device to use. Defaults to /dev/fb0\n");
+        ("-fb <path>           Framebuffer device to use. Defaults to /dev/fb0\n");
     ErrorF
-        ("-dri <path|auto> Optional drm device path to use\n");
+        ("-dri [path|auto]     Optional drm device path to use\n");
     ErrorF
-        ("-drm-master      Enable master permissions on the fd used for dri\n");
+        ("-drm-master          Enable master permissions on the fd used for dri\n");
     ErrorF
-        ("-noshadow        Disable the ShadowFB layer if possible\n");
+        ("-noshadow            Disable the ShadowFB layer if possible\n");
     ErrorF
-        ("-glamor          Force enable glamor render acceleration if possible\n");
+        ("-glamor              Force enable glamor render acceleration if possible\n");
     ErrorF
-        ("-noglamor        Force disable glamor render acceleration\n");
+        ("-noglamor            Force disable glamor render acceleration\n");
     ErrorF
-        ("-glvendor        Suggest what glvnd vendor library should be used\n");
+        ("-glvendor <string>   Suggest what glvnd vendor library should be used\n");
     ErrorF
-        ("-force-gl        Force glamor to only use GL contexts\n");
+        ("-force-gl            Force glamor to only use GL contexts\n");
     ErrorF
-        ("-force-es        Force glamor to only use GLES contexts\n");
+        ("-force-es            Force glamor to only use GLES contexts\n");
     ErrorF
-        ("-noxv            Disable X-Video support\n");
+        ("-noxv                Disable X-Video support\n");
     ErrorF("\n");
 }
 

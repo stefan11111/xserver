@@ -30,19 +30,17 @@
 
 #include "fbdev.h"
 
-const char *fbdevDevicePath = NULL;
-Bool fbDisableShadow = FALSE;
-
 static Bool
 fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
 {
     unsigned long off;
+    FbScreenConf *config = card->closure;
 
-    if (fbdevDevicePath) {
-        priv->fd = open(fbdevDevicePath, O_RDWR);
+    if (config->fbdevDevicePath) {
+        priv->fd = open(config->fbdevDevicePath, O_RDWR);
         if (priv->fd < 0) {
             ErrorF("Error opening framebuffer %s: %s\n",
-                   fbdevDevicePath, strerror(errno));
+                   config->fbdevDevicePath, strerror(errno));
             return FALSE;
         }
     } else {
@@ -366,8 +364,9 @@ fbdevMapFramebuffer(KdScreenInfo * screen)
     FbdevScrPriv *scrpriv = screen->driver;
     KdPointerMatrix m;
     FbdevPriv *priv = screen->card->driver;
+    FbScreenConf *config = screen->card->closure;
 
-    if (!fbDisableShadow) {
+    if (!config->fbDisableShadow) {
         scrpriv->shadow = TRUE;
     } else if (scrpriv->randr != RR_Rotate_0 ||
         priv->fix.type != FB_TYPE_PACKED_PIXELS) {
@@ -852,6 +851,10 @@ fbdevCardFini(KdCardInfo * card)
     munmap(priv->fb_base, priv->fix.smem_len);
     close(priv->fd);
     free(priv);
+    card->driver = NULL;
+
+    free(card->closure);
+    card->closure = NULL;
 }
 
 /*

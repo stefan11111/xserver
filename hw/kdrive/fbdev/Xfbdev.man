@@ -74,3 +74,4 @@ The
 .B Xfbdev
 server was written by Keith Packard.
 
+HW acceleration support was later added by stefan11111.

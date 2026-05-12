@@ -364,7 +364,7 @@ fbdevMapFramebuffer(KdScreenInfo * screen)
     FbdevScrPriv *scrpriv = screen->driver;
     KdPointerMatrix m;
     FbdevPriv *priv = screen->card->driver;
-    FbCardConf *config = screen->card->closure;
+    FbScreenConf *config = screen->closure;
 
     if (!config->fbDisableShadow) {
         scrpriv->shadow = TRUE;

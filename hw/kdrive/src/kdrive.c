@@ -485,7 +485,7 @@ KdProcessArgument(int argc, char **argv, int i)
                 card = KdCardInfoLast();
             }
             if (card) {
-                screen = KdScreenInfoAdd(card);
+                screen = NewScreen(card);
                 KdParseScreen(screen, argv[i + 1]);
             }
             else
@@ -1106,7 +1106,7 @@ KdInitOutput(int argc, char **argv)
         InitCard(0);
         if (!(card = KdCardInfoLast()))
             FatalError("No matching cards found!\n");
-        screen = KdScreenInfoAdd(card);
+        screen = NewScreen(card);
         KdParseScreen(screen, 0);
     }
     /*

@@ -56,26 +56,29 @@ typedef struct _fbdevScrPriv {
 } FbdevScrPriv;
 
 typedef struct _fbCardConf {
-const char *fbdevDevicePath;
-Bool fbDisableShadow;
+    const char *fbdevDevicePath;
+} FbCardConf;
+
+typedef struct _fbScreenConf {
+    Bool fbDisableShadow;
 
 #ifdef GLAMOR
-char *fbdev_glvnd_provider;
+    char *fbdev_glvnd_provider;
 
-char *fbdev_dri_path;
-bool fbdev_auto_dri3;
-bool fbdev_drm_master;
+    char *fbdev_dri_path;
+    bool fbdev_auto_dri3;
+    bool fbdev_drm_master;
 
-bool es_allowed;
-bool force_es;
+    bool es_allowed;
+    bool force_es;
 
-bool fbGlamorAllowed;
-bool fbForceGlamor;
+    bool fbGlamorAllowed;
+    bool fbForceGlamor;
 #ifdef XV
-bool fbXVAllowed;
+    bool fbXVAllowed;
 #endif
 #endif
-} FbCardConf;
+} FbScreenConf;
 
 extern KdCardFuncs fbdevFuncs;
 

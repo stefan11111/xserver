@@ -63,6 +63,12 @@ InitCard(char *name)
     KdCardInfoAdd(&ephyrFuncs, 0);
 }
 
+KdScreenInfo*
+NewScreen(KdCardInfo * ci)
+{
+    return KdScreenInfoAdd(ci, NULL);
+}
+
 void
 InitOutput(int argc, char **argv)
 {
@@ -155,7 +161,7 @@ processScreenOrOutputArg(const char *screen_size, const char *output, char *pare
         unsigned long p_id = 0;
         Bool use_geometry;
 
-        screen = KdScreenInfoAdd(card);
+        screen = NewScreen(card);
         KdParseScreen(screen, screen_size);
         screen->driver = calloc(1, sizeof(EphyrScrPriv));
         if (!screen->driver)

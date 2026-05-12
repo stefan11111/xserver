@@ -29,13 +29,24 @@
 #include <string.h>
 
 static FbCardConf *fbCurrCard = NULL;
+static FbScreenConf *fbCurrScreen = NULL;
 
 void
 InitCard(char *name)
 {
     fbCurrCard = XNFalloc(sizeof(*fbCurrCard));
     *fbCurrCard = (FbCardConf) {
-                                    .fbdevDevicePath = NULL,
+                                .fbdevDevicePath = NULL,
+                               };
+
+    KdCardInfoAdd(&fbdevFuncs, fbCurrCard);
+}
+
+KdScreenInfo*
+NewScreen(KdCardInfo * ci)
+{
+    fbCurrScreen = XNFalloc(sizeof(*fbCurrScreen));
+    *fbCurrScreen = (FbScreenConf) {
                                     .fbDisableShadow = FALSE,
 #ifdef GLAMOR
                                     .fbdev_glvnd_provider = NULL,
@@ -55,7 +66,8 @@ InitCard(char *name)
 #endif
                                    };
 
-    KdCardInfoAdd(&fbdevFuncs, fbCurrCard);
+
+    return KdScreenInfoAdd(ci, fbCurrScreen);
 }
 
 #if INPUTTHREAD
@@ -126,7 +138,7 @@ ddxProcessArgument(int argc, char **argv, int i)
 
         /* This is what KdInitOutput would have done */
         KdCardInfo *card = KdCardInfoLast();
-        KdScreenInfo *screen = KdScreenInfoAdd(card);
+        KdScreenInfo *screen = NewScreen(card);
         KdParseScreen(screen, NULL);
     } else if (!strcmp(argv[i], "-card")) {
         InitCard(NULL);
@@ -145,24 +157,24 @@ ddxProcessArgument(int argc, char **argv, int i)
     }
 
     if (!strcmp(argv[i], "-noshadow")) {
-        fbCurrCard->fbDisableShadow = TRUE;
+        fbCurrScreen->fbDisableShadow = TRUE;
         return 1;
     }
 
 #ifdef GLAMOR
     if (!strcmp(argv[i], "-glamor")) {
-        fbCurrCard->fbForceGlamor = TRUE;
+        fbCurrScreen->fbForceGlamor = TRUE;
         return 1;
     }
 
     if (!strcmp(argv[i], "-noglamor")) {
-        fbCurrCard->fbGlamorAllowed = FALSE;
+        fbCurrScreen->fbGlamorAllowed = FALSE;
         return 1;
     }
 
     if (!strcmp(argv[i], "-glvendor")) {
         if (i + 1 < argc) {
-            fbCurrCard->fbdev_glvnd_provider = strdup(argv[i + 1]);
+            fbCurrScreen->fbdev_glvnd_provider = strdup(argv[i + 1]);
             return 2;
         }
         UseMsg();
@@ -172,35 +184,35 @@ ddxProcessArgument(int argc, char **argv, int i)
     if (!strcmp(argv[i], "-dri")) {
         if (i + 1 < argc) {
             if (argv[i + 1][0] == '-' || !strcmp(argv[i + 1], "auto")) {
-                fbCurrCard->fbdev_auto_dri3 = TRUE;
+                fbCurrScreen->fbdev_auto_dri3 = TRUE;
             } else {
-                fbCurrCard->fbdev_dri_path = strdup(argv[i + 1]);
+                fbCurrScreen->fbdev_dri_path = strdup(argv[i + 1]);
             }
             return 2;
         } else {
-            fbCurrCard->fbdev_auto_dri3 = TRUE;
+            fbCurrScreen->fbdev_auto_dri3 = TRUE;
             return 1;
         }
     }
 
     if (!strcmp(argv[i], "-drm-master")) {
-        fbCurrCard->fbdev_drm_master = TRUE;
+        fbCurrScreen->fbdev_drm_master = TRUE;
         return 1;
     }
 
     if (!strcmp(argv[i], "-force-gl")) {
-        fbCurrCard->es_allowed = FALSE;
+        fbCurrScreen->es_allowed = FALSE;
         return 1;
     }
 
     if (!strcmp(argv[i], "-force-es")) {
-        fbCurrCard->force_es = TRUE;
+        fbCurrScreen->force_es = TRUE;
         return 1;
     }
 
 #ifdef XV
     if (!strcmp(argv[i], "-noxv")) {
-        fbCurrCard->fbXVAllowed = FALSE;
+        fbCurrScreen->fbXVAllowed = FALSE;
         return 1;
     }
 #endif

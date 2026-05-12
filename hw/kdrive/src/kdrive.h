@@ -91,6 +91,7 @@ typedef struct _KdScreenInfo {
     KdCardInfo *card;
     ScreenPtr pScreen;
     void *driver;
+    void *closure;
     Rotation randr;             /* rotation and reflection */
     int x;
     int y;
@@ -459,7 +460,7 @@ KdCardInfo *KdCardInfoLast(void);
 void
  KdCardInfoDispose(KdCardInfo * ci);
 
-KdScreenInfo *KdScreenInfoAdd(KdCardInfo * ci);
+KdScreenInfo *KdScreenInfoAdd(KdCardInfo * ci, void* closure);
 
 void
  KdScreenInfoDispose(KdScreenInfo * si);
@@ -567,6 +568,9 @@ void
 /* function prototypes to be implemented by the drivers */
 void
  InitCard(char *name);
+
+KdScreenInfo*
+ NewScreen(KdCardInfo * ci);
 
 Bool KdCloseScreen(ScreenPtr pScreen);
 

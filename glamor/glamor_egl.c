@@ -1567,7 +1567,9 @@ glamor_egl_pre_close_screen_cleanup(glamor_egl_priv_t *glamor_egl)
          * (on hot unplug another GPU may still be using glamor)
          */
         lastGLContext = NULL;
-        eglTerminate(glamor_egl->display);
+        if (!glamor_egl->no_display_terminate) {
+            eglTerminate(glamor_egl->display);
+        }
         glamor_egl->display = EGL_NO_DISPLAY;
     }
 
@@ -1897,6 +1899,12 @@ glamor_egl_get_fd(ScreenPtr screen)
     return glamor_egl_get_screen_private(screen)->fd;
 }
 
+void*
+glamor_egl_get_screen_display(ScreenPtr screen)
+{
+    return glamor_egl_get_screen_private(screen)->display;
+}
+
 Bool
 glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
 {
@@ -1920,6 +1928,8 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
     }
 
     memset(glamor_egl, 0, sizeof(*glamor_egl));
+
+    glamor_egl->no_display_terminate = glamor_egl_conf->no_display_terminate;
 
     if (glamor_egl_conf->glvnd_vendor) {
         glamor_egl->glvnd_vendor = glamor_egl_conf->glvnd_vendor;

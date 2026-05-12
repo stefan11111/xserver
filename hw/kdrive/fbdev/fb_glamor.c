@@ -31,6 +31,7 @@ fbdevInitAccel(ScreenPtr pScreen)
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
     FbCardConf *config = screen->card->closure;
+    FbdevPriv *priv = screen->card->driver;
 
     if (config->fbdev_dri_path) {
         scrpriv->dri_fd = open(config->fbdev_dri_path, O_RDWR);
@@ -62,6 +63,7 @@ fbdevInitAccel(ScreenPtr pScreen)
                                          .force_glamor = TRUE,
                                          .es_disallowed = !config->es_allowed,
                                          .force_es = config->force_es,
+                                         .no_display_terminate = TRUE,
                                         };
 
     if (!glamor_egl_init_internal(&glamor_egl_conf, NULL)) {
@@ -100,6 +102,8 @@ fbdevInitAccel(ScreenPtr pScreen)
         kd_glamor_xv_init(pScreen);
     }
 #endif
+
+    priv->display = glamor_egl_get_screen_display(pScreen);
 
     return TRUE;
 }
@@ -143,5 +147,19 @@ fbdevFiniAccel(ScreenPtr pScreen)
 
     if (scrpriv->dri_fd >= 0) {
         close(scrpriv->dri_fd);
+    }
+}
+
+void
+fbdevFiniCardAccel(KdCardInfo * card)
+{
+    /**
+     * Due to global state tracking in egl,
+     * we need to terminate the display for a card exactly once
+     */
+    FbdevPriv *priv = card->driver;
+    if (priv->display != EGL_NO_DISPLAY) {
+        eglTerminate(priv->display);
+        priv->display = EGL_NO_DISPLAY;
     }
 }

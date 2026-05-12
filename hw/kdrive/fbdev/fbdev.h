@@ -42,6 +42,9 @@ typedef struct _fbdevPriv {
     int fd;
     char *fb;
     char *fb_base;
+#ifdef GLAMOR
+    void* display;
+#endif
 } FbdevPriv;
 
 typedef struct _fbdevScrPriv {
@@ -114,6 +117,8 @@ void fbdevEnableAccel(ScreenPtr screen);
 void fbdevDisableAccel(ScreenPtr screen);
 
 void fbdevFiniAccel(ScreenPtr screen);
+
+void fbdevFiniCardAccel(KdCardInfo * card);
 #endif
 
 #endif                          /* _KDRIVE_FBDEV_H_ */

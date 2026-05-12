@@ -846,6 +846,10 @@ fbdevScreenFini(KdScreenInfo * screen)
 void
 fbdevCardFini(KdCardInfo * card)
 {
+#ifdef GLAMOR
+    fbdevFiniCardAccel(card);
+#endif
+
     FbdevPriv *priv = card->driver;
 
     munmap(priv->fb_base, priv->fix.smem_len);

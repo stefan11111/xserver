@@ -65,6 +65,8 @@ typedef struct {
 
     int es_disallowed; /* If using GLES contexts is forbidden */
     int force_es; /* If glamor should only use GLES contexts */
+
+    int no_display_terminate; /* If glamor should not terminate the EGLDisplay */
 } glamor_egl_conf_t;
 
 /**
@@ -126,5 +128,7 @@ glamor_egl_get_display(EGLint type, void *native)
 }
 
 int glamor_egl_get_fd(ScreenPtr screen);
+
+void* glamor_egl_get_screen_display(ScreenPtr screen);
 
 #endif

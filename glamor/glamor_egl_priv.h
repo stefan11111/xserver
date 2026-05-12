@@ -37,6 +37,7 @@ typedef struct glamor_egl_screen_private {
     int fd;
     int dmabuf_capable;
     int linear_only; /* When using gbm, this means that only linear buffers can be created */
+    int no_display_terminate;
 } glamor_egl_priv_t;
 
 /**

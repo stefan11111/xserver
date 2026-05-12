@@ -476,22 +476,19 @@ KdProcessArgument(int argc, char **argv, int i)
     KdScreenInfo *screen;
 
     if (!strcmp(argv[i], "-screen")) {
-        if ((i + 1) < argc) {
+        char *screen_arg = ((i + 1) < argc && argv[i + 1][0] != '-') ? argv[i + 1] : NULL;
+        card = KdCardInfoLast();
+        if (!card) {
+            InitCard(0);
             card = KdCardInfoLast();
-            if (!card) {
-                InitCard(0);
-                card = KdCardInfoLast();
-            }
-            if (card) {
-                screen = KdScreenInfoAdd(card);
-                KdParseScreen(screen, argv[i + 1]);
-            }
-            else
-                ErrorF("No matching card found!\n");
         }
-        else
-            UseMsg();
-        return 2;
+        if (card) {
+            screen = KdScreenInfoAdd(card);
+            KdParseScreen(screen, screen_arg);
+        } else {
+            ErrorF("No matching card found!\n");
+        }
+        return screen_arg ? 2 : 1;
     }
     if (!strcmp(argv[i], "-zaphod")) {
         kdDisableZaphod = TRUE;

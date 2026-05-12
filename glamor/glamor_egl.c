@@ -63,6 +63,75 @@
 #include "glamor_glx_provider.h"
 #include "dri3.h"
 
+/**
+ * EGLDeviceEXT's are internally stored as a globals.
+ * As such, when multiple screens query the same device,
+ * they end up with the same exact pointer value for the device.
+ *
+ * Then, per the spec, eglGetPlatformDisplayEXT returns the
+ * same EGLDisplay handle.
+ *
+ * This is a problem, because on teardown, each screen
+ * destroys it's EGLDevice, and since it can be shared by
+ * multiple screens, we risk destroying the display from under it.
+ *
+ * See: https://github.com/X11Libre/xserver/pull/2721
+ */
+
+typedef struct _freeDisplayList{
+    EGLDisplay dpy;
+    struct _freeDisplayList *next;
+} FreeDisplayList;
+
+static FreeDisplayList *freeDisplayList = NULL;
+
+static void
+glamor_egl_add_display_to_list(EGLDisplay dpy)
+{
+    if (dpy == EGL_NO_DISPLAY) {
+        return;
+    }
+
+    FreeDisplayList **ptr = &freeDisplayList;
+    while (*ptr) {
+        ptr = &(*ptr)->next;
+    }
+
+    *ptr = XNFalloc(sizeof(**ptr));
+    (*ptr)->dpy = dpy;
+    (*ptr)->next = NULL;
+}
+
+static void
+glamor_egl_destroy_display(EGLDisplay dpy)
+{
+    int num_found = 0;
+
+    if (dpy == EGL_NO_DISPLAY) {
+        return;
+    }
+
+    FreeDisplayList **ptr = &freeDisplayList;
+    while (*ptr) {
+        if ((*ptr)->dpy == dpy) {
+            num_found++;
+            if (num_found == 1) {
+                /* We found it once, remove it from the list */
+                *ptr = (*ptr)->next;
+                continue;
+            } else {
+                /* We found it more than once, stop searching */
+                break;
+            }
+        }
+        ptr = &(*ptr)->next;
+    }
+
+    if (num_found == 1) {
+        eglTerminate(dpy);
+    }
+}
+
 static DevPrivateKeyRec glamor_egl_screen_private_key;
 
 static inline Bool
@@ -1567,7 +1636,7 @@ glamor_egl_pre_close_screen_cleanup(glamor_egl_priv_t *glamor_egl)
          * (on hot unplug another GPU may still be using glamor)
          */
         lastGLContext = NULL;
-        eglTerminate(glamor_egl->display);
+        glamor_egl_destroy_display(glamor_egl->display);
         glamor_egl->display = EGL_NO_DISPLAY;
     }
 
@@ -1801,6 +1870,7 @@ glamor_egl_init_display(glamor_egl_priv_t *glamor_egl, int *dri_fd)
      */
 #define GLAMOR_EGL_TRY_PLATFORM(platform, native, platform_fallback) \
     glamor_egl->display = glamor_egl_get_display2(platform, native, platform_fallback); \
+    glamor_egl_add_display_to_list(glamor_egl->display); \
     if (glamor_egl->display == EGL_NO_DISPLAY) { \
         LogMessage(X_ERROR, "glamor: eglGetDisplay(" #platform ", " #native ") failed\n"); \
     } else { \
@@ -1816,7 +1886,7 @@ glamor_egl_init_display(glamor_egl_priv_t *glamor_egl, int *dri_fd)
             return TRUE; \
         } \
         LogMessage(X_ERROR, "glamor: eglInitialize() failed on " #platform "\n"); \
-        eglTerminate(glamor_egl->display); \
+        glamor_egl_destroy_display(glamor_egl->display); \
         glamor_egl->display = EGL_NO_DISPLAY; \
     }
 

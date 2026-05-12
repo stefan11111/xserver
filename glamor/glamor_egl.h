@@ -66,6 +66,7 @@ typedef struct {
     int es_disallowed; /* If using GLES contexts is forbidden */
     int force_es; /* If glamor should only use GLES contexts */
 
+    void* display; /* An optional initialized EGLDisplay for glamor to use */
     int no_display_terminate; /* If glamor should not terminate the EGLDisplay */
 } glamor_egl_conf_t;
 

@@ -63,6 +63,7 @@ fbdevInitAccel(ScreenPtr pScreen)
                                          .force_glamor = TRUE,
                                          .es_disallowed = !config->es_allowed,
                                          .force_es = config->force_es,
+                                         .display = priv->display,
                                          .no_display_terminate = TRUE,
                                         };
 
@@ -103,7 +104,9 @@ fbdevInitAccel(ScreenPtr pScreen)
     }
 #endif
 
-    priv->display = glamor_egl_get_screen_display(pScreen);
+    if (!priv->display) {
+        priv->display = glamor_egl_get_screen_display(pScreen);
+    }
 
     return TRUE;
 }

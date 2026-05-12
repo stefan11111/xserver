@@ -1961,7 +1961,9 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
         dri_fd = &glamor_egl->fd;
     }
 
-    if (!glamor_egl_init_display(glamor_egl, dri_fd)) {
+    if (glamor_egl_conf->display) {
+        glamor_egl->display = glamor_egl_conf->display;
+    } else if (!glamor_egl_init_display(glamor_egl, dri_fd)) {
         goto error;
     }
 

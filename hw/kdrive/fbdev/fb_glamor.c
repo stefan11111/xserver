@@ -30,7 +30,7 @@ fbdevInitAccel(ScreenPtr pScreen)
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
-    FbScreenConf *config = screen->card->closure;
+    FbCardConf *config = screen->card->closure;
 
     if (config->fbdev_dri_path) {
         scrpriv->dri_fd = open(config->fbdev_dri_path, O_RDWR);
@@ -111,7 +111,7 @@ fbdevEnableAccel(ScreenPtr pScreen)
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
-    FbScreenConf *config = screen->card->closure;
+    FbCardConf *config = screen->card->closure;
 
     if (config->fbdev_drm_master && scrpriv->dri_fd >= 0) {
         drmSetMaster(scrpriv->dri_fd);
@@ -126,7 +126,7 @@ fbdevDisableAccel(ScreenPtr pScreen)
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
-    FbScreenConf *config = screen->card->closure;
+    FbCardConf *config = screen->card->closure;
 
     if (config->fbdev_drm_master && scrpriv->dri_fd >= 0) {
         drmDropMaster(scrpriv->dri_fd);

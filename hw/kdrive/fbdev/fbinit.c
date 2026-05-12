@@ -28,13 +28,13 @@
 
 #include <string.h>
 
-static FbScreenConf *fbCurrScreen = NULL;
+static FbCardConf *fbCurrCard = NULL;
 
 void
 InitCard(char *name)
 {
-    fbCurrScreen = XNFalloc(sizeof(*fbCurrScreen));
-    *fbCurrScreen = (FbScreenConf) {
+    fbCurrCard = XNFalloc(sizeof(*fbCurrCard));
+    *fbCurrCard = (FbCardConf) {
                                     .fbdevDevicePath = NULL,
                                     .fbDisableShadow = FALSE,
 #ifdef GLAMOR
@@ -55,7 +55,7 @@ InitCard(char *name)
 #endif
                                    };
 
-    KdCardInfoAdd(&fbdevFuncs, fbCurrScreen);
+    KdCardInfoAdd(&fbdevFuncs, fbCurrCard);
 }
 
 #if INPUTTHREAD
@@ -93,6 +93,8 @@ ddxUseMsg(void)
     KdUseMsg();
     ErrorF("\nXfbdev Device Usage:\n");
     ErrorF
+        ("-card                Declare a new card for the X server to parse\n");
+    ErrorF
         ("-fb <path>           Framebuffer device to use. Defaults to /dev/fb0\n");
     ErrorF
         ("-dri [path|auto]     Optional drm device path to use\n");
@@ -118,21 +120,24 @@ ddxUseMsg(void)
 int
 ddxProcessArgument(int argc, char **argv, int i)
 {
-    if (!fbCurrScreen || !strcmp(argv[i], "-screen")) {
-        /* Put each screen on a separate card */
-        int implicit_first_screen = !fbCurrScreen;
+    if (!fbCurrCard && argv[i][0] == '-' &&
+        strcmp(argv[i], "-card")) {
         InitCard(NULL);
-        if (implicit_first_screen) {
-            /* This is what KdInitOutput would have done */
-            KdCardInfo *card = KdCardInfoLast();
-            KdScreenInfo *screen = KdScreenInfoAdd(card);
-            KdParseScreen(screen, NULL);
-        }
+
+        /* This is what KdInitOutput would have done */
+        KdCardInfo *card = KdCardInfoLast();
+        KdScreenInfo *screen = KdScreenInfoAdd(card);
+        KdParseScreen(screen, NULL);
+    } else if (!strcmp(argv[i], "-card")) {
+        InitCard(NULL);
+
+        /* a -screen option must follow before the next -card option */
+        return 1;
     }
 
     if (!strcmp(argv[i], "-fb")) {
         if (i + 1 < argc) {
-            fbCurrScreen->fbdevDevicePath = argv[i + 1];
+            fbCurrCard->fbdevDevicePath = argv[i + 1];
             return 2;
         }
         UseMsg();
@@ -140,24 +145,24 @@ ddxProcessArgument(int argc, char **argv, int i)
     }
 
     if (!strcmp(argv[i], "-noshadow")) {
-        fbCurrScreen->fbDisableShadow = TRUE;
+        fbCurrCard->fbDisableShadow = TRUE;
         return 1;
     }
 
 #ifdef GLAMOR
     if (!strcmp(argv[i], "-glamor")) {
-        fbCurrScreen->fbForceGlamor = TRUE;
+        fbCurrCard->fbForceGlamor = TRUE;
         return 1;
     }
 
     if (!strcmp(argv[i], "-noglamor")) {
-        fbCurrScreen->fbGlamorAllowed = FALSE;
+        fbCurrCard->fbGlamorAllowed = FALSE;
         return 1;
     }
 
     if (!strcmp(argv[i], "-glvendor")) {
         if (i + 1 < argc) {
-            fbCurrScreen->fbdev_glvnd_provider = strdup(argv[i + 1]);
+            fbCurrCard->fbdev_glvnd_provider = strdup(argv[i + 1]);
             return 2;
         }
         UseMsg();
@@ -167,35 +172,35 @@ ddxProcessArgument(int argc, char **argv, int i)
     if (!strcmp(argv[i], "-dri")) {
         if (i + 1 < argc) {
             if (argv[i + 1][0] == '-' || !strcmp(argv[i + 1], "auto")) {
-                fbCurrScreen->fbdev_auto_dri3 = TRUE;
+                fbCurrCard->fbdev_auto_dri3 = TRUE;
             } else {
-                fbCurrScreen->fbdev_dri_path = strdup(argv[i + 1]);
+                fbCurrCard->fbdev_dri_path = strdup(argv[i + 1]);
             }
             return 2;
         } else {
-            fbCurrScreen->fbdev_auto_dri3 = TRUE;
+            fbCurrCard->fbdev_auto_dri3 = TRUE;
             return 1;
         }
     }
 
     if (!strcmp(argv[i], "-drm-master")) {
-        fbCurrScreen->fbdev_drm_master = TRUE;
+        fbCurrCard->fbdev_drm_master = TRUE;
         return 1;
     }
 
     if (!strcmp(argv[i], "-force-gl")) {
-        fbCurrScreen->es_allowed = FALSE;
+        fbCurrCard->es_allowed = FALSE;
         return 1;
     }
 
     if (!strcmp(argv[i], "-force-es")) {
-        fbCurrScreen->force_es = TRUE;
+        fbCurrCard->force_es = TRUE;
         return 1;
     }
 
 #ifdef XV
     if (!strcmp(argv[i], "-noxv")) {
-        fbCurrScreen->fbXVAllowed = FALSE;
+        fbCurrCard->fbXVAllowed = FALSE;
         return 1;
     }
 #endif

@@ -21,6 +21,9 @@ see Xkdrive(1).
 .B Xfbdev
 also accepts the following additional options:
 .TP 8
+.B -card
+Declares a new physical device for the X server to use.
+.TP 8
 .B -fb "</dev/fbxx>"
 sets the framebuffer device path the X server will use.
 .TP 8

@@ -34,7 +34,7 @@ static Bool
 fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
 {
     unsigned long off;
-    FbScreenConf *config = card->closure;
+    FbCardConf *config = card->closure;
 
     if (config->fbdevDevicePath) {
         priv->fd = open(config->fbdevDevicePath, O_RDWR);
@@ -364,7 +364,7 @@ fbdevMapFramebuffer(KdScreenInfo * screen)
     FbdevScrPriv *scrpriv = screen->driver;
     KdPointerMatrix m;
     FbdevPriv *priv = screen->card->driver;
-    FbScreenConf *config = screen->card->closure;
+    FbCardConf *config = screen->card->closure;
 
     if (!config->fbDisableShadow) {
         scrpriv->shadow = TRUE;

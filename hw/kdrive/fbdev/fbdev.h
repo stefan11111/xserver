@@ -52,7 +52,7 @@ typedef struct _fbdevScrPriv {
 #endif
 } FbdevScrPriv;
 
-typedef struct _fbScreenConf {
+typedef struct _fbCardConf {
 const char *fbdevDevicePath;
 Bool fbDisableShadow;
 
@@ -72,7 +72,7 @@ bool fbForceGlamor;
 bool fbXVAllowed;
 #endif
 #endif
-} FbScreenConf;
+} FbCardConf;
 
 extern KdCardFuncs fbdevFuncs;
 

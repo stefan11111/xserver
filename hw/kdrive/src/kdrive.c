@@ -150,7 +150,7 @@ KdDoSwitchCmd(const char *reason)
     }
 }
 
-void KdSuspend(void)
+void KdSuspend(int ddxAbort)
 {
     KdCardInfo *card;
     KdScreenInfo *screen;
@@ -163,14 +163,16 @@ void KdSuspend(void)
             if (card->driver && card->cfuncs->restore)
                 (*card->cfuncs->restore) (card);
         }
-        KdDisableInput();
+        if (!ddxAbort) {
+            KdDisableInput();
+        }
         KdDoSwitchCmd("suspend");
     }
 }
 
-void KdDisableScreens(void)
+void KdDisableScreens(int ddxAbort)
 {
-    KdSuspend();
+    KdSuspend(ddxAbort);
     if (kdEnabled && (kdOsFuncs->Disable))
         kdOsFuncs->Disable();
     kdEnabled = FALSE;
@@ -236,7 +238,7 @@ void
 KdProcessSwitch(void)
 {
     if (kdEnabled)
-        KdDisableScreens();
+        KdDisableScreens(FALSE);
     else
         KdEnableScreens();
 }
@@ -244,7 +246,7 @@ KdProcessSwitch(void)
 static void
 AbortDDX(enum ExitCode error)
 {
-    KdDisableScreens();
+    KdDisableScreens(TRUE);
     if (kdOsFuncs) {
         if (kdEnabled && kdOsFuncs->Disable)
             (*kdOsFuncs->Disable) ();

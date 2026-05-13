@@ -69,14 +69,16 @@ fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
     /* quiet valgrind */
     memset(&priv->fix, '\0', sizeof(priv->fix));
     if (ioctl(priv->fd, FBIOGET_FSCREENINFO, &priv->fix) < 0) {
-        perror("Error with /dev/fb ioctl FIOGET_FSCREENINFO");
+        LogMessage(X_ERROR, "Xfbdev: FBIOGET_FSCREENINFO: %s\n",
+                   strerror(errno));
         close(priv->fd);
         return FALSE;
     }
     /* quiet valgrind */
     memset(&priv->var, '\0', sizeof(priv->var));
     if (ioctl(priv->fd, FBIOGET_VSCREENINFO, &priv->var) < 0) {
-        perror("Error with /dev/fb ioctl FIOGET_VSCREENINFO");
+        LogMessage(X_ERROR, "Xfbdev: FBIOPUT_VSCREENINFO: %s\n",
+                   strerror(errno));
         close(priv->fd);
         return FALSE;
     }
@@ -87,7 +89,8 @@ fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
                                   MAP_SHARED, priv->fd, 0);
 
     if (priv->fb_base == (char *) -1) {
-        perror("ERROR: mmap framebuffer fails!");
+        LogMessage(X_ERROR, "Xfbdev: Could not mmap the framebuffer: %s\n",
+                   strerror(errno));
         close(priv->fd);
         return FALSE;
     }
@@ -212,14 +215,16 @@ fbdevScreenInitialize(KdScreenInfo * screen, FbdevScrPriv * scrpriv)
     k = ioctl(priv->fd, FBIOPUT_VSCREENINFO, &var);
 
     if (k < 0) {
-        fprintf(stderr, "error: %s\n", strerror(errno));
+        LogMessage(X_ERROR, "Xfbdev(%d): FBIOPUT_VSCREENINFO: %s\n",
+                   screen->pScreen->myNum, strerror(errno));
         return FALSE;
     }
 
     /* Re-get the "fixed" parameters since they might have changed */
     k = ioctl(priv->fd, FBIOGET_FSCREENINFO, &priv->fix);
     if (k < 0)
-        perror("FBIOGET_FSCREENINFO");
+        LogMessage(X_ERROR, "Xfbdev(%d): FBIOGET_FSCREENINFO: %s\n",
+                   screen->pScreen->myNum, strerror(errno));
 
     /* Now get the new screeninfo */
     ioctl(priv->fd, FBIOGET_VSCREENINFO, &priv->var);
@@ -783,7 +788,8 @@ fbdevEnable(ScreenPtr pScreen)
     /* display it on the LCD */
     k = ioctl(priv->fd, FBIOPUT_VSCREENINFO, &priv->var);
     if (k < 0) {
-        perror("FBIOPUT_VSCREENINFO");
+        LogMessage(X_ERROR, "Xfbdev(%d): FBIOPUT_VSCREENINFO: %s\n",
+                   pScreen->myNum, strerror(errno));
         return FALSE;
     }
 
@@ -886,7 +892,8 @@ fbdevGetColors(ScreenPtr pScreen, int n, xColorItem * pdefs)
     cmap.transp = 0;
     k = ioctl(priv->fd, FBIOGETCMAP, &cmap);
     if (k < 0) {
-        perror("can't get colormap");
+        LogMessage(X_ERROR, "Xfbdev(%d): FBIOGETCMAP: %s\n",
+                   pScreen->myNum, strerror(errno));
         return;
     }
     while (n--) {

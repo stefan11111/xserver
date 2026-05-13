@@ -32,11 +32,15 @@
 
 static FbScreenConf *fbCurrScreen = NULL;
 
+static void fbdevLogScreenInfo(FbScreenConf *config, int screen_num);
+
 void LinuxLogInit(void);
 
 void
 LinuxLogInit(void)
 {
+    KdCardInfo *curr_card = kdCardInfo;
+    int curr_screen_num = 0;
     char *log_file = NULL;
     const char *display_name = display ? display : "";
     if (asprintf(&log_file, DEFAULT_LOGDIR "/Xfbdev.%s.log", display_name) < 0) {
@@ -47,6 +51,13 @@ LinuxLogInit(void)
     }
 
     LogMessage(X_INFO, "Xfbdev: X11 server for linux framebuffer devices\n");
+    LogMessage(X_INFO, "\n");
+    LogMessage(X_INFO, "Xfbdev: Configured screens info:\n");
+    LogMessage(X_INFO, "\n");
+    while(curr_card) {
+        fbdevLogScreenInfo(curr_card->closure, curr_screen_num++);
+        curr_card = curr_card->next;
+    }
 }
 
 void
@@ -75,6 +86,44 @@ InitCard(char *name)
                                    };
 
     KdCardInfoAdd(&fbdevFuncs, fbCurrScreen);
+}
+
+static void
+fbdevLogScreenInfo(FbScreenConf *config, int screen_num)
+{
+    LogMessage(X_INFO, "Xfbdev(%d): Screen %d:\n", screen_num, screen_num);
+
+    LogMessage(X_INFO, "Xfbdev(%d): framebuffer device: %s\n", screen_num,
+               config->fbdevDevicePath ? config->fbdevDevicePath : "not passed");
+    LogMessage(X_INFO, "Xfbdev(%d): ShadowFB %s\n", screen_num,
+               config->fbDisableShadow ? "disabled" : "enabled");
+#ifdef GLAMOR
+    LogMessage(X_INFO, "Xfbdev(%d): glvnd library: %s\n", screen_num,
+               config->fbdev_glvnd_provider ? config->fbdev_glvnd_provider : "not passed");
+
+    LogMessage(X_INFO, "Xfbdev(%d): dri device: %s\n", screen_num,
+               config->fbdev_dri_path ? config->fbdev_dri_path : "none");
+    LogMessage(X_INFO, "Xfbdev(%d): automatic DRI3 %s\n", screen_num,
+               config->fbdev_auto_dri3 ? "enabled" : "disabled");
+    LogMessage(X_INFO, "Xfbdev(%d): drm master %s\n", screen_num,
+               config->fbdev_drm_master ? "enabled" : "disabled");
+
+
+    LogMessage(X_INFO, "Xfbdev(%d): glamor OpenGL contexts %s\n", screen_num,
+               !config->force_es ? "allowed" : "forbidden");
+    LogMessage(X_INFO, "Xfbdev(%d): glamor GLES contexts %s\n", screen_num,
+               config->es_allowed ? "allowed" : "forbidden");
+
+    LogMessage(X_INFO, "Xfbdev(%d): glamor render acceleration %s\n", screen_num,
+               config->fbGlamorAllowed ? "enabled" : "disabled");
+    LogMessage(X_INFO, "Xfbdev(%d): glamor render acceleration %s on software renderers\n", screen_num,
+               config->fbForceGlamor ? "allowed" : "forbidden");
+#ifdef XV
+    LogMessage(X_INFO, "Xfbdev(%d): glamor X-Video support %s\n", screen_num,
+               config->fbXVAllowed ? "allowed" : "forbidden");
+#endif
+#endif
+    LogMessage(X_INFO, "\n");
 }
 
 #if INPUTTHREAD

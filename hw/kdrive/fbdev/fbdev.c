@@ -30,6 +30,10 @@
 
 #include "fbdev.h"
 
+#ifdef XV
+#include "kxv.h"
+#endif
+
 static Bool
 fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
 {
@@ -810,6 +814,10 @@ fbdevEnable(ScreenPtr pScreen)
 
         fbdevUpdateFbColormap(priv, 0, i);
     }
+
+#ifdef XV
+    KdXVEnable (pScreen);
+#endif
     return TRUE;
 }
 
@@ -840,6 +848,9 @@ fbdevDPMS(ScreenPtr pScreen, int mode)
 void
 fbdevDisable(ScreenPtr pScreen)
 {
+#ifdef XV
+    KdXVDisable (pScreen);
+#endif
 }
 
 void

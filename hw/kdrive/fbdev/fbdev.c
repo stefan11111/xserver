@@ -43,8 +43,8 @@ fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
                    config->fbdevDevicePath, strerror(errno));
             return FALSE;
         }
-        LogMessage(X_INFO, "Xfbdev: Using framebuffer device: %s\n",
-                   config->fbdevDevicePath);
+        LogMessage(X_INFO, "Xfbdev(%d): Using framebuffer device: %s\n",
+                   card->mynum, config->fbdevDevicePath);
     } else {
         char devbuf[] = "/dev/fbxx";
         priv->fd = -1;
@@ -66,22 +66,22 @@ fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
             ErrorF("Error opening framebuffers /dev/fb[0-31]\n");
             return FALSE;
         }
-        LogMessage(X_INFO, "Xfbdev: Using framebuffer device: %s\n", devbuf);
+        LogMessage(X_INFO, "Xfbdev(%d): Using framebuffer device: %s\n", card->mynum, devbuf);
     }
 
     /* quiet valgrind */
     memset(&priv->fix, '\0', sizeof(priv->fix));
     if (ioctl(priv->fd, FBIOGET_FSCREENINFO, &priv->fix) < 0) {
-        LogMessage(X_ERROR, "Xfbdev: FBIOGET_FSCREENINFO: %s\n",
-                   strerror(errno));
+        LogMessage(X_ERROR, "Xfbdev(%d): FBIOGET_FSCREENINFO: %s\n",
+                   card->mynum, strerror(errno));
         close(priv->fd);
         return FALSE;
     }
     /* quiet valgrind */
     memset(&priv->var, '\0', sizeof(priv->var));
     if (ioctl(priv->fd, FBIOGET_VSCREENINFO, &priv->var) < 0) {
-        LogMessage(X_ERROR, "Xfbdev: FBIOPUT_VSCREENINFO: %s\n",
-                   strerror(errno));
+        LogMessage(X_ERROR, "Xfbdev(%d): FBIOPUT_VSCREENINFO: %s\n",
+                   card->mynum, strerror(errno));
         close(priv->fd);
         return FALSE;
     }
@@ -92,8 +92,8 @@ fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
                                   MAP_SHARED, priv->fd, 0);
 
     if (priv->fb_base == (char *) -1) {
-        LogMessage(X_ERROR, "Xfbdev: Could not mmap the framebuffer: %s\n",
-                   strerror(errno));
+        LogMessage(X_ERROR, "Xfbdev(%d): Could not mmap the framebuffer: %s\n",
+                   card->mynum, strerror(errno));
         close(priv->fd);
         return FALSE;
     }

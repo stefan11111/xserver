@@ -40,7 +40,6 @@ void
 LinuxLogInit(void)
 {
     KdCardInfo *curr_card = kdCardInfo;
-    int curr_screen_num = 0;
     char *log_file = NULL;
     const char *display_name = display ? display : "";
     if (asprintf(&log_file, DEFAULT_LOGDIR "/Xfbdev.%s.log", display_name) < 0) {
@@ -55,7 +54,7 @@ LinuxLogInit(void)
     LogMessage(X_INFO, "Xfbdev: Configured screens info:\n");
     LogMessage(X_INFO, "\n");
     while(curr_card) {
-        fbdevLogScreenInfo(curr_card->closure, curr_screen_num++);
+        fbdevLogScreenInfo(curr_card->closure, curr_card->mynum);
         curr_card = curr_card->next;
     }
 }

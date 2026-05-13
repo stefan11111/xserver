@@ -63,6 +63,7 @@ typedef struct _KdCardInfo {
     void *driver;
     struct _KdScreenInfo *screenList;
     int selected;
+    int mynum;
     struct _KdCardInfo *next;
 } KdCardInfo;
 

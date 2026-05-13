@@ -117,7 +117,9 @@ glamor_egl_destroy_display(EGLDisplay dpy)
             num_found++;
             if (num_found == 1) {
                 /* We found it once, remove it from the list */
+                void *free_me = *ptr;
                 *ptr = (*ptr)->next;
+                free(free_me);
                 continue;
             } else {
                 /* We found it more than once, stop searching */

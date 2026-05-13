@@ -32,7 +32,6 @@
 
 #include "os/osdep.h"
 #include "os/ddx_priv.h"
-#include "os/log_priv.h"
 
 #ifdef KDRIVE_MOUSE
 extern KdPointerDriver LinuxMouseDriver;
@@ -49,6 +48,9 @@ extern KdKeyboardDriver LinuxEvdevKeyboardDriver;
 #ifdef KDRIVE_KBD
 extern KdKeyboardDriver LinuxKeyboardDriver;
 #endif
+
+/* Implemented by the X server */
+extern void LinuxLogInit(void);
 
 static int vtno;
 int LinuxConsoleFd;
@@ -371,6 +373,6 @@ KdOsFuncs LinuxFuncs = {
 void
 OsVendorInit(void)
 {
-    LogInit(DEFAULT_LOGDIR "/Xkdrive.log", ".old");
+    LinuxLogInit();
     KdOsInit(&LinuxFuncs);
 }

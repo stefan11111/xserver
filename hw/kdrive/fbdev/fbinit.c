@@ -25,10 +25,19 @@
 
 #include "os/cmdline.h"
 #include "os/ddx_priv.h"
+#include "os/log_priv.h"
 
 #include <string.h>
 
 static FbScreenConf *fbCurrScreen = NULL;
+
+void LinuxLogInit(void);
+
+void
+LinuxLogInit(void)
+{
+    LogInit(DEFAULT_LOGDIR "/Xkdrive.log", ".old");
+}
 
 void
 InitCard(char *name)

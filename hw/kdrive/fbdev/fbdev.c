@@ -43,6 +43,8 @@ fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
                    config->fbdevDevicePath, strerror(errno));
             return FALSE;
         }
+        LogMessage(X_INFO, "Xfbdev: Using framebuffer device: %s\n",
+                   config->fbdevDevicePath);
     } else {
         char devbuf[] = "/dev/fbxx";
         priv->fd = -1;
@@ -64,6 +66,7 @@ fbdevInitialize(KdCardInfo * card, FbdevPriv * priv)
             ErrorF("Error opening framebuffers /dev/fb[0-31]\n");
             return FALSE;
         }
+        LogMessage(X_INFO, "Xfbdev: Using framebuffer device: %s\n", devbuf);
     }
 
     /* quiet valgrind */

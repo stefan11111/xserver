@@ -43,7 +43,7 @@ fbdevInitAccel(ScreenPtr pScreen)
             }
 #endif
         } else {
-            LogMessage(X_WARNING, "Could not open %s: %s\n", config->fbdev_dri_path, strerror(errno));
+            LogMessage(X_WARNING, "Xfbdev(%d): Could not open %s: %s\n", pScreen->myNum, config->fbdev_dri_path, strerror(errno));
         }
     } else {
         scrpriv->dri_fd = -1;

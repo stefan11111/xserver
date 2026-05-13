@@ -23,6 +23,7 @@
 #include <kdrive-config.h>
 #include "fbdev.h"
 
+#include "dix/dix_priv.h"
 #include "os/cmdline.h"
 #include "os/ddx_priv.h"
 #include "os/log_priv.h"
@@ -36,7 +37,16 @@ void LinuxLogInit(void);
 void
 LinuxLogInit(void)
 {
-    LogInit(DEFAULT_LOGDIR "/Xkdrive.log", ".old");
+    char *log_file = NULL;
+    const char *display_name = display ? display : "";
+    if (asprintf(&log_file, DEFAULT_LOGDIR "/Xfbdev.%s.log", display_name) < 0) {
+        LogInit(DEFAULT_LOGDIR "/Xkdrive.log", ".old");
+    } else {
+        LogInit(log_file, ".old");
+        free(log_file);
+    }
+
+    LogMessage(X_INFO, "Xfbdev: X11 server for linux framebuffer devices\n");
 }
 
 void

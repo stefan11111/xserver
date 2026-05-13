@@ -89,7 +89,7 @@ static void KdXVWindowDestroy(CallbackListPtr *pcbl, ScreenPtr pScreen, WindowPt
 
 static void KdXVWindowExposures(WindowPtr pWin, RegionPtr r1);
 static void KdXVClipNotify(WindowPtr pWin, int dx, int dy);
-static Bool KdXVCloseScreen(ScreenPtr);
+static void KdXVCloseScreen(CallbackListPtr *pcbl, ScreenPtr pScreen, void *unused);
 
 /* misc */
 static Bool KdXVInitAdaptors(ScreenPtr, KdVideoAdaptorPtr, int);
@@ -147,8 +147,8 @@ KdXVScreenInit(ScreenPtr pScreen, KdVideoAdaptorPtr adaptors, int num)
 
     pScreen->WindowExposures = KdXVWindowExposures;
     pScreen->ClipNotify = KdXVClipNotify;
-    /* it will call KdCloseScreen() as it's the last act */
-    pScreen->CloseScreen = KdXVCloseScreen;
+
+    dixScreenHookClose(pScreen, KdXVCloseScreen);
 
     if (!KdXVInitAdaptors(pScreen, adaptors, num))
         return FALSE;
@@ -976,8 +976,8 @@ KdXVClipNotify(WindowPtr pWin, int dx, int dy)
 
 /**** Required XvScreenRec fields ****/
 
-static Bool
-KdXVCloseScreen(ScreenPtr pScreen)
+static void
+KdXVCloseScreen(CallbackListPtr *pcbl, ScreenPtr pScreen, void *unused)
 {
     XvScreenPtr pxvs = GET_XV_SCREEN(pScreen);
     KdXVScreenPtr ScreenPriv = GET_KDXV_SCREEN(pScreen);
@@ -985,7 +985,9 @@ KdXVCloseScreen(ScreenPtr pScreen)
     int c;
 
     if (!ScreenPriv)
-        return TRUE;
+        return;
+
+    KdXVGeneration = 0;
 
     pScreen->WindowExposures = ScreenPriv->WindowExposures;
     pScreen->ClipNotify = ScreenPriv->ClipNotify;
@@ -997,7 +999,7 @@ KdXVCloseScreen(ScreenPtr pScreen)
     free(pxvs->pAdaptors);
     free(ScreenPriv);
 
-    return KdCloseScreen(pScreen);
+    dixScreenUnhookClose(pScreen, KdXVCloseScreen);
 }
 
 /**** XvAdaptorRec fields ****/

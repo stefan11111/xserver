@@ -1077,6 +1077,17 @@ glamor_back_pixmap_from_fd(PixmapPtr pixmap,
 #endif
 }
 
+static PixmapPtr
+glamor_pixmap_from_fds_noop(ScreenPtr screen,
+                            CARD8 num_fds, const int *fds,
+                            CARD16 width, CARD16 height,
+                            const CARD32 *_strides, const CARD32 *_offsets,
+                            CARD8 depth, CARD8 bpp,
+                            uint64_t modifier)
+{
+    return NULL;
+}
+
 PixmapPtr
 glamor_pixmap_from_fds(ScreenPtr screen,
                        CARD8 num_fds, const int *fds,
@@ -1478,13 +1489,21 @@ glamor_dri3_open_client(ClientPtr client,
 
 static dri3_screen_info_rec glamor_dri3_info = {
     .version = 2,
-    .open_client = glamor_dri3_open_client,
-    .pixmap_from_fds = glamor_pixmap_from_fds,
+
     .fd_from_pixmap = glamor_egl_fd_from_pixmap,
+
+    /* Version 1 */
+    .open_client = glamor_dri3_open_client,
+
+    /* Version 2 */
+    .pixmap_from_fds = glamor_pixmap_from_fds,
     .fds_from_pixmap = glamor_egl_fds_from_pixmap,
     .get_formats = glamor_get_formats,
     .get_modifiers = glamor_get_modifiers,
     .get_drawable_modifiers = glamor_get_drawable_modifiers,
+
+    /* Version 4 */
+    .import_syncobj = NULL; /* TODO: implement */
 };
 #endif /* DRI3 */
 
@@ -2360,8 +2379,10 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
 
     if (!epoxy_has_gl_extension("GL_OES_EGL_image")) {
         LogMessage(X_ERROR,
-                   "glamor dri acceleration requires GL_OES_EGL_image\n");
-        goto glamor_no_dri;
+                   "glamor: Egl extenison GL_OES_EGL_image is not available\n");
+        LogMessage(X_ERROR,
+                   "glamor: DRI3 import will not available\n");
+        glamor_dri3_info.pixmap_from_fds = NULL;
     }
 
     if (epoxy_has_egl_extension(glamor_egl->display,
@@ -2421,6 +2442,12 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
 
     if (caps) {
         *caps |= GLAMOR_EGL_DEFAULT_CAPS;
+        if (!glamor_dri3_info.pixmap_from_fds) {
+            *caps &= ~GLAMOR_EGL_CAP_DMABUF_IMPORT;
+
+            /* Avoid DRI3 returning BadImplementation */
+            glamor_dri3_info.pixmap_from_fds = glamor_pixmap_from_fds_noop;
+        }
     }
 
     LogMessage(X_INFO, "glamor dri X acceleration enabled on %s\n",

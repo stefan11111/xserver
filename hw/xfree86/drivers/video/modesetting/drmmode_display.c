@@ -4899,26 +4899,42 @@ drmmode_free_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
 }
 
 /* XXX Do we really need to do this? XXX */
-static struct gbm_bo*
-drmmode_create_bpp_probe_bo(drmmode_ptr drmmode,
-                            unsigned width, unsigned height, unsigned depth,
-                            unsigned bpp, struct gbm_device **out_gbm_dev)
+static Bool
+drmmode_supports_depth_bpp(drmmode_ptr drmmode,
+                           int width, int height,
+                           int depth, int bpp)
 {
-    uint32_t format = drmmode_gbm_format_for_depth(depth);
-    struct gbm_device *gbm_dev = drmmode->gbm;
+    /**
+     * We could use gbm here, but it leads to issues.
+     *
+     * See: https://github.com/X11Libre/xserver/issues/2645
+     */
 
-    *out_gbm_dev = NULL;
-    if (!gbm_dev) {
-        gbm_dev = gbm_create_device(drmmode->fd);
-        if (!gbm_dev) {
-            return NULL;
-        }
+    struct drm_mode_create_dumb create_arg;
+    struct drm_mode_destroy_dumb destroy_arg;
+    uint32_t fb_id = 0;
+    Bool ret = FALSE;
 
-        *out_gbm_dev = gbm_dev;
+    memset(&create_arg, 0, sizeof(create_arg));
+    create_arg.width = width;
+    create_arg.height = height;
+    create_arg.bpp = bpp;
+    if (drmIoctl(drmmode->fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_arg)) {
+        return FALSE;
     }
 
-    return gbm_bo_create(gbm_dev, width, height,
-                         format, GBM_BO_USE_SCANOUT | GBM_BO_USE_WRITE);
+    if(drmModeAddFB(drmmode->fd, width, height,
+                    depth, bpp, create_arg.pitch,
+                    create_arg.handle, &fb_id) == 0) {
+        ret = TRUE;
+        drmModeRmFB(drmmode->fd, fb_id);
+    }
+
+    memset(&destroy_arg, 0, sizeof(destroy_arg));
+    destroy_arg.handle = create_arg.handle;
+    drmIoctl(drmmode->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_arg);
+
+    return ret;
 }
 
 /* ugly workaround to see if we can create 32bpp */
@@ -4928,9 +4944,6 @@ drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int *depth,
 {
     drmModeResPtr mode_res;
     uint64_t value;
-    struct gbm_device *free_me = NULL;
-    struct gbm_bo *bo = NULL;
-    uint32_t fb_id;
     int ret;
 
     /* 16 is fine */
@@ -4951,35 +4964,13 @@ drmmode_get_default_bpp(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int *depth,
         mode_res->min_width = 1;
     if (mode_res->min_height == 0)
         mode_res->min_height = 1;
-    /*create a bo */
-    bo = drmmode_create_bpp_probe_bo(drmmode, mode_res->min_width, mode_res->min_height,
-                                     *depth, *bpp, &free_me);
 
-    if (!bo) {
+
+    if (!drmmode_supports_depth_bpp(drmmode, mode_res->min_width, mode_res->min_height, 24, 32)) {
         *bpp = 24;
-        goto out;
     }
 
-    ret = drmModeAddFB(drmmode->fd, mode_res->min_width, mode_res->min_height,
-                       *depth, *bpp, gbm_bo_get_stride(bo), gbm_bo_get_handle(bo).s32, &fb_id);
-
-    if (ret) {
-        *bpp = 24;
-        goto out;
-    }
-
-    drmModeRmFB(drmmode->fd, fb_id);
-
-out:
-    if (bo) {
-        gbm_bo_destroy(bo);
-    }
-
-    if (free_me) {
-        gbm_device_destroy(free_me);
-    }
     drmModeFreeResources(mode_res);
-    return;
 }
 
 void

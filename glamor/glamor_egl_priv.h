@@ -39,6 +39,35 @@ typedef struct glamor_egl_screen_private {
     int dmabuf_capable;
 } glamor_egl_priv_t;
 
+/* Get a screen's glamor egl private */
+extern glamor_egl_priv_t*
+(*glamor_egl_get_screen_private)(ScreenPtr screen);
+
+/* Create an EGLImageKHR from dma bufs */
+EGLImageKHR
+glamor_egl_image_from_dma_bufs(ScreenPtr screen,
+                               uint32_t num_fds, const int *fds,
+                               int width, int height,
+                               const int *strides, const int *offsets,
+                               uint32_t format, uint64_t modifier);
+
+/* Create a texture from an image an map it to a pixmap */
+Bool
+glamor_egl_create_textured_pixmap_from_egl_image(PixmapPtr pixmap,
+                                                 EGLImageKHR image,
+                                                 Bool used_modifiers);
+
+/* Query the formats supported by egl */
+Bool
+glamor_get_formats_internal(glamor_egl_priv_t *glamor_egl,
+                            CARD32 *num_formats, CARD32 **formats);
+
+/* Query the modifiers supported by egl */
+Bool
+glamor_get_modifiers_internal(glamor_egl_priv_t *glamor_egl, uint32_t format,
+                              uint32_t *num_modifiers, uint64_t **modifiers);
+
+
 /**
  * Deinitialize an egl context created by glamor egl
  * and free associated resources.

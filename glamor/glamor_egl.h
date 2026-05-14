@@ -36,6 +36,10 @@
 
 #include "scrnintstr.h"
 
+#ifndef GBM_MAX_PLANES
+#define GBM_MAX_PLANES 4
+#endif
+
 typedef struct glamor_egl_screen_private glamor_egl_priv_t;
 
 typedef struct {

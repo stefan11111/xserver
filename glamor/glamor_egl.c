@@ -212,7 +212,6 @@ glamor_get_flink_name(int fd, int handle, int *name)
 }
 #endif
 
-#ifdef GLAMOR_HAS_GBM
 static Bool
 glamor_create_texture_from_image(ScreenPtr screen,
                                  EGLImageKHR image, GLuint * texture)
@@ -232,7 +231,6 @@ glamor_create_texture_from_image(ScreenPtr screen,
 
     return TRUE;
 }
-#endif
 
 struct gbm_device *
 glamor_egl_get_gbm_device(ScreenPtr screen)
@@ -244,7 +242,6 @@ glamor_egl_get_gbm_device(ScreenPtr screen)
 #endif
 }
 
-#ifdef GLAMOR_HAS_GBM
 static void
 glamor_egl_set_pixmap_image(PixmapPtr pixmap, EGLImageKHR image,
                             Bool used_modifiers)
@@ -265,7 +262,6 @@ glamor_egl_set_pixmap_image(PixmapPtr pixmap, EGLImageKHR image,
     pixmap_priv->image = image;
     pixmap_priv->used_modifiers = used_modifiers;
 }
-#endif
 
 Bool
 glamor_egl_create_textured_pixmap(PixmapPtr pixmap, int handle, int stride)
@@ -535,9 +531,9 @@ fallback:
 #endif
 
 static Bool
-glamor_egl_glamor_egl_create_textured_pixmap_from_egl_image(PixmapPtr pixmap,
-                                                            EGLImageKHR image,
-                                                            Bool used_modifiers)
+glamor_egl_create_textured_pixmap_from_egl_image(PixmapPtr pixmap,
+                                                 EGLImageKHR image,
+                                                 Bool used_modifiers)
 {
     ScreenPtr screen = pixmap->drawable.pScreen;
     GLuint texture;
@@ -576,8 +572,8 @@ glamor_egl_create_textured_pixmap_from_dma_bufs(PixmapPtr pixmap,
                                                        strides, offsets,
                                                        format, modifier);
 
-    return glamor_egl_glamor_egl_create_textured_pixmap_from_egl_image(pixmap, image,
-                                                                       used_modifiers);
+    return glamor_egl_create_textured_pixmap_from_egl_image(pixmap, image,
+                                                            used_modifiers);
 }
 #endif
 
@@ -590,8 +586,8 @@ glamor_egl_create_textured_pixmap_from_gbm_bo(PixmapPtr pixmap,
     ScreenPtr screen = pixmap->drawable.pScreen;
     EGLImageKHR image = glamor_egl_image_from_gbm_bo(screen, bo);
 
-    return glamor_egl_glamor_egl_create_textured_pixmap_from_egl_image(pixmap, image,
-                                                                       used_modifiers);
+    return glamor_egl_create_textured_pixmap_from_egl_image(pixmap, image,
+                                                            used_modifiers);
 #else
     return FALSE;
 #endif
@@ -631,6 +627,10 @@ glamor_make_pixmap_exportable(PixmapPtr pixmap, Bool modifiers_ok)
     if (pixmap_priv->image &&
         (modifiers_ok || !pixmap_priv->used_modifiers))
         return TRUE;
+
+    if (!glamor_egl->gbm || !glamor_egl->can_texture_gbm_bo) {
+        return FALSE;
+    }
 
     switch (pixmap->drawable.depth) {
     case 30:
@@ -775,6 +775,10 @@ glamor_gbm_bo_from_pixmap_internal(ScreenPtr screen, PixmapPtr pixmap)
 
     if (!pixmap_priv->image)
         return NULL;
+
+    if (!glamor_egl->gbm) {
+        return NULL;
+    }
 
     return gbm_bo_import(glamor_egl->gbm, GBM_BO_IMPORT_EGL_IMAGE,
                          pixmap_priv->image, GBM_BO_USE_RENDERING);
@@ -1167,7 +1171,6 @@ glamor_pixmap_from_fd(ScreenPtr screen,
                       CARD16 height,
                       CARD16 stride, CARD8 depth, CARD8 bpp)
 {
-#ifdef GLAMOR_HAS_GBM
     PixmapPtr pixmap;
     Bool ret;
 
@@ -1181,9 +1184,6 @@ glamor_pixmap_from_fd(ScreenPtr screen,
         return NULL;
     }
     return pixmap;
-#else
-    return NULL;
-#endif
 }
 
 static Bool
@@ -1236,22 +1236,11 @@ glamor_get_formats(ScreenPtr screen,
 
 static void
 glamor_filter_modifiers(uint32_t *num_modifiers, uint64_t **modifiers,
-                        EGLBoolean *external_only, int linear_only)
+                        EGLBoolean *external_only)
 {
     uint32_t write_pos = 0;
     for (uint32_t i = 0; i < *num_modifiers; i++) {
         if (external_only[i]) {
-            continue;
-        }
-
-        if (linear_only &&
-#ifdef WITH_LIBDRM
-            ((*modifiers)[i] != DRM_FORMAT_MOD_LINEAR) &&
-            ((*modifiers)[i] != DRM_FORMAT_MOD_INVALID))
-#else
-            (*modifiers)[i] != 0) /* DRM_FORMAT_MOD_LINEAR */
-#endif
-        {
             continue;
         }
 
@@ -1316,7 +1305,7 @@ glamor_get_modifiers_internal(glamor_egl_priv_t *glamor_egl, uint32_t format,
     }
 
     *num_modifiers = num;
-    glamor_filter_modifiers(num_modifiers, modifiers, external_only, glamor_egl->linear_only);
+    glamor_filter_modifiers(num_modifiers, modifiers, external_only);
     free(external_only);
 
 
@@ -1503,7 +1492,7 @@ static dri3_screen_info_rec glamor_dri3_info = {
     .get_drawable_modifiers = glamor_get_drawable_modifiers,
 
     /* Version 4 */
-    .import_syncobj = NULL; /* TODO: implement */
+    .import_syncobj = NULL, /* TODO: implement */
 };
 #endif /* DRI3 */
 
@@ -1523,7 +1512,7 @@ glamor_egl_set_glvnd_vendor(ScreenPtr screen)
     }
 
 #ifdef GLAMOR_HAS_GBM
-    if (glamor_egl->fd >= 0) {
+    if (glamor_egl->gbm) {
         const char *gbm_backend_name;
         gbm_backend_name = gbm_device_get_backend_name(glamor_egl->gbm);
         if (gbm_backend_name) {
@@ -2230,12 +2219,60 @@ glamor_egl_get_fd(ScreenPtr screen)
     return glamor_egl_get_screen_private(screen)->fd;
 }
 
+static Bool
+glamor_egl_can_texture_gbm_bo(glamor_egl_priv_t *glamor_egl, int linear_only)
+{
+    /* Check if at least one combination of format + modifier is supported */
+    CARD32 *formats = NULL;
+    CARD32 num_formats = 0;
+    Bool found = FALSE;
+    if (!glamor_get_formats_internal(glamor_egl, &num_formats, &formats)) {
+        return FALSE;
+    }
+
+    if (num_formats == 0) {
+        /* Everything is supported (unlikely) */
+        return TRUE;
+    }
+
+    for (uint32_t i = 0; i < num_formats; i++) {
+        uint64_t *modifiers = NULL;
+        uint32_t num_modifiers = 0;
+        if (glamor_get_modifiers_internal(glamor_egl, formats[i],
+                                          &num_modifiers, &modifiers)) {
+            if (linear_only) {
+                for (uint32_t j = 0; j < num_modifiers; j++) {
+                    if (
+#ifdef WITH_LIBDRM
+                        (modifiers[i] != DRM_FORMAT_MOD_LINEAR) &&
+                        (modifiers[i] != DRM_FORMAT_MOD_INVALID))
+#else
+                        modifiers[i] != 0) /* DRM_FORMAT_MOD_LINEAR */
+#endif
+                    {
+                        found = TRUE;
+                        break;
+                    }
+                }
+            }
+            free(modifiers);
+            if (found) {
+                break;
+            }
+        }
+    }
+    free(formats);
+
+    return found;
+}
+
 Bool
 glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
 {
     const GLubyte *renderer;
     glamor_egl_priv_t* glamor_egl = NULL;
     int *dri_fd = NULL;
+    int gbm_is_linear_only = FALSE;
 
     if (caps) {
         *caps = GLAMOR_EGL_CAP_NONE;
@@ -2275,7 +2312,7 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
         const char* gbm_backend = glamor_egl->gbm ?
                                   gbm_device_get_backend_name(glamor_egl->gbm) : NULL;
         if (gbm_backend && !strcmp(gbm_backend, "dumb")) {
-            glamor_egl->linear_only = TRUE;
+            gbm_is_linear_only = TRUE;
         }
     }
 #endif
@@ -2287,27 +2324,6 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
     if (!glamor_egl_init_display(glamor_egl, dri_fd)) {
         goto error;
     }
-
-#ifdef GLAMOR_HAS_GBM
-    if (!glamor_egl->gbm && glamor_egl->fd >= 0 &&
-        glamor_egl_conf->auto_dri) {
-        glamor_egl->gbm = gbm_create_device(glamor_egl->fd);
-        if (!glamor_egl->gbm) {
-            glamor_egl->gbm = gbm_create_device_by_name(glamor_egl->fd, "dumb");
-        }
-
-        if (glamor_egl->gbm == NULL) {
-            ErrorF("couldn't create gbm device\n");
-            glamor_egl->fd = -1;
-        }
-
-        const char* gbm_backend = glamor_egl->gbm ?
-                                  gbm_device_get_backend_name(glamor_egl->gbm) : NULL;
-        if (gbm_backend && !strcmp(gbm_backend, "dumb")) {
-            glamor_egl->linear_only = TRUE;
-        }
-    }
-#endif
 
 #define GLAMOR_CHECK_EGL_EXTENSION(EXT)  \
 	if (!epoxy_has_egl_extension(glamor_egl->display, "EGL_" #EXT)) {  \
@@ -2408,45 +2424,36 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
 
 #ifdef GLAMOR_HAS_GBM
     glamor_egl->fast_gbm_import = renderer && !strstr((const char *)renderer, "NVIDIA");
+
+    if (glamor_egl->gbm) {
+        glamor_egl->can_texture_gbm_bo = glamor_egl_can_texture_gbm_bo(glamor_egl, gbm_is_linear_only);
+    }
 #endif
-
-    /* Check if at least one combination of format + modifier is supported */
-    CARD32 *formats = NULL;
-    CARD32 num_formats = 0;
-    Bool found = FALSE;
-    if (!glamor_get_formats_internal(glamor_egl, &num_formats, &formats)) {
-        goto glamor_no_dri;
-    }
-
-    if (num_formats == 0) {
-        found = TRUE;
-    }
-
-    for (uint32_t i = 0; i < num_formats; i++) {
-        uint64_t *modifiers = NULL;
-        uint32_t num_modifiers = 0;
-        if (glamor_get_modifiers_internal(glamor_egl, formats[i],
-                                          &num_modifiers, &modifiers)) {
-            found = TRUE;
-            free(modifiers);
-            break;
-        }
-    }
-    free(formats);
-
-    if (!found) {
-        LogMessage(X_ERROR,
-                   "glamor: No combination of format + modifier is supported\n");
-        goto glamor_no_dri;
-    }
 
     if (caps) {
         *caps |= GLAMOR_EGL_DEFAULT_CAPS;
         if (!glamor_dri3_info.pixmap_from_fds) {
-            *caps &= ~GLAMOR_EGL_CAP_DMABUF_IMPORT;
+            *caps &= ~GLAMOR_EGL_CAP_DRI3_IMPORT;
 
             /* Avoid DRI3 returning BadImplementation */
             glamor_dri3_info.pixmap_from_fds = glamor_pixmap_from_fds_noop;
+        }
+    }
+
+    if (!glamor_egl->gbm || !glamor_egl->can_texture_gbm_bo) {
+        LogMessage(X_ERROR, "glamor: Cannot texture gbm buffers\n");
+        if (caps) {
+            *caps &= ~GLAMOR_EGL_CAP_TEXTURE_GBM_BO;
+        }
+        if (epoxy_has_egl_extension(glamor_egl->display, "EGL_MESA_image_dma_buf_export")) {
+            glamor_dri3_info.fd_from_pixmap = glamor_egl_fd_from_pixmap_fast;
+            glamor_dri3_info.fds_from_pixmap = glamor_egl_fds_from_pixmap_fast;
+        } else {
+            glamor_dri3_info.fd_from_pixmap = NULL;
+            glamor_dri3_info.fds_from_pixmap = NULL;
+            if (caps) {
+                *caps &= ~GLAMOR_EGL_CAP_DRI3_EXPORT;
+            }
         }
     }
 

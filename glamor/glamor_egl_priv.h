@@ -33,10 +33,10 @@ typedef struct glamor_egl_screen_private {
 #ifdef GLAMOR_HAS_GBM
     struct gbm_device *gbm;
     int fast_gbm_import;
+    int can_texture_gbm_bo; /* If gbm bo's can be textured to create pixmaps from */
 #endif
     int fd;
     int dmabuf_capable;
-    int linear_only; /* When using gbm, this means that only linear buffers can be created */
 } glamor_egl_priv_t;
 
 /**

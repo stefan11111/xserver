@@ -223,7 +223,7 @@ fbdevScreenInitialize(KdScreenInfo * screen, FbdevScrPriv * scrpriv)
 
     if (k < 0) {
         LogMessage(X_ERROR, "Xfbdev(%d): FBIOPUT_VSCREENINFO: %s\n",
-                   screen->pScreen->myNum, strerror(errno));
+                   screen->card->mynum, strerror(errno));
         return FALSE;
     }
 
@@ -231,7 +231,7 @@ fbdevScreenInitialize(KdScreenInfo * screen, FbdevScrPriv * scrpriv)
     k = ioctl(priv->fd, FBIOGET_FSCREENINFO, &priv->fix);
     if (k < 0)
         LogMessage(X_ERROR, "Xfbdev(%d): FBIOGET_FSCREENINFO: %s\n",
-                   screen->pScreen->myNum, strerror(errno));
+                   screen->card->mynum, strerror(errno));
 
     /* Now get the new screeninfo */
     ioctl(priv->fd, FBIOGET_VSCREENINFO, &priv->var);

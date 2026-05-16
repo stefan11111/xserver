@@ -78,31 +78,31 @@
  * See: https://github.com/X11Libre/xserver/pull/2721
  */
 
-typedef struct _freeDisplayList{
+typedef struct _usedDisplayList{
     EGLDisplay dpy;
-    struct _freeDisplayList *next;
-} FreeDisplayList;
+    struct _usedDisplayList *next;
+} UsedDisplayList;
 
-static FreeDisplayList *freeDisplayList = NULL;
+static UsedDisplayList *usedDisplayList = NULL;
 
 static void
 glamor_egl_add_display_to_list(EGLDisplay dpy)
 {
-    FreeDisplayList *new;
+    UsedDisplayList *new;
     if (dpy == EGL_NO_DISPLAY) {
         return;
     }
 
     new = XNFalloc(sizeof(*new));
     new->dpy = dpy;
-    new->next = freeDisplayList;
-    freeDisplayList = new;
+    new->next = usedDisplayList;
+    usedDisplayList = new;
 }
 
 static void
 glamor_egl_destroy_display(EGLDisplay dpy)
 {
-    FreeDisplayList **ptr = &freeDisplayList;
+    UsedDisplayList **ptr = &usedDisplayList;
     void *free_me;
 
     if (dpy == EGL_NO_DISPLAY) {
@@ -111,7 +111,7 @@ glamor_egl_destroy_display(EGLDisplay dpy)
 
     for (; *ptr && ((*ptr)->dpy != dpy); ptr = &(*ptr)->next);
     if (*ptr == NULL) {
-        /* Display is not in freelist, should not happen */
+        /* Display is not in usedlist, should not happen */
         return;
     }
 

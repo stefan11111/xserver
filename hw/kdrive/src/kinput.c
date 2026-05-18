@@ -1906,6 +1906,7 @@ KdCheckLock(void)
 static KeySym
 KdKeyCodeToKeySym(KdKeyboardInfo *ki, int type, unsigned char key_code)
 {
+    const char* driver_name = ki->driver->name;
     unsigned char scan_code = key_code - KD_MIN_KEYCODE + ki->minScanCode;
     (void)type;
 
@@ -1933,14 +1934,24 @@ KdKeyCodeToKeySym(KdKeyboardInfo *ki, int type, unsigned char key_code)
 #define KEY_F8 0x42
 #define KEY_F9 0x43
 #define KEY_F10 0x44
+
+#define KEY_KP_DEL 0x53
+
 #define KEY_F11 0x57
 #define KEY_F12 0x58
 
-/**
- * The driver doesn't differentiate between E0 53 and 53,
- * so both are treated as the delete key being pressed
- */
-#define KEY_DEL 0x53
+/* This one is taken from the linux keyboard driver */
+#define KEY_DEL 0x63
+
+#if 0
+    if (driver_name && !strcmp(driver_name, "ephyr")) {
+#define EPHYR_KEY_BACKSPACE 0x16 /* I couldn't find any source for this, but it seems stable */
+        if (scan_code == EPHYR_KEY_BACKSPACE) {
+            return XK_BackSpace;
+        }
+        return XK_VoidSymbol;
+    }
+#endif
 
     switch(scan_code) {
         case KEY_BACKSPACE:
@@ -1969,10 +1980,13 @@ KdKeyCodeToKeySym(KdKeyboardInfo *ki, int type, unsigned char key_code)
             return XK_F11;
         case KEY_F12:
             return XK_F12;
-#if 0 /* Doesn't work from my testing */
+        case KEY_KP_DEL:
+            return XK_KP_Delete;
         case KEY_DEL:
-            return XK_Delete;
-#endif
+            if (driver_name && !strcmp(driver_name, "keyboard")) { /* Linux Keyboard */
+                return XK_Delete;
+            }
+            return XK_VoidSymbol;
     }
 
     return XK_VoidSymbol;

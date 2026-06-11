@@ -322,9 +322,6 @@ typedef struct _KdMonitorTiming {
     KdSyncPolarity vpol;        /* polarity */
 } KdMonitorTiming;
 
-extern const KdMonitorTiming kdMonitorTimings[];
-extern const int kdNumMonitorTimings;
-
 typedef struct _KdPointerMatrix {
     int matrix[2][3];
 } KdPointerMatrix;
@@ -527,6 +524,9 @@ void KdRingBell(KdKeyboardInfo * ki, int volume, int pitch, int duration);
 const KdMonitorTiming *KdFindMode(KdScreenInfo * screen,
                                   Bool (*supported) (KdScreenInfo *,
                                                      const KdMonitorTiming *));
+
+Bool
+KdAddMode(const KdMonitorTiming *new);
 
 Bool
 KdTuneMode(KdScreenInfo * screen,

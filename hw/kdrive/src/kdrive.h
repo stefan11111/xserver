@@ -521,6 +521,10 @@ void
 void KdRingBell(KdKeyboardInfo * ki, int volume, int pitch, int duration);
 
 /* kmode.c */
+int
+KdFindRate(KdScreenInfo * screen,
+           Bool (*supported) (KdScreenInfo *, const KdMonitorTiming *));
+
 const KdMonitorTiming *KdFindMode(KdScreenInfo * screen,
                                   Bool (*supported) (KdScreenInfo *,
                                                      const KdMonitorTiming *));

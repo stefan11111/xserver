@@ -259,6 +259,24 @@ static KdMonitorTiming kdMonitorTimings[] = {
 static int kdNumFreeMonitorTimings = NUM_FREE_TIMINGS;
 static int kdNumMonitorTimings = NUM_MONITOR_TIMINGS - NUM_FREE_TIMINGS;
 
+int
+KdFindRate(KdScreenInfo * screen,
+           Bool (*supported) (KdScreenInfo *, const KdMonitorTiming *))
+{
+    int i;
+    const KdMonitorTiming *t;
+
+    for (i = 0, t = kdMonitorTimings; i < kdNumMonitorTimings; i++, t++) {
+        if ((*supported) (screen, t) &&
+            t->horizontal == screen->width &&
+            t->vertical == screen->height) {
+            return t->rate;
+        }
+    }
+
+    return 0;
+}
+
 const KdMonitorTiming *
 KdFindMode(KdScreenInfo * screen,
            Bool (*supported) (KdScreenInfo *, const KdMonitorTiming *))

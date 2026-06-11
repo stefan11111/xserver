@@ -526,6 +526,20 @@ fbdevSetScreenSizes(ScreenPtr pScreen)
     }
 }
 
+static void
+fbdevClearFramebuffer(KdScreenInfo * screen)
+{
+#if 0 /* XXX Does not work reliably XXX */
+    FbdevPriv *priv = screen->card->driver;
+    memset(priv->fb_base, 0, priv->fix.smem_len);
+    volatile char *clear_me = (volatile char*)priv->fb_base;
+    for (int i = 0; i < priv->fix.smem_len; i++, clear_me[i] = 0);
+#else
+    kdOsFuncs->Disable();
+    kdOsFuncs->Enable();
+#endif
+}
+
 static Bool
 fbdevUnmapFramebuffer(KdScreenInfo * screen)
 {
@@ -640,12 +654,26 @@ fbdevSetShadow(ScreenPtr pScreen)
 
 #ifdef RANDR
 static Bool
+fbdevRandrModeSupported(ScreenPtr pScreen, const KdMonitorTiming *t)
+{
+    KdScreenPriv(pScreen);
+    KdScreenInfo *screen = pScreenPriv->screen;
+
+    return (t->horizontal <= screen->width) && (t->vertical <= screen->height);
+}
+
+static Bool
+fbdevRandrModeChangeSupported(ScreenPtr pScreen, const KdMonitorTiming *t)
+{
+    return TRUE;
+}
+
+static Bool
 fbdevRandRGetInfo(ScreenPtr pScreen, Rotation * rotations)
 {
     KdScreenPriv(pScreen);
     KdScreenInfo *screen = pScreenPriv->screen;
     FbdevScrPriv *scrpriv = screen->driver;
-    RRScreenSizePtr pSize;
     Rotation randr;
     int n;
 
@@ -657,15 +685,9 @@ fbdevRandRGetInfo(ScreenPtr pScreen, Rotation * rotations)
     if (n == pScreen->numDepths)
         return FALSE;
 
-    pSize = RRRegisterSize(pScreen,
-                           screen->width,
-                           screen->height, screen->width_mm, screen->height_mm);
-
     randr = KdSubRotation(scrpriv->randr, screen->randr);
 
-    RRSetCurrentConfig(pScreen, randr, 0, pSize);
-
-    return TRUE;
+    return KdRandRGetInfo(pScreen, randr, fbdevRandrModeSupported);
 }
 
 static Bool
@@ -677,6 +699,7 @@ fbdevRandRSetConfig(ScreenPtr pScreen,
     FbdevScrPriv *scrpriv = screen->driver;
     Bool wasEnabled = pScreenPriv->enabled;
     FbdevScrPriv oldscr;
+    const KdMonitorTiming *t;
     int oldwidth;
     int oldheight;
     int oldmmwidth;
@@ -718,6 +741,11 @@ fbdevRandRSetConfig(ScreenPtr pScreen,
 
     fbdevUnmapFramebuffer(screen);
 
+    t = KdRandRGetTiming(pScreen, fbdevRandrModeChangeSupported, rate, pSize);
+
+    if (!t || !fbdevSetMode(screen, t))
+        goto bail4;
+
     if (!fbdevMapFramebuffer(screen))
         goto bail4;
 
@@ -742,8 +770,11 @@ fbdevRandRSetConfig(ScreenPtr pScreen,
     /* set the subpixel order */
 
     KdSetSubpixelOrder(pScreen, scrpriv->randr);
-    if (wasEnabled)
+
+    if (wasEnabled) {
         KdEnableScreen(pScreen);
+        fbdevClearFramebuffer(screen);
+    }
 
     return TRUE;
 

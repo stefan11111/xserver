@@ -1756,7 +1756,6 @@ glamor_egl_fd_is_render_node(int fd)
 {
     struct stat buf;
     if(fstat(fd, &buf) < 0) {
-        close(fd);
         return FALSE;
     }
 

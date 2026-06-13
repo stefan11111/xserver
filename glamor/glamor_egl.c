@@ -2184,7 +2184,7 @@ glamor_egl_try_gles_api(glamor_egl_priv_t *glamor_egl)
     if (!eglMakeCurrent(glamor_egl->display,
                         EGL_NO_SURFACE, EGL_NO_SURFACE, glamor_egl->context)) {
         eglDestroyContext(glamor_egl->display, glamor_egl->context);
-        glamor_egl->display = EGL_NO_CONTEXT;
+        glamor_egl->context = EGL_NO_CONTEXT;
         LogMessage(X_ERROR, "Failed to make GLES context current\n");
         return FALSE;
     }

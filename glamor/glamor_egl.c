@@ -2492,8 +2492,8 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
     memset(glamor_egl, 0, sizeof(*glamor_egl));
 
     if (glamor_egl_conf->glvnd_vendor) {
-        glamor_egl->glvnd_vendor = glamor_egl_conf->glvnd_vendor;
-        glamor_egl->exact_glvnd_vendor = TRUE;
+        glamor_egl->glvnd_vendor = strdup(glamor_egl_conf->glvnd_vendor);
+        glamor_egl->exact_glvnd_vendor = !!glamor_egl->glvnd_vendor;
     }
     glamor_egl->fd = glamor_egl_conf->fd;
 

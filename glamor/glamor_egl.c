@@ -1339,7 +1339,7 @@ glamor_filter_modifiers(uint32_t *num_modifiers, uint64_t **modifiers,
         *modifiers = NULL;
     } else if (write_pos != *num_modifiers) {
         *num_modifiers = write_pos;
-        uint64_t *filtered_modifiers = realloc(*modifiers, write_pos * sizeof(*modifiers));
+        uint64_t *filtered_modifiers = realloc(*modifiers, write_pos * sizeof(**modifiers));
         if (filtered_modifiers != NULL) {
             *modifiers = filtered_modifiers;
         }

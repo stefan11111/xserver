@@ -54,6 +54,13 @@ fi
 echo "Repo: $REPO  (from remote '$UPSTREAM_REMOTE')"
 echo ""
 
+# clean prior workflow runs to reduce spamming via cronjob
+gh run list -w "retry-transient-ci.yml" -s completed --json databaseId --jq '.[].databaseId' \
+    | while read -r run_id; do
+        echo "---> job id: $run_id"
+        gh run delete "$run_id"
+    done
+
 ########################################################################
 # 2. Gather all open PRs
 ########################################################################

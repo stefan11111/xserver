@@ -1034,7 +1034,13 @@ static Bool
 drmmode_SharedPixmapPresent(PixmapPtr ppix, xf86CrtcPtr crtc,
                             drmmode_ptr drmmode)
 {
-    ScreenPtr primary = crtc->randr_crtc->pScreen->current_primary;
+    ScreenPtr primary;
+
+    if (!crtc->randr_crtc) {
+        return FALSE;
+    }
+
+    primary = crtc->randr_crtc->pScreen->current_primary;
 
     if (primary->PresentSharedPixmap(ppix)) {
         /* Success, queue flip to back target */
@@ -2137,6 +2143,9 @@ drmmode_set_target_scanout_pixmap_cpu(xf86CrtcPtr crtc, PixmapPtr ppix,
 
     ppriv = msGetPixmapPriv(drmmode, ppix);
     if (!ppriv->secondary_damage) {
+        if (!crtc->randr_crtc) {
+            return FALSE;
+        }
         ppriv->secondary_damage = DamageCreate(NULL, NULL,
                                            DamageReportNone,
                                            TRUE,

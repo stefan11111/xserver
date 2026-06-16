@@ -41,6 +41,7 @@
 #include "os/mathx_priv.h"
 #include "Xext/present/present_priv.h"
 
+#include "extinit.h"
 #include "inputstr.h"
 #include "xf86str.h"
 #include "X11/Xatom.h"
@@ -4605,7 +4606,12 @@ out_free_res:
 
     drmModeFreeResources(mode_res);
 out:
-    RRGetInfo(xf86ScrnToScreen(scrn), TRUE);
+#ifdef XINERAMA
+    if (noPanoramiXExtension)
+#endif
+    {
+        RRGetInfo(xf86ScrnToScreen(scrn), TRUE);
+    }
 }
 
 #undef DRM_MODE_LINK_STATUS_BAD

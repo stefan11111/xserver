@@ -24,6 +24,7 @@
  */
 #include <xorg-config.h>
 
+#include <assert.h>
 #include <errno.h>
 
 #include "include/misc.h"

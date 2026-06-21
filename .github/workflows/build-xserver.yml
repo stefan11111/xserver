@@ -483,7 +483,6 @@ jobs:
             - xserver-build-freebsd
             - xserver-build-dragonflybsd
             - xserver-build-netbsd
-            - xserver-build-cygwin
             - xserver-build-arch
         steps:
             - name: Checkout

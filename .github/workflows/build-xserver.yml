@@ -383,6 +383,9 @@ jobs:
     xserver-build-cygwin:
         runs-on: windows-latest
         steps:
+            - uses: actions/checkout@v6
+              with:
+                  set-safe-directory: false
             - name: Cygwin packages cache
               uses: actions/cache@v5
               with:
@@ -428,10 +431,6 @@ jobs:
                 key: ${{ runner.os }}-ccache
                 restore-keys: ${{ runner.os }}-ccache
             - run: git config --global --add safe.directory /cygdrive/d/a/xserver/xserver
-            - uses: actions/checkout@v6
-              with:
-                  # Done above as the builtin would use a path for Windows git.
-                  set-safe-directory: false
             - run: |
                   PATH="/usr/bin:$(cygpath "$SYSTEMROOT")/system32"
               shell: bash --noprofile --norc -e -o igncr '{0}'

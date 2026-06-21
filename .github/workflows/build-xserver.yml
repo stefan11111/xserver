@@ -485,7 +485,6 @@ jobs:
             - xserver-build-netbsd
             - xserver-build-cygwin
             - xserver-build-arch
-            - check-sign-off
         steps:
             - name: Checkout
               uses: actions/checkout@v6

@@ -971,6 +971,7 @@ glamor_egl_fds_from_pixmap_slow(ScreenPtr screen, PixmapPtr pixmap, int *fds,
 #endif
 }
 
+#if 0
 /* Used for textured pixmaps */
 static int
 glamor_egl_fds_from_pixmap_fast(ScreenPtr screen, PixmapPtr pixmap, int *fds,
@@ -1014,6 +1015,7 @@ glamor_egl_fds_from_pixmap_fast(ScreenPtr screen, PixmapPtr pixmap, int *fds,
     return 0;
 #endif
 }
+#endif
 
 int
 glamor_egl_fds_from_pixmap(ScreenPtr screen, PixmapPtr pixmap, int *fds,
@@ -1021,8 +1023,8 @@ glamor_egl_fds_from_pixmap(ScreenPtr screen, PixmapPtr pixmap, int *fds,
                            uint64_t *modifier)
 {
     static int warned = FALSE;
-    int ret = glamor_egl_fds_from_pixmap_fast(screen, pixmap, fds,
-                                              strides, offsets, modifier);
+    int ret = 0; //glamor_egl_fds_from_pixmap_fast(screen, pixmap, fds,
+                   //                           strides, offsets, modifier);
     if (ret) {
         return ret;
     }
@@ -1030,10 +1032,10 @@ glamor_egl_fds_from_pixmap(ScreenPtr screen, PixmapPtr pixmap, int *fds,
     ret = glamor_egl_fds_from_pixmap_slow(screen, pixmap, fds,
                                           strides, offsets, modifier);
 
-    if (!warned && ret) {
-        GLAMOR_LOG_STR(screen->myNum, X_WARNING, "glamor_egl_fds_from_pixmap_fast failed\n");
-        warned = TRUE;
-    }
+   // if (!warned && ret) {
+   //     GLAMOR_LOG_STR(screen->myNum, X_WARNING, "glamor_egl_fds_from_pixmap_fast failed\n");
+   //     warned = TRUE;
+   // }
     return ret;
 }
 
@@ -1064,6 +1066,7 @@ glamor_egl_fd_from_pixmap_slow(ScreenPtr screen, PixmapPtr pixmap,
 #endif
 }
 
+#if 0
 /* Used for textured pixmaps */
 static int
 glamor_egl_fd_from_pixmap_fast(ScreenPtr screen, PixmapPtr pixmap,
@@ -1088,25 +1091,29 @@ glamor_egl_fd_from_pixmap_fast(ScreenPtr screen, PixmapPtr pixmap,
     }
     return -1;
 }
+#endif
 
 int
 glamor_egl_fd_from_pixmap(ScreenPtr screen, PixmapPtr pixmap,
                           CARD16 *stride, CARD32 *size)
 {
     static int warned = FALSE;
-    int fd = glamor_egl_fd_from_pixmap_fast(screen, pixmap, stride, size);
+    int fd = -1; // glamor_egl_fd_from_pixmap_fast(screen, pixmap, stride, size);
     if (fd >= 0) {
         return fd;
     }
 
     fd = glamor_egl_fd_from_pixmap_slow(screen, pixmap, stride, size);
+    return fd;
 
+#if 0
     if (!warned && (fd >= 0)) {
         GLAMOR_LOG_STR(screen->myNum, X_WARNING, "glamor_egl_fd_from_pixmap_fast failed\n");
         warned = TRUE;
     }
 
     return fd;
+#endif
 }
 
 int
@@ -1163,6 +1170,7 @@ glamor_drm_format_for_depth(CARD8 depth)
 }
 #endif
 
+#if 0
 static Bool
 glamor_back_pixmap_from_fd_fast(PixmapPtr pixmap,
                                 int fd,
@@ -1193,6 +1201,7 @@ glamor_back_pixmap_from_fd_fast(PixmapPtr pixmap,
     return FALSE;
 #endif
 }
+#endif
 
 static Bool
 glamor_back_pixmap_from_fd_slow(PixmapPtr pixmap,
@@ -1251,9 +1260,9 @@ glamor_back_pixmap_from_fd(PixmapPtr pixmap,
     Bool ret = glamor_back_pixmap_from_fd_slow(pixmap, fd,
                                                width, height,
                                                stride, depth, bpp);
-    return ret ? ret : glamor_back_pixmap_from_fd_fast(pixmap, fd,
-                                                       width, height,
-                                                       stride, depth, bpp);
+    return ret; // ? ret : glamor_back_pixmap_from_fd_fast(pixmap, fd,
+                   //                                    width, height,
+                     //                                  stride, depth, bpp);
 }
 
 static PixmapPtr
@@ -1267,6 +1276,7 @@ glamor_pixmap_from_fds_noop(ScreenPtr screen,
     return NULL;
 }
 
+#if 0
 static PixmapPtr
 glamor_pixmap_from_fds_fast(ScreenPtr screen,
                             CARD8 num_fds, const int *fds,
@@ -1339,6 +1349,7 @@ error:
     return NULL;
 #endif
 }
+#endif
 
 static PixmapPtr
 glamor_pixmap_from_fds_slow(ScreenPtr screen,
@@ -1424,12 +1435,13 @@ glamor_pixmap_from_fds(ScreenPtr screen,
                                                 width, height,
                                                 strides, offsets,
                                                 depth, bpp, modifier);
-    return ret ? ret : glamor_pixmap_from_fds_fast(screen, num_fds, fds,
-                                                   width, height,
-                                                   strides, offsets,
-                                                   depth, bpp, modifier);
+    return ret; // ? ret : glamor_pixmap_from_fds_fast(screen, num_fds, fds,
+                  //                                 width, height,
+                    //                               strides, offsets,
+                      //                             depth, bpp, modifier);
 }
 
+#if 0
 static PixmapPtr
 glamor_pixmap_from_fd_fast(ScreenPtr screen,
                            int fd,
@@ -1451,6 +1463,7 @@ glamor_pixmap_from_fd_fast(ScreenPtr screen,
     }
     return pixmap;
 }
+#endif
 
 static PixmapPtr
 glamor_pixmap_from_fd_slow(ScreenPtr screen,
@@ -1497,9 +1510,9 @@ glamor_pixmap_from_fd(ScreenPtr screen,
                                                width, height,
                                                stride, depth, bpp);
 
-    return ret ? ret : glamor_pixmap_from_fd_fast(screen, fd,
-                                                  width, height,
-                                                  stride, depth, bpp);
+    return ret;// ? ret : glamor_pixmap_from_fd_fast(screen, fd,
+                 //                                 width, height,
+                   //                               stride, depth, bpp);
 }
 
 static Bool
@@ -1800,6 +1813,26 @@ glamor_dri3_open_client(ClientPtr client,
     return Success;
 }
 
+static const dri3_screen_info_rec glamor_dri3_info_default = {
+    .version = 2,
+
+    .fd_from_pixmap = glamor_egl_fd_from_pixmap_slow,
+
+    /* Version 1 */
+    .open_client = glamor_dri3_open_client,
+
+    /* Version 2 */
+    .pixmap_from_fds = glamor_pixmap_from_fds_slow,
+    .fds_from_pixmap = glamor_egl_fds_from_pixmap_slow,
+    .get_formats = glamor_get_formats,
+    .get_modifiers = glamor_get_modifiers,
+    .get_drawable_modifiers = glamor_get_drawable_modifiers,
+
+    /* Version 4 */
+    .import_syncobj = NULL, /* TODO: implement */
+};
+
+
 static dri3_screen_info_rec glamor_dri3_info = {
     .version = 2,
 
@@ -1932,7 +1965,7 @@ glamor_egl_screen_init(ScreenPtr screen, struct glamor_context *glamor_ctx)
             if (!glamor_egl->device_path)
                 glamor_egl->device_path = drmGetDeviceNameFromFd2(glamor_egl->fd);
 
-            if (!dri3_screen_init(screen, &glamor_dri3_info)) {
+            if (!dri3_screen_init(screen, &glamor_dri3_info_default)) {
                 GLAMOR_LOG_STR(screen->myNum, X_ERROR,
                                "Failed to initialize DRI3.\n");
             }
@@ -2906,12 +2939,12 @@ glamor_egl_init_internal(glamor_egl_conf_t* glamor_egl_conf, int *caps)
         *caps &= ~GLAMOR_EGL_CAP_TEXTURE_GBM_BO;
 #ifdef DRI3
         if (glamor_dri3_info.pixmap_from_fds) {
-            glamor_dri3_info.pixmap_from_fds = glamor_pixmap_from_fds_fast;
+//            glamor_dri3_info.pixmap_from_fds = glamor_pixmap_from_fds_fast;
         }
 
         if (epoxy_has_egl_extension(glamor_egl->display, "EGL_MESA_image_dma_buf_export")) {
-            glamor_dri3_info.fd_from_pixmap = glamor_egl_fd_from_pixmap_fast;
-            glamor_dri3_info.fds_from_pixmap = glamor_egl_fds_from_pixmap_fast;
+//            glamor_dri3_info.fd_from_pixmap = glamor_egl_fd_from_pixmap_fast;
+//            glamor_dri3_info.fds_from_pixmap = glamor_egl_fds_from_pixmap_fast;
         } else {
             GLAMOR_LOG_STR(screen_idx, X_WARNING, "EGL extension EGL_MESA_image_dma_buf_export not available\n");
             GLAMOR_LOG_STR(screen_idx, X_WARNING, "DRI3 dmabuf export will be unavailable\n");

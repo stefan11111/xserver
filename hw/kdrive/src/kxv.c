@@ -861,7 +861,6 @@ KdXVWindowExposures(WindowPtr pWin, RegionPtr reg1)
     ScreenPtr pScreen = pWin->drawable.pScreen;
     KdXVScreenPtr ScreenPriv = GET_KDXV_SCREEN(pScreen);
     KdXVWindowPtr WinPriv = GET_KDXV_WINDOW(pWin);
-    KdXVWindowPtr pPrev;
     XvPortRecPrivatePtr pPriv;
     Bool AreasExposed;
 
@@ -874,8 +873,6 @@ KdXVWindowExposures(WindowPtr pWin, RegionPtr reg1)
     /* filter out XClearWindow/Area */
     if (!pWin->valdata)
         return;
-
-    pPrev = NULL;
 
     while (WinPriv) {
         pPriv = WinPriv->PortRec;
@@ -893,28 +890,17 @@ KdXVWindowExposures(WindowPtr pWin, RegionPtr reg1)
             if (pPriv->AdaptorRec->ReputImage)
                 KdXVReputImage(pPriv);
             else if (AreasExposed) {
-                KdXVWindowPtr tmp;
-
                 if (pPriv->isOn == XV_ON) {
                     (*pPriv->AdaptorRec->StopVideo) (pPriv->screen,
                                                      pPriv->DevPriv.ptr, FALSE);
                     pPriv->isOn = XV_PENDING;
                 }
-                pPriv->pDraw = NULL;
-
-                if (!pPrev)
-                    dixSetPrivate(&pWin->devPrivates, KdXVWindowKey,
-                                  WinPriv->next);
-                else
-                    pPrev->next = WinPriv->next;
-                tmp = WinPriv;
                 WinPriv = WinPriv->next;
-                free(tmp);
+                KdXVRemovePortFromWindow(pWin, pPriv);
                 continue;
             }
             break;
         }
-        pPrev = WinPriv;
         WinPriv = WinPriv->next;
     }
 }
@@ -925,7 +911,6 @@ KdXVClipNotify(WindowPtr pWin, int dx, int dy)
     ScreenPtr pScreen = pWin->drawable.pScreen;
     KdXVScreenPtr ScreenPriv = GET_KDXV_SCREEN(pScreen);
     KdXVWindowPtr WinPriv = GET_KDXV_WINDOW(pWin);
-    KdXVWindowPtr tmp, pPrev = NULL;
     XvPortRecPrivatePtr pPriv;
     Bool visible = (pWin->visibility == VisibilityUnobscured) ||
         (pWin->visibility == VisibilityPartiallyObscured);
@@ -949,21 +934,12 @@ KdXVClipNotify(WindowPtr pWin, int dx, int dy)
             }
 
             if (!pPriv->type) { /* overlaid still/image */
-                pPriv->pDraw = NULL;
-
-                if (!pPrev)
-                    dixSetPrivate(&pWin->devPrivates, KdXVWindowKey,
-                                  WinPriv->next);
-                else
-                    pPrev->next = WinPriv->next;
-                tmp = WinPriv;
                 WinPriv = WinPriv->next;
-                free(tmp);
+                KdXVRemovePortFromWindow(pWin, pPriv);
                 continue;
             }
         }
 
-        pPrev = WinPriv;
         WinPriv = WinPriv->next;
     }
 

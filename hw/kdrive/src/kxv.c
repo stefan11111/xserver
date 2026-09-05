@@ -830,6 +830,37 @@ KdXVDisable(ScreenPtr pScreen)
     }
 }
 
+static void
+KdXVReputOrStopPort(XvPortRecPrivatePtr pPriv,
+                    WindowPtr pWin,
+                    Bool AreasExposed)
+{
+    /* Reput anyone with a reput function */
+
+    switch (pPriv->type) {
+    case XvInputMask:
+        KdXVReputVideo(pPriv);
+        break;
+    case XvOutputMask:
+        KdXVRegetVideo(pPriv);
+        break;
+    default:               /* overlaid still/image */
+        if (pPriv->AdaptorRec->ReputImage)
+            KdXVReputImage(pPriv);
+        else if (AreasExposed) {
+            if (pPriv->isOn == XV_ON) {
+                (*pPriv->AdaptorRec->StopVideo) (pPriv->screen,
+                                                 pPriv->DevPriv.ptr, FALSE);
+                pPriv->isOn = XV_PENDING;
+            }
+            WinPriv = WinPriv->next;
+            KdXVRemovePortFromWindow(pWin, pPriv);
+            continue;
+        }
+        break;
+    }
+}
+
 /****  ScreenRec fields ****/
 
 static void
@@ -877,31 +908,10 @@ KdXVWindowExposures(WindowPtr pWin, RegionPtr reg1)
     while (WinPriv) {
         pPriv = WinPriv->PortRec;
 
-        /* Reput anyone with a reput function */
-
-        switch (pPriv->type) {
-        case XvInputMask:
-            KdXVReputVideo(pPriv);
-            break;
-        case XvOutputMask:
-            KdXVRegetVideo(pPriv);
-            break;
-        default:               /* overlaid still/image */
-            if (pPriv->AdaptorRec->ReputImage)
-                KdXVReputImage(pPriv);
-            else if (AreasExposed) {
-                if (pPriv->isOn == XV_ON) {
-                    (*pPriv->AdaptorRec->StopVideo) (pPriv->screen,
-                                                     pPriv->DevPriv.ptr, FALSE);
-                    pPriv->isOn = XV_PENDING;
-                }
-                WinPriv = WinPriv->next;
-                KdXVRemovePortFromWindow(pWin, pPriv);
-                continue;
-            }
-            break;
-        }
         WinPriv = WinPriv->next;
+
+        /* Reput anyone with a reput function */
+        KdXVReputOrStopPort(pPriv, pWin, AreasExposed);
     }
 }
 

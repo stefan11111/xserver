@@ -503,6 +503,27 @@ KdXVCopyClip(XvPortRecPrivatePtr portPriv, GCPtr pGC)
     portPriv->subWindowMode = pGC->subWindowMode;
 }
 
+static void
+KdXVCopyCompositeClip(XvPortRecPrivatePtr portPriv,
+                        GCPtr pGC,
+                        DrawablePtr pDraw)
+{
+    if (!portPriv->clientClip)
+        portPriv->clientClip = RegionCreate(NullBox, 1);
+    /* Keep the original GC composite clip around for ReputImage */
+    RegionCopy(portPriv->clientClip, pGC->pCompositeClip);
+    RegionTranslate(portPriv->clientClip,
+                    -pDraw->x, -pDraw->y);
+
+    /* get rid of the old clip list */
+    if (portPriv->pCompositeClip && portPriv->FreeCompositeClip)
+        RegionDestroy(portPriv->pCompositeClip);
+
+    portPriv->pCompositeClip = pGC->pCompositeClip;
+    portPriv->FreeCompositeClip = FALSE;
+    portPriv->subWindowMode = pGC->subWindowMode;
+}
+
 static int
 KdXVRegetVideo(XvPortRecPrivatePtr portPriv)
 {
@@ -650,6 +671,11 @@ KdXVReputImage(XvPortRecPrivatePtr portPriv)
     Bool clippedAway = FALSE;
 
     KdXVUpdateCompositeClip(portPriv);
+
+    /* the clip can get smaller over time */
+    RegionCopy(portPriv->clientClip, portPriv->pCompositeClip);
+    RegionTranslate(portPriv->clientClip,
+                    -portPriv->pDraw->x, -portPriv->pDraw->y);
 
     /* translate the video region to the screen */
     WinBox.x1 = portPriv->pDraw->x + portPriv->drw_x;
@@ -1072,6 +1098,8 @@ KdXVPutStill(DrawablePtr pDraw,
     if (!pScreenPriv->enabled)
         return Success;
 
+    KdXVCopyCompositeClip(portPriv, pGC, pDraw);
+
     WinBox.x1 = pDraw->x + drw_x;
     WinBox.y1 = pDraw->y + drw_y;
     WinBox.x2 = WinBox.x1 + drw_w;
@@ -1125,13 +1153,18 @@ KdXVPutStill(DrawablePtr pDraw,
         pPort->pDraw = pDraw;   /* make sure we can get stop requests */
     }
 
- PUT_STILL_BAILOUT:
+PUT_STILL_BAILOUT:
 
     if ((clippedAway || (ret != Success)) && (portPriv->isOn == XV_ON)) {
         (*portPriv->AdaptorRec->StopVideo) (portPriv->screen,
                                             portPriv->DevPriv.ptr, FALSE);
         portPriv->isOn = XV_PENDING;
     }
+
+    /* This clip was copied and only good for one shot */
+    if(!portPriv->FreeCompositeClip)
+        portPriv->pCompositeClip = NULL;
+
 
     RegionUninit(&WinRegion);
     RegionUninit(&ClipRegion);
@@ -1343,7 +1376,9 @@ KdXVPutImage(DrawablePtr pDraw,
         return BadAlloc;
 
     if (!pScreenPriv->enabled)
-        return Success;
+        return Success; /* Success ? */
+
+    KdXVCopyCompositeClip(portPriv, pGC, pDraw);
 
     WinBox.x1 = pDraw->x + drw_x;
     WinBox.y1 = pDraw->y + drw_y;
@@ -1406,6 +1441,11 @@ KdXVPutImage(DrawablePtr pDraw,
                                             portPriv->DevPriv.ptr, FALSE);
         portPriv->isOn = XV_PENDING;
     }
+
+    /* This clip was copied and only good for one shot */
+    if(!portPriv->FreeCompositeClip)
+        portPriv->pCompositeClip = NULL;
+
 
     RegionUninit(&WinRegion);
     RegionUninit(&ClipRegion);

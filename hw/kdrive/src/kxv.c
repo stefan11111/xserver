@@ -933,10 +933,11 @@ KdXVClipNotify(WindowPtr pWin, int dx, int dy)
     KdXVScreenPtr ScreenPriv = GET_KDXV_SCREEN(pScreen);
     KdXVWindowPtr WinPriv = GET_KDXV_WINDOW(pWin);
     XvPortRecPrivatePtr pPriv;
-    Bool visible = (pWin->visibility == VisibilityUnobscured) ||
-        (pWin->visibility == VisibilityPartiallyObscured);
 
     while (WinPriv) {
+        Bool visible = pWin->visibility == VisibilityUnobscured ||
+                       pWin->visibility == VisibilityPartiallyObscured;
+
         pPriv = WinPriv->PortRec;
 
         if (pPriv->pCompositeClip && pPriv->FreeCompositeClip)
@@ -944,24 +945,15 @@ KdXVClipNotify(WindowPtr pWin, int dx, int dy)
 
         pPriv->pCompositeClip = NULL;
 
-        /* Stop everything except images, but stop them too if the
-           window isn't visible.  But we only remove the images. */
-
-        if (pPriv->type || !visible) {
-            if (pPriv->isOn == XV_ON) {
-                (*pPriv->AdaptorRec->StopVideo) (pPriv->screen,
-                                                 pPriv->DevPriv.ptr, FALSE);
-                pPriv->isOn = XV_PENDING;
-            }
-
-            if (!pPriv->type) { /* overlaid still/image */
-                WinPriv = WinPriv->next;
-                KdXVRemovePortFromWindow(pWin, pPriv);
-                continue;
-            }
-        }
+        /*
+         * Stop and remove still/images if
+         * ReputImage isn't supported.
+         */
+        if (!pPriv->type && !pPriv->AdaptorRec->ReputImage)
+            visible = FALSE;
 
         WinPriv = WinPriv->next;
+        KdXVReputOrStopPort(pPriv, pWin, visible);
     }
 
     if (ScreenPriv->ClipNotify) {

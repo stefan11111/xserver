@@ -140,7 +140,7 @@ typedef struct {
     GetPortAttributeFuncPtr GetPortAttribute;
     QueryBestSizeFuncPtr QueryBestSize;
     PutImageFuncPtr PutImage;
-    ReputImageFuncPtr ReputImage;
+    ReputImageFuncPtr ReputImage; /* image/still */
     QueryImageAttributesFuncPtr QueryImageAttributes;
 } KdVideoAdaptorRec, *KdVideoAdaptorPtr;
 

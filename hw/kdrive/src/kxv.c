@@ -355,7 +355,7 @@ KdXVInitAdaptors(ScreenPtr pScreen, KdVideoAdaptorPtr infoPtr, int number)
         adaptorPriv->QueryBestSize = adaptorPtr->QueryBestSize;
         adaptorPriv->QueryImageAttributes = adaptorPtr->QueryImageAttributes;
         adaptorPriv->PutImage = adaptorPtr->PutImage;
-        adaptorPriv->ReputImage = adaptorPtr->ReputImage;
+        adaptorPriv->ReputImage = adaptorPtr->ReputImage; /* image/still */
 
         pa->devPriv.ptr = (void *) adaptorPriv;
 
@@ -657,6 +657,7 @@ KdXVReputVideo(XvPortRecPrivatePtr portPriv)
     return ret;
 }
 
+/* Reput image/still */
 static int
 KdXVReputImage(XvPortRecPrivatePtr portPriv)
 {

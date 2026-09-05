@@ -833,8 +833,20 @@ KdXVDisable(ScreenPtr pScreen)
 static void
 KdXVReputOrStopPort(XvPortRecPrivatePtr pPriv,
                     WindowPtr pWin,
-                    Bool AreasExposed)
+                    Bool visible)
 {
+    if (!visible) {
+        if (pPriv->isOn == XV_ON) {
+            (*pPriv->AdaptorRec->StopVideo)(pPriv->pScrn, pPriv->DevPriv.ptr, FALSE);
+            pPriv->isOn = XV_PENDING;
+        }
+
+        if (!pPriv->type) /* overlaid still/image*/
+            KdXVRemovePortFromWindow(pWin, pPriv);
+
+        return;
+    }
+
     /* Reput anyone with a reput function */
 
     switch (pPriv->type) {
@@ -847,16 +859,6 @@ KdXVReputOrStopPort(XvPortRecPrivatePtr pPriv,
     default:               /* overlaid still/image */
         if (pPriv->AdaptorRec->ReputImage)
             KdXVReputImage(pPriv);
-        else if (AreasExposed) {
-            if (pPriv->isOn == XV_ON) {
-                (*pPriv->AdaptorRec->StopVideo) (pPriv->screen,
-                                                 pPriv->DevPriv.ptr, FALSE);
-                pPriv->isOn = XV_PENDING;
-            }
-            WinPriv = WinPriv->next;
-            KdXVRemovePortFromWindow(pWin, pPriv);
-            continue;
-        }
         break;
     }
 }
@@ -906,12 +908,21 @@ KdXVWindowExposures(WindowPtr pWin, RegionPtr reg1)
         return;
 
     while (WinPriv) {
+        Bool visible = TRUE;
+
         pPriv = WinPriv->PortRec;
+
+        /*
+         * Stop and remove still/images if areas were exposed and
+         * ReputImage isn't supported.
+         */
+        if (!pPriv->type && !pPriv->AdaptorRec->ReputImage)
+	        visible = !AreasExposed;
 
         WinPriv = WinPriv->next;
 
         /* Reput anyone with a reput function */
-        KdXVReputOrStopPort(pPriv, pWin, AreasExposed);
+        KdXVReputOrStopPort(pPriv, pWin, visible);
     }
 }
 

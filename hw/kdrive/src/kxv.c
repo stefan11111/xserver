@@ -461,8 +461,7 @@ KdXVUpdateCompositeClip(XvPortRecPrivatePtr portPriv)
     pCompositeClip = RegionCreate(NullBox, 1);
     RegionCopy(pCompositeClip, portPriv->clientClip);
     RegionTranslate(pCompositeClip,
-                    portPriv->pDraw->x + portPriv->clipOrg.x,
-                    portPriv->pDraw->y + portPriv->clipOrg.y);
+                    portPriv->pDraw->x, portPriv->pDraw->y);
     RegionIntersect(pCompositeClip, pregWin, pCompositeClip);
 
     portPriv->pCompositeClip = pCompositeClip;
@@ -485,6 +484,9 @@ KdXVCopyClip(XvPortRecPrivatePtr portPriv, GCPtr pGC)
             portPriv->clientClip = RegionCreate(NullBox, 1);
         /* Note: this is in window coordinates */
         RegionCopy(portPriv->clientClip, pGC->clientClip);
+        RegionTranslate(portPriv->clientClip,
+                        pGC->clipOrg.x, pGC->clipOrg.y);
+
     }
     else if (portPriv->clientClip) {    /* free the old clientClip */
         RegionDestroy(portPriv->clientClip);
@@ -496,7 +498,6 @@ KdXVCopyClip(XvPortRecPrivatePtr portPriv, GCPtr pGC)
         RegionDestroy(portPriv->pCompositeClip);
     }
 
-    portPriv->clipOrg = pGC->clipOrg;
     portPriv->pCompositeClip = pGC->pCompositeClip;
     portPriv->FreeCompositeClip = FALSE;
     portPriv->subWindowMode = pGC->subWindowMode;

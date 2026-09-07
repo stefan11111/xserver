@@ -187,7 +187,7 @@ typedef struct {
 
     /* Sorted from smallest to largest. */
     drmmode_cursor_dim_rec* dimensions;
-    struct gbm_bo *bo;
+    struct gbm_bo **bos;
 } drmmode_cursor_rec, *drmmode_cursor_ptr;
 
 typedef struct {
@@ -230,8 +230,7 @@ typedef struct {
 
     uint64_t next_msc;
 
-    int cursor_width;
-    int cursor_height;
+    int cursor_size;
 
     Bool need_modeset;
     struct xorg_list mode_list;
@@ -242,18 +241,12 @@ typedef struct {
     Bool vrr_enabled;
     Bool use_gamma_lut;
 
-    /* For damage-like tracking of the cursor buffer */
-    uint32_t cursor_glyph_width;
-    uint32_t cursor_glyph_height;
-    int old_pitch;
-    int cursor_rotation;
+    /* For rotations */
     int cursor_src_x;
     int cursor_src_y;
 
     Bool cursor_probed;
     Bool cursor_dim_fallback_warned;
-
-    int* cursor_pitches;
 } drmmode_crtc_private_rec, *drmmode_crtc_private_ptr;
 
 typedef struct {

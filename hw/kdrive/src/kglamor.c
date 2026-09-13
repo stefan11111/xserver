@@ -194,6 +194,11 @@ KdGlamorParse(KdGlamorInfo *info, int argc, char **argv, int i)
         return 1;
     }
 
+    if (!strcmp(argv[i], "-nogbm")) {
+        info->use_gbm = FALSE;
+        return 1;
+    }
+
     if (!strcmp(argv[i], "-direct-dri3")) {
         info->direct_dri3 = TRUE;
         return 1;
@@ -248,6 +253,8 @@ KdGlamorUseMsg(void)
         ("-noglamor            Force disable glamor render acceleration\n");
     ErrorF
         ("-gbm                 Allow glamor to use libgbm\n");
+    ErrorF
+        ("-nogbm               Force glamor to not use libgbm\n");
     ErrorF
         ("-direct-dri3         Force glamor to use the direct DRI3 implementation\n");
     ErrorF

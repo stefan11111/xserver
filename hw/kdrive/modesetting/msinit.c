@@ -42,6 +42,7 @@ static MsScreenConf *msCurrScreen = NULL;
 static const MsScreenConf msDefaultConfig = {
                                              .dev_path = NULL,
                                              .shadow = TRUE,
+                                             .glamor_info = {.use_gbm = TRUE,},
                                             };
 
 static void msLogScreenInfo(const MsScreenConf *config, int screen_num);
@@ -71,7 +72,6 @@ msLogInit(void)
         }
     } else {
         MsScreenConf msDummyConfig = msDefaultConfig;
-        msDummyConfig.glamor_info = kdGlamorDefault;
         msLogScreenInfo(&msDummyConfig, 0);
     }
 }
@@ -81,7 +81,6 @@ InitCard(char *name)
 {
     msCurrScreen = XNFalloc(sizeof(*msCurrScreen));
     *msCurrScreen = msDefaultConfig;
-    msCurrScreen->glamor_info = kdGlamorDefault;
     KdCardInfoAdd(&msFuncs, msCurrScreen);
 }
 
@@ -99,7 +98,7 @@ msLogScreenInfo(const MsScreenConf *config, int screen_num)
                config->glamor_info.glvnd ? config->glamor_info.glvnd : "not passed");
 
     LogMessage(X_INFO, "Xmodesetting(%d): dri device: %s\n", screen_num,
-               config->dri_path ? config->dri_path : "none");
+               config->glamor_info.dri_path ? config->glamor_info.dri_path : "none");
 
     LogMessage(X_INFO, "Xmodesetting(%d): glamor OpenGL contexts %s\n", screen_num,
                !config->glamor_info.force_es ? "allowed" : "forbidden");
@@ -172,6 +171,9 @@ ddxProcessArgument(int argc, char **argv, int i)
     if (!strcmp(argv[i], "-dev")) {
         if ((i + 1 < argc) && (argv[i + 1][0] != '-')) {
             msCurrScreen->dev_path = argv[i + 1];
+            if (!msCurrScreen->glamor_info.dri_path) {
+                msCurrScreen->glamor_info.dri_path = msCurrScreen->dev_path;
+            }
             return 2;
         }
         UseMsg();
@@ -183,7 +185,7 @@ ddxProcessArgument(int argc, char **argv, int i)
         return 1;
     }
 
-    glamor_arg = KdGlamorParse(&msCurrScreen->glamor_info, &msCurrScreen->dri_path, argc, argv, i);
+    glamor_arg = KdGlamorParse(&msCurrScreen->glamor_info, argc, argv, i);
     if (glamor_arg) {
         return glamor_arg;
     }

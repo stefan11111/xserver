@@ -169,7 +169,8 @@ void KdSuspend(int ddxAbort)
         for (card = kdCardInfo; card; card = card->next) {
             for (screen = card->screenList; screen; screen = screen->next)
                 if (screen->mynum == card->selected && screen->pScreen)
-                    KdDisableScreen(screen->pScreen);
+                    if (screen->initialized)
+                        KdDisableScreen(screen->pScreen);
             if (card->driver && card->cfuncs->restore)
                 (*card->cfuncs->restore) (card);
         }
@@ -997,6 +998,7 @@ Bool KdScreenInit(ScreenPtr pScreen, int argc, char **argv)
     }
 #endif
 
+    screen->initialized = TRUE;
     return TRUE;
 }
 

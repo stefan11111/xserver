@@ -293,7 +293,8 @@ ddxProcessArgument(int argc, char **argv, int i)
     return KdProcessArgument(argc, argv, i);
 }
 
-void ddxInit(void)
+void
+ddxInit(void)
 {
     msLogInit();
 #ifdef KDRIVE_LINUX
@@ -311,7 +312,7 @@ KdCardFuncs msFuncs = {
     .createRes        = msCreateResources,
     .preserve         = msPreserve,
     .enable           = msEnable,
-    .dpms             = NULL, /* TODO: implement */
+    .dpms             = msDPMS,
     .disable          = msDisable,
     .restore          = msRestore,
     .scrfini          = msScreenFini,

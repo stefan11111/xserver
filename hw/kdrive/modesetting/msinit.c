@@ -188,7 +188,8 @@ msLogScreenInfo(const MsScreenConf *config, const char *dev_path, int screen_num
                dev_path ? dev_path : "not passed");
     LogMessage(X_INFO, "Xmodesetting(%d): ShadowFB %s\n", screen_num,
                config->shadow ? "enabled" : "disabled");
-
+    LogMessage(X_INFO, "Xmodesetting(%d): Preferred format color ordering %s\n", screen_num,
+               config->format_swap ? "BGR" : "RGB");
     KdGlamorLogScreenInfo(&config->glamor_info, screen_num);
     LogMessage(X_INFO, "\n");
 }
@@ -254,6 +255,8 @@ ddxUseMsg(void)
         ("-dev <path>          KMS device to use. Defaults to /dev/dri/card0\n");
     ErrorF
         ("-noshadow            Disable the ShadowFB layer if possible\n");
+    ErrorF
+        ("-swap                Prefer BGR format color ordering instead of RGB\n");
     ErrorF("\n");
 }
 
@@ -282,6 +285,11 @@ ddxProcessArgument(int argc, char **argv, int i)
 
     if (!strcmp(argv[i], "-noshadow")) {
         msCurrScreen->shadow = FALSE;
+        return 1;
+    }
+
+    if (!strcmp(argv[i], "-swap")) {
+        msCurrScreen->format_swap = TRUE;
         return 1;
     }
 

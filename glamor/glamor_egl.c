@@ -1139,7 +1139,8 @@ glamor_drm_format_for_depth(CARD8 depth, int is_gles)
     case 24:
         return is_gles ? DRM_FORMAT_ARGB8888 : DRM_FORMAT_XRGB8888;
     case 30:
-        return DRM_FORMAT_ARGB2101010;
+        /* Match the format chosen in glamor_setup_formats */
+        return is_gles ? DRM_FORMAT_ABGR2101010 : DRM_FORMAT_ARGB2101010;
     default:
         GLAMOR_LOG_MESSAGE(-1, X_ERROR, "unexpected depth: %d\n", depth);
     case 32:

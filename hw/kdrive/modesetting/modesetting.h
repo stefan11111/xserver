@@ -91,6 +91,18 @@ Bool msSetShadow(ScreenPtr pScreen);
 struct gbm_bo*
 modesetting_open(KdScreenInfo *screen, Bool need_map, Bool keep_depth);
 
+/* ms_cursor.c */
+
+Bool msCursorInit(ScreenPtr pScreen);
+
+void msCursorEnable(ScreenPtr pScreen);
+
+void msCursorDisable(ScreenPtr pScreen);
+
+void msRecolorCursor(ScreenPtr pScreen, int ndef, xColorItem *pdef);
+
+void msCursorFini(ScreenPtr pScreen);
+
 /* ms_damage.c */
 
 Bool msDamageCreateRes(ScreenPtr pScreen);

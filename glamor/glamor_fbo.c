@@ -276,6 +276,7 @@ glamor_pixmap_detach_fbo(glamor_pixmap_private *pixmap_priv)
         return NULL;
 
     pixmap_priv->fbo = NULL;
+    pixmap_priv->gl_fbo = GLAMOR_FBO_UNATTACHED;
     return fbo;
 }
 
